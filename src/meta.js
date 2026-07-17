@@ -120,6 +120,58 @@ export async function fetchFacebookNetFanDeltas(market) {
   });
 }
 
+// ── Engajamento por período (curtidas, comentários, visualizações somados) ─────────────────
+// Diferente do `recentLikes`/`recentComments` do snapshot diário (amostra dos últimos 25
+// posts NO MOMENTO do sync) — aqui é o total de verdade dentro do período escolhido na tela,
+// via Insights com metric_type=total_value (confirmado ao vivo 17/07/2026, ver probeEngagement
+// acima). Cache leve em memória (5 min) — o auto-refresh do front pode rodar a cada 1 min, e
+// não faz sentido bater na Insights API a cada esses ciclos pra um número que não muda tão
+// rápido assim.
+const engagementCache = new Map();
+const ENGAGEMENT_CACHE_TTL_MS = 5 * 60 * 1000;
+async function cached(key, fn) {
+  const hit = engagementCache.get(key);
+  if (hit && Date.now() - hit.at < ENGAGEMENT_CACHE_TTL_MS) return hit.value;
+  const value = await fn();
+  engagementCache.set(key, { value, at: Date.now() });
+  return value;
+}
+function isoToUnix(iso) { return Math.floor(Date.parse(iso + 'T00:00:00Z') / 1000); }
+
+export async function fetchInstagramEngagement(market, since, until) {
+  const id = IG_IDS[market];
+  if (!TOKEN || !id) return null;
+  return cached(`ig-eng-${market}-${since}-${until}`, async () => {
+    const sinceU = isoToUnix(since), untilU = isoToUnix(until);
+    const json = await graphGet(`${id}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${sinceU}&until=${untilU}`);
+    const byName = {};
+    for (const m of json.data || []) byName[m.name] = m.total_value?.value ?? null;
+    return {
+      likes: byName.likes ?? null,
+      comments: byName.comments ?? null,
+      views: byName.views ?? null,
+      shares: byName.shares ?? null,
+      saves: byName.saves ?? null,
+      totalInteractions: byName.total_interactions ?? null,
+    };
+  });
+}
+
+// Página do Facebook: page_video_views vem como série diária (confirmado ao vivo) — soma
+// dentro do período pedido.
+export async function fetchFacebookVideoViews(market, since, until) {
+  const pageToken = await fetchPageAccessToken(market);
+  const id = FB_IDS[market];
+  if (!pageToken || !id) return null;
+  return cached(`fb-video-${market}-${since}-${until}`, async () => {
+    const sinceU = isoToUnix(since), untilU = isoToUnix(until);
+    const json = await graphGetAs(pageToken, `${id}/insights/page_video_views?period=day&since=${sinceU}&until=${untilU}`);
+    const values = json.data?.[0]?.values || [];
+    const total = values.reduce((a, v) => a + (v.value || 0), 0);
+    return { videoViews: total };
+  });
+}
+
 // Diagnóstico: devolve a resposta crua dos endpoints de Insights (Instagram e Facebook),
 // sem processar nada — confirma ao vivo quantos dias realmente vêm e se as métricas ainda
 // existem pra essa conta, antes de confiar no backfill. Usado por GET /api/meta/probe-insights.

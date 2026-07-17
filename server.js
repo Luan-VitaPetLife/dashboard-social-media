@@ -37,10 +37,14 @@ app.get('/api/status', (req, res) => {
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }
 
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   const until = req.query.until || todayISO();
   const since = req.query.since || isoDaysAgo(29);
-  res.json({ ...computeSocialDashboard({ since, until }), lastSync: getLastSync() });
+  try {
+    res.json({ ...(await computeSocialDashboard({ since, until })), lastSync: getLastSync() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/sync', async (req, res) => {

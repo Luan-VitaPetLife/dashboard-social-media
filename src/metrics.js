@@ -8,6 +8,7 @@
 // snapshot na janela anterior (conta muito nova, ainda sem 2 períodos de histórico), o delta
 // fica null ("—") em vez de fabricar um número.
 import { getSnapshotsInRange } from './store.js';
+import { fetchInstagramEngagement, fetchFacebookVideoViews } from './meta.js';
 
 const IG_KEYS = ['followers', 'following', 'posts', 'recentLikes', 'recentComments'];
 const FB_KEYS = ['likes', 'followers'];
@@ -71,10 +72,37 @@ function combinedKpi(a, b, key) {
   return { value, deltaPct };
 }
 
-export function computeSocialDashboard({ since, until }) {
+// Soma curtidas/comentários/visualizações do período (Instagram) ou visualizações de vídeo
+// (Facebook) de dois mercados, com delta vs. o mesmo cálculo no período anterior — busca ao
+// vivo na Insights API (cache de 5 min em meta.js), diferente dos campos de `buildEntity`
+// acima (que vêm do snapshot diário já salvo no store).
+function sumWithDelta(curA, curB, prevA, prevB) {
+  if (curA == null && curB == null) return { value: null, deltaPct: null };
+  const value = (curA ?? 0) + (curB ?? 0);
+  const prevValue = (prevA == null && prevB == null) ? null : (prevA ?? 0) + (prevB ?? 0);
+  return { value, deltaPct: prevValue != null ? pct(prevValue, value) : null };
+}
+
+export async function computeSocialDashboard({ since, until }) {
   const ig = { br: buildEntity('instagram', 'br', since, until), us: buildEntity('instagram', 'us', since, until) };
   const fb = { br: buildEntity('facebook', 'br', since, until), us: buildEntity('facebook', 'us', since, until) };
   const { prevSince, prevUntil } = previousPeriod(since, until);
+
+  const [igEngBr, igEngUs, igEngBrPrev, igEngUsPrev, fbVidBr, fbVidUs, fbVidBrPrev, fbVidUsPrev] = await Promise.all([
+    fetchInstagramEngagement('br', since, until).catch(() => null),
+    fetchInstagramEngagement('us', since, until).catch(() => null),
+    fetchInstagramEngagement('br', prevSince, prevUntil).catch(() => null),
+    fetchInstagramEngagement('us', prevSince, prevUntil).catch(() => null),
+    fetchFacebookVideoViews('br', since, until).catch(() => null),
+    fetchFacebookVideoViews('us', since, until).catch(() => null),
+    fetchFacebookVideoViews('br', prevSince, prevUntil).catch(() => null),
+    fetchFacebookVideoViews('us', prevSince, prevUntil).catch(() => null),
+  ]);
+
+  ig.br.engagement = igEngBr;
+  ig.us.engagement = igEngUs;
+  fb.br.videoViews = fbVidBr?.videoViews ?? null;
+  fb.us.videoViews = fbVidUs?.videoViews ?? null;
 
   return {
     period: { since, until, prevSince, prevUntil },
@@ -82,9 +110,11 @@ export function computeSocialDashboard({ since, until }) {
     facebook: fb,
     combined: {
       igFollowers: combinedKpi(ig.br, ig.us, 'followers'),
-      igLikes:     combinedKpi(ig.br, ig.us, 'recentLikes'),
+      igLikes:     sumWithDelta(igEngBr?.likes, igEngUs?.likes, igEngBrPrev?.likes, igEngUsPrev?.likes),
+      igViews:     sumWithDelta(igEngBr?.views, igEngUs?.views, igEngBrPrev?.views, igEngUsPrev?.views),
       fbLikes:     combinedKpi(fb.br, fb.us, 'likes'),
       fbFollowers: combinedKpi(fb.br, fb.us, 'followers'),
+      fbVideoViews: sumWithDelta(fbVidBr?.videoViews, fbVidUs?.videoViews, fbVidBrPrev?.videoViews, fbVidUsPrev?.videoViews),
     },
   };
 }
