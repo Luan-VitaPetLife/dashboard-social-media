@@ -572,7 +572,7 @@ function renderHistoryTable(elId, igSeries, fbSeries) {
     + (showFb ? `<th class="hist-group fb" colspan="2"><i class="bi bi-facebook"></i> Facebook</th>` : '');
   const metricRow =
     (showIg ? `<th class="hist-metric group-start">Seguidores</th><th class="hist-metric">Curtidas</th>` : '')
-    + (showFb ? `<th class="hist-metric group-start">Curtidas</th><th class="hist-metric">Seguidores</th>` : '');
+    + (showFb ? `<th class="hist-metric group-start">Seguidores</th><th class="hist-metric">Curtidas</th>` : '');
 
   el.innerHTML = `<table>
     <thead>
@@ -582,7 +582,7 @@ function renderHistoryTable(elId, igSeries, fbSeries) {
     <tbody>${dates.map(d => {
       let cells = `<td class="hist-date">${fmtDateBR(d)}</td>`;
       if (showIg) cells += `<td class="hist-cell group-start">${fmt(igF.get(d))}</td><td class="hist-cell">${fmt(igL.get(d))}</td>`;
-      if (showFb) cells += `<td class="hist-cell group-start">${fmt(fbL.get(d))}</td><td class="hist-cell">${fmt(fbF.get(d))}</td>`;
+      if (showFb) cells += `<td class="hist-cell group-start">${fmt(fbF.get(d))}</td><td class="hist-cell">${fmt(fbL.get(d))}</td>`;
       return `<tr>${cells}</tr>`;
     }).join('')}</tbody>
   </table>`;
