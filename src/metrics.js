@@ -1,11 +1,12 @@
-// metrics.js — monta o payload de /api/dashboard: valor atual, crescimento dentro do período
-// selecionado e série pro gráfico de tendência, por plataforma e mercado.
+// metrics.js — monta o payload de /api/dashboard: valor atual, comparação com o período
+// anterior de mesmo tamanho (ex: últimos 7 dias vs. os 7 dias antes desses) e série pro
+// gráfico de tendência, por plataforma e mercado.
 //
-// "Crescimento no período" aqui é o primeiro valor vs. o último valor DENTRO da janela
-// escolhida (não "vs. período anterior" como no live-dashboard) — seguidores é um contador
-// (gauge), não um total somável como receita, e a série é só um snapshot por dia, então
-// "quanto cresceu do início ao fim da janela que você está olhando" é a leitura mais direta
-// pra esse tipo de dado, e funciona mesmo com pouco histórico acumulado ainda.
+// Seguidores/curtidas de página são um contador (gauge), não um total somável como receita —
+// "o valor no período" é o último snapshot dentro da janela, e "vs. período anterior" compara
+// esse valor com o último snapshot da janela imediatamente anterior, de mesmo tamanho. Sem
+// snapshot na janela anterior (conta muito nova, ainda sem 2 períodos de histórico), o delta
+// fica null ("—") em vez de fabricar um número.
 import { getSnapshotsInRange } from './store.js';
 
 const IG_KEYS = ['followers', 'following', 'posts', 'recentLikes', 'recentComments'];
@@ -16,65 +17,67 @@ function pct(from, to) {
   return ((to - from) / Math.abs(from)) * 100;
 }
 
+function parseISO(s) { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); }
+function isoUTC(d) { return d.toISOString().slice(0, 10); }
+function addDaysISO(iso, n) { const d = parseISO(iso); d.setUTCDate(d.getUTCDate() + n); return isoUTC(d); }
+function daysBetween(a, b) { return Math.round((parseISO(b) - parseISO(a)) / 86400000); }
+
+// Janela anterior de mesmo tamanho, encostada logo antes de `since` — ex: since=10/07,
+// until=16/07 (7 dias) → período anterior = 03/07 a 09/07.
+function previousPeriod(since, until) {
+  const lengthDays = daysBetween(since, until) + 1;
+  const prevUntil = addDaysISO(since, -1);
+  const prevSince = addDaysISO(prevUntil, -(lengthDays - 1));
+  return { prevSince, prevUntil };
+}
+
+function lastValueInRange(platform, market, since, until) {
+  const entries = getSnapshotsInRange(platform, market, since, until);
+  if (!entries.length) return null;
+  return entries[entries.length - 1][1];
+}
+
 function buildEntity(platform, market, since, until) {
   const keys = platform === 'instagram' ? IG_KEYS : FB_KEYS;
   const entries = getSnapshotsInRange(platform, market, since, until);
   const series = { dates: entries.map(([d]) => d) };
   for (const k of keys) series[k] = entries.map(([, v]) => v[k] ?? null);
 
-  if (!entries.length) return { latest: null, delta: {}, series };
+  const { prevSince, prevUntil } = previousPeriod(since, until);
+  const previous = lastValueInRange(platform, market, prevSince, prevUntil);
+
+  if (!entries.length) return { latest: null, previous, delta: {}, series };
 
   const [lastDate, last] = entries[entries.length - 1];
   const delta = {};
-  // Só calcula crescimento com 2+ snapshots no período — com só 1, "primeiro" e "último" são
-  // o mesmo ponto e pct(x,x) sempre dá 0, o que mostraria "↑0%" (parece medido e estável) em
-  // vez de "—" (não dá pra medir variação ainda). Isso é o estado normal nos primeiros dias
-  // de uma conta recém-conectada, não um erro.
-  if (entries.length >= 2) {
-    const [, first] = entries[0];
-    for (const k of keys) delta[k] = pct(first[k], last[k]);
-  }
+  for (const k of keys) delta[k] = previous ? pct(previous[k], last[k]) : null;
 
-  return { latest: { ...last, date: lastDate }, delta, series };
+  return { latest: { ...last, date: lastDate }, previous, delta, series };
 }
 
-// Soma duas séries do mesmo mercado por data, pra dar o KPI combinado BR+US. As duas quase
-// sempre sincronizam juntas (mesmo agendamento), mas nem sempre no mesmo dia exato (uma pode
-// falhar um sync e a outra não) — por isso "carrega pra frente" o último valor conhecido de
-// cada mercado em vez de tratar ausência como 0. Só entra no resultado a partir do ponto em
-// que os DOIS mercados já têm pelo menos um valor conhecido: antes disso, "somar" só um deles
-// não é um total combinado de verdade, e trataria "o outro mercado começou a reportar" como
-// crescimento — não é.
-function combineSeries(a, b, key) {
-  const build = (series) => { const m = new Map(); (series.dates || []).forEach((d, i) => { const v = series[key]?.[i]; if (v != null) m.set(d, v); }); return m; };
-  const aMap = build(a), bMap = build(b);
-  const dates = [...new Set([...aMap.keys(), ...bMap.keys()])].sort();
-  let aLast = null, bLast = null;
-  const out = [];
-  for (const d of dates) {
-    if (aMap.has(d)) aLast = aMap.get(d);
-    if (bMap.has(d)) bLast = bMap.get(d);
-    if (aLast == null || bLast == null) continue;
-    out.push(aLast + bLast);
-  }
-  return out;
-}
-
+// Soma o valor mais recente de cada mercado (atual e do período anterior) pro KPI combinado
+// BR+US — mercado sem dado em algum dos dois momentos entra como 0 na soma, mas só calcula
+// delta se pelo menos um dos dois tinha algo no período anterior (senão "apareceu do nada"
+// pareceria crescimento infinito).
 function combinedKpi(a, b, key) {
   const av = a.latest?.[key], bv = b.latest?.[key];
   if (av == null && bv == null) return { value: null, deltaPct: null };
   const value = (av ?? 0) + (bv ?? 0);
-  const combined = combineSeries(a.series, b.series, key);
-  const deltaPct = combined.length >= 2 ? pct(combined[0], combined[combined.length - 1]) : null;
+
+  const apv = a.previous?.[key], bpv = b.previous?.[key];
+  const prevValue = (apv == null && bpv == null) ? null : (apv ?? 0) + (bpv ?? 0);
+  const deltaPct = prevValue != null ? pct(prevValue, value) : null;
+
   return { value, deltaPct };
 }
 
 export function computeSocialDashboard({ since, until }) {
   const ig = { br: buildEntity('instagram', 'br', since, until), us: buildEntity('instagram', 'us', since, until) };
   const fb = { br: buildEntity('facebook', 'br', since, until), us: buildEntity('facebook', 'us', since, until) };
+  const { prevSince, prevUntil } = previousPeriod(since, until);
 
   return {
-    period: { since, until },
+    period: { since, until, prevSince, prevUntil },
     instagram: ig,
     facebook: fb,
     combined: {

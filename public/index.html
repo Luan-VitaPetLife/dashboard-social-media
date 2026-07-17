@@ -329,7 +329,7 @@ const todayISO = isoLocal(new Date());
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
 
-function deltaHtml(p, suffix = 'no período') {
+function deltaHtml(p, suffix = 'vs. período anterior') {
   if (p == null) return `<span class="delta-val flat">—</span> ${suffix}`;
   const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
   return `<span class="delta-val ${cls}">${up ? '↑' : '↓'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span> ${suffix}`;
