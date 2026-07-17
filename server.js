@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initStore, getLastSync } from './src/store.js';
+import { initStore, getLastSync, getSnapshots, getStoreBackend } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
 import { probeInsights } from './src/meta.js';
@@ -19,6 +19,20 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// Diagnóstico: confirma qual backend de armazenamento está ativo (mongodb ou json local) e
+// quantos snapshots existem por conta — sem precisar vasculhar log do Railway/Atlas.
+app.get('/api/status', (req, res) => {
+  const count = (platform, market) => Object.keys(getSnapshots(platform, market)).length;
+  res.json({
+    storeBackend: getStoreBackend(),
+    lastSync: getLastSync(),
+    snapshotCounts: {
+      instagram: { br: count('instagram', 'br'), us: count('instagram', 'us') },
+      facebook: { br: count('facebook', 'br'), us: count('facebook', 'us') },
+    },
+  });
+});
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }

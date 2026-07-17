@@ -50,6 +50,12 @@ export async function initStore() {
   }
 }
 
+// Diagnóstico: qual backend está realmente ativo — usado por GET /api/status pra confirmar
+// se o MONGODB_URI foi lido e a conexão foi aberta, sem precisar vasculhar log do Railway.
+export function getStoreBackend() {
+  return USE_MONGO ? 'mongodb' : 'json';
+}
+
 export function getSnapshots(platform, market) {
   return (cache.snapshots || {})[platform]?.[market] || {};
 }
