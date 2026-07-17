@@ -19,8 +19,8 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.get('/api/dashboard', (req, res) => {
   res.json({
-    instagram: getSnapshots('instagram'),
-    facebook: getSnapshots('facebook'),
+    instagram: { br: getSnapshots('instagram', 'br'), us: getSnapshots('instagram', 'us') },
+    facebook:  { br: getSnapshots('facebook', 'br'),  us: getSnapshots('facebook', 'us') },
     lastSync: getLastSync(),
   });
 });

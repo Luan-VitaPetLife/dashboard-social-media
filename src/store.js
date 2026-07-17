@@ -51,14 +51,15 @@ export async function initStore() {
   }
 }
 
-export function getSnapshots(platform) {
-  return (cache.snapshots || {})[platform] || {};
+export function getSnapshots(platform, market) {
+  return (cache.snapshots || {})[platform]?.[market] || {};
 }
 
-export function addSnapshot(platform, dateISO, data) {
+export function addSnapshot(platform, market, dateISO, data) {
   if (!cache.snapshots) cache.snapshots = {};
   if (!cache.snapshots[platform]) cache.snapshots[platform] = {};
-  cache.snapshots[platform][dateISO] = data;
+  if (!cache.snapshots[platform][market]) cache.snapshots[platform][market] = {};
+  cache.snapshots[platform][market][dateISO] = data;
   saveJson();
   pgSet('snapshots', cache.snapshots);
 }
