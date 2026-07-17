@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { initStore, getLastSync, getSnapshots, getStoreBackend } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
-import { probeInsights } from './src/meta.js';
+import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +53,14 @@ app.post('/api/sync', async (req, res) => {
 app.get('/api/meta/probe-insights', async (req, res) => {
   const market = req.query.market === 'us' ? 'us' : 'br';
   try { res.json(await probeInsights(market)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Diagnóstico: testa candidatos de métrica pra visualizações de vídeo + curtidas/comentários
+// somados no período (Instagram e Facebook), um de cada vez. Ver src/meta.js probeEngagement.
+app.get('/api/meta/probe-engagement', async (req, res) => {
+  const market = req.query.market === 'us' ? 'us' : 'br';
+  try { res.json(await probeEngagement(market)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -154,3 +154,53 @@ export async function probeInsights(market) {
 
   return out;
 }
+
+// ── Diagnóstico: visualizações de vídeo + curtidas/comentários somados no período ──────────
+// Pedido do Luan (17/07/2026): total de curtidas em posts E visualizações de vídeo, somados
+// no período — diferente do que já existe (`recentLikes`, amostra dos últimos 25 posts NO
+// MOMENTO do sync, não uma soma do período). Os nomes de métrica de engajamento por conta
+// mudaram bastante nas versões recentes da Graph API (ex: "impressions" foi substituído por
+// "views" em várias contas) — em vez de assumir um nome, testa cada candidato separado, mesmo
+// padrão que já resolveu o caso do Facebook (ver FB_METRIC_CANDIDATES acima).
+const IG_ENGAGEMENT_CANDIDATES = ['likes', 'comments', 'views', 'video_views', 'reach', 'saved', 'shares', 'total_interactions'];
+const FB_ENGAGEMENT_CANDIDATES = ['post_video_views', 'page_video_views', 'page_impressions', 'page_posts_impressions'];
+
+export async function probeEngagement(market) {
+  const igId = IG_IDS[market], fbId = FB_IDS[market];
+  const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
+  const out = { market, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
+  if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+
+  if (igId) {
+    out.instagramMetrics = {};
+    for (const metric of IG_ENGAGEMENT_CANDIDATES) {
+      try {
+        const json = await graphGet(`${igId}/insights?metric=${metric}&period=day&since=${since}&until=${until}`);
+        const values = json.data?.[0]?.values || [];
+        out.instagramMetrics[metric] = { ok: true, points: values.length, sample: values.slice(0, 3) };
+      } catch (e) {
+        out.instagramMetrics[metric] = { ok: false, error: e.message };
+      }
+    }
+  } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
+
+  if (fbId) {
+    try {
+      const pageToken = await fetchPageAccessToken(market);
+      out.facebookEngagementMetrics = {};
+      for (const metric of FB_ENGAGEMENT_CANDIDATES) {
+        try {
+          const json = await graphGetAs(pageToken, `${fbId}/insights/${metric}?period=day&since=${since}&until=${until}`);
+          const values = json.data?.[0]?.values || [];
+          out.facebookEngagementMetrics[metric] = { ok: true, points: values.length, sample: values.slice(0, 3) };
+        } catch (e) {
+          out.facebookEngagementMetrics[metric] = { ok: false, error: e.message };
+        }
+      }
+    } catch (e) {
+      out.facebookTokenError = e.message;
+    }
+  } else out.facebookError = 'META_FB_PAGE_ID_' + market.toUpperCase() + ' ausente.';
+
+  return out;
+}
