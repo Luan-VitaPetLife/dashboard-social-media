@@ -57,8 +57,12 @@ export async function backfillSocialHistory({ market }) {
       const deltas = await fetchFacebookNetFanDeltas(market);
       const series = reconstructAbsolute(fbAnchor.data.likes, deltas);
       for (const { date, value } of series) {
-        if (fbExisting[date]) continue;
-        addSnapshot('facebook', market, date, { likes: value });
+        const existing = fbExisting[date];
+        if (existing && existing.followers != null) continue; // já completo (sync real ou backfill anterior) — não mexe
+        // Curtidas e seguidores da Página são sempre o mesmo número observado nessa conta (a
+        // Meta unificou os dois conceitos) — usa o mesmo valor reconstruído pros dois campos.
+        // Se já existia um `likes` de um backfill anterior, preserva ele em vez de sobrescrever.
+        addSnapshot('facebook', market, date, { ...(existing || {}), likes: existing?.likes ?? value, followers: value });
         result.facebook.added++;
       }
     } catch (e) {
