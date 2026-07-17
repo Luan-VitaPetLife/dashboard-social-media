@@ -24,12 +24,18 @@ function buildEntity(platform, market, since, until) {
 
   if (!entries.length) return { latest: null, delta: {}, series };
 
-  const [firstDate, first] = entries[0];
   const [lastDate, last] = entries[entries.length - 1];
   const delta = {};
-  for (const k of keys) delta[k] = pct(first[k], last[k]);
+  // Só calcula crescimento com 2+ snapshots no período — com só 1, "primeiro" e "último" são
+  // o mesmo ponto e pct(x,x) sempre dá 0, o que mostraria "↑0%" (parece medido e estável) em
+  // vez de "—" (não dá pra medir variação ainda). Isso é o estado normal nos primeiros dias
+  // de uma conta recém-conectada, não um erro.
+  if (entries.length >= 2) {
+    const [, first] = entries[0];
+    for (const k of keys) delta[k] = pct(first[k], last[k]);
+  }
 
-  return { latest: { ...last, date: lastDate }, first: { ...first, date: firstDate }, delta, series };
+  return { latest: { ...last, date: lastDate }, delta, series };
 }
 
 // Soma duas séries do mesmo mercado por data, pra dar o KPI combinado BR+US. As duas quase
@@ -59,7 +65,7 @@ function combinedKpi(a, b, key) {
   if (av == null && bv == null) return { value: null, deltaPct: null };
   const value = (av ?? 0) + (bv ?? 0);
   const combined = combineSeries(a.series, b.series, key);
-  const deltaPct = combined.length ? pct(combined[0], combined[combined.length - 1]) : null;
+  const deltaPct = combined.length >= 2 ? pct(combined[0], combined[combined.length - 1]) : null;
   return { value, deltaPct };
 }
 

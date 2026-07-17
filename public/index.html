@@ -142,6 +142,7 @@
   .legend-dot.br{background:var(--mkt-br)}
   .legend-dot.us{background:var(--mkt-us)}
   .chart-wrap{height:280px;margin-top:6px}
+  .chart-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 
   /* ── Histórico ── */
   table{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -178,6 +179,15 @@
         </div>
       </div>
 
+      <div class="filter-pill csel" id="cselChannel">
+        <span class="lbl">Canal</span><span class="val" id="channelVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop">
+          <div class="csel-opt active" data-value="todos">Todos</div>
+          <div class="csel-opt" data-value="instagram">Instagram</div>
+          <div class="csel-opt" data-value="facebook">Facebook</div>
+        </div>
+      </div>
+
       <div style="position:relative" id="periodWrap">
         <div class="filter-pill period-pill-active" id="periodPill">
           <span class="lbl">Período</span><span class="val" id="periodValue">30 dias</span><span class="arr">▾</span>
@@ -207,23 +217,23 @@
   <main class="content">
     <h3 class="section">Agora · Brasil + Estados Unidos</h3>
     <div class="card kpi-strip-card">
-      <div class="kpi-strip-grid">
-        <div class="kpi-mini">
+      <div class="kpi-strip-grid" id="kpiStripGrid">
+        <div class="kpi-mini kpi-ig" id="kpiIgFollowersWrap">
           <div class="kc-label"><i class="bi bi-instagram"></i> Seguidores Instagram</div>
           <div class="kc-value" id="kpiIgFollowersValue">—</div>
           <div class="kc-delta" id="kpiIgFollowersDelta"></div>
         </div>
-        <div class="kpi-mini">
+        <div class="kpi-mini kpi-ig" id="kpiIgLikesWrap">
           <div class="kc-label"><i class="bi bi-heart"></i> Curtidas Instagram</div>
           <div class="kc-value" id="kpiIgLikesValue">—</div>
           <div class="kc-delta" id="kpiIgLikesDelta"></div>
         </div>
-        <div class="kpi-mini">
+        <div class="kpi-mini kpi-fb" id="kpiFbLikesWrap">
           <div class="kc-label"><i class="bi bi-facebook"></i> Curtidas Facebook</div>
           <div class="kc-value" id="kpiFbLikesValue">—</div>
           <div class="kc-delta" id="kpiFbLikesDelta"></div>
         </div>
-        <div class="kpi-mini">
+        <div class="kpi-mini kpi-fb" id="kpiFbFollowersWrap">
           <div class="kc-label"><i class="bi bi-people"></i> Seguidores Facebook</div>
           <div class="kc-value" id="kpiFbFollowersValue">—</div>
           <div class="kc-delta" id="kpiFbFollowersDelta"></div>
@@ -279,6 +289,7 @@
       </div>
       <div class="legend-row"><span><span class="legend-dot br"></span>Brasil</span><span><span class="legend-dot us"></span>Estados Unidos</span></div>
       <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período — o gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
     </div>
 
     <h3 class="section">Histórico (dentro do período selecionado)</h3>
@@ -327,6 +338,9 @@ const METRIC_SOURCES = {
 };
 let metric = localStorage.getItem('coco_sm_metric') || 'igFollowers';
 if (!METRIC_SOURCES[metric]) metric = 'igFollowers';
+const CHANNEL_LABEL = { todos: 'Todos', instagram: 'Instagram', facebook: 'Facebook' };
+let channel = localStorage.getItem('coco_sm_channel') || 'todos';
+if (!CHANNEL_LABEL[channel]) channel = 'todos';
 
 let lastData = null;
 let refreshTimer = null;
@@ -352,7 +366,29 @@ function syncControls() {
   document.querySelectorAll('#cselRefresh .csel-opt').forEach(o => o.classList.toggle('active', Number(o.dataset.value) === refreshMin));
   document.getElementById('metricVal').textContent = METRIC_SOURCES[metric].label;
   document.querySelectorAll('#cselMetric .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === metric));
+  document.getElementById('channelVal').textContent = CHANNEL_LABEL[channel];
+  document.querySelectorAll('#cselChannel .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === channel));
   document.getElementById('periodValue').textContent = rangeLabel(sinceDate, untilDate);
+}
+
+// Aplica o filtro de canal (Todos/Instagram/Facebook): esconde cards, KPIs, opções de
+// métrica do gráfico e colunas do histórico que não pertencem ao canal escolhido. Os nós
+// afetados são estáticos no HTML (só o conteúdo interno é re-renderizado), então o
+// display:none aplicado aqui sobrevive a cada render() novo — não precisa reaplicar toda vez.
+function updateChannelVisibility() {
+  document.querySelectorAll('.acc-card.ig').forEach(el => el.style.display = channel === 'facebook' ? 'none' : '');
+  document.querySelectorAll('.acc-card.fb').forEach(el => el.style.display = channel === 'instagram' ? 'none' : '');
+  document.querySelectorAll('.kpi-mini.kpi-ig').forEach(el => el.style.display = channel === 'facebook' ? 'none' : '');
+  document.querySelectorAll('.kpi-mini.kpi-fb').forEach(el => el.style.display = channel === 'instagram' ? 'none' : '');
+
+  document.querySelectorAll('#cselMetric .csel-opt').forEach(opt => {
+    const hide = channel !== 'todos' && METRIC_SOURCES[opt.dataset.value].platform !== channel;
+    opt.style.display = hide ? 'none' : '';
+  });
+  if (channel !== 'todos' && METRIC_SOURCES[metric].platform !== channel) {
+    metric = channel === 'facebook' ? 'fbLikes' : 'igFollowers';
+    localStorage.setItem('coco_sm_metric', metric);
+  }
 }
 
 // ── Dropdowns ──
@@ -385,6 +421,13 @@ setupCsel(document.getElementById('cselMetric'), val => {
   localStorage.setItem('coco_sm_metric', metric);
   syncControls();
   if (lastData) drawTrendChart(lastData);
+});
+setupCsel(document.getElementById('cselChannel'), val => {
+  channel = val;
+  localStorage.setItem('coco_sm_channel', channel);
+  updateChannelVisibility();
+  syncControls();
+  if (lastData) { drawTrendChart(lastData); renderHistoryTable('histBr', lastData.instagram.br.series, lastData.facebook.br.series); renderHistoryTable('histUs', lastData.instagram.us.series, lastData.facebook.us.series); }
 });
 
 // ── Period picker ──
@@ -461,6 +504,12 @@ function drawTrendChart(d) {
       }
     }
   });
+
+  // Com menos de 2 pontos numa das linhas, o Chart.js não tem o que traçar (só um ponto
+  // solto) — não é erro, é só o começo da coleta. Avisa em vez de deixar o gráfico
+  // parecendo quebrado.
+  const sparse = dates.length < 2;
+  document.getElementById('chartNote').style.display = sparse ? '' : 'none';
 }
 
 function setKpi(prefix, kpi) {
@@ -490,20 +539,26 @@ function renderAccountCard(elId, entity, platform) {
 }
 
 function renderHistoryTable(elId, igSeries, fbSeries) {
-  const dates = Array.from(new Set([...(igSeries?.dates || []), ...(fbSeries?.dates || [])])).sort().reverse();
+  const showIg = channel !== 'facebook', showFb = channel !== 'instagram';
+  const dates = Array.from(new Set([
+    ...(showIg ? igSeries?.dates || [] : []),
+    ...(showFb ? fbSeries?.dates || [] : []),
+  ])).sort().reverse();
   const el = document.getElementById(elId);
   if (!dates.length) { el.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
   const igF = seriesMap(igSeries, 'followers'), igL = seriesMap(igSeries, 'recentLikes');
   const fbL = seriesMap(fbSeries, 'likes'), fbF = seriesMap(fbSeries, 'followers');
+  const headers = ['Data'];
+  if (showIg) headers.push('Instagram Seguidores', 'Instagram Curtidas');
+  if (showFb) headers.push('Facebook Curtidas', 'Facebook Seguidores');
   el.innerHTML = `<table>
-    <thead><tr><th>Data</th><th>IG Seguidores</th><th>IG Curtidas</th><th>FB Curtidas</th><th>FB Seguidores</th></tr></thead>
-    <tbody>${dates.map(d => `<tr>
-      <td>${d}</td>
-      <td>${fmt(igF.get(d))}</td>
-      <td>${fmt(igL.get(d))}</td>
-      <td>${fmt(fbL.get(d))}</td>
-      <td>${fmt(fbF.get(d))}</td>
-    </tr>`).join('')}</tbody>
+    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${dates.map(d => {
+      let cells = `<td>${d}</td>`;
+      if (showIg) cells += `<td>${fmt(igF.get(d))}</td><td>${fmt(igL.get(d))}</td>`;
+      if (showFb) cells += `<td>${fmt(fbL.get(d))}</td><td>${fmt(fbF.get(d))}</td>`;
+      return `<tr>${cells}</tr>`;
+    }).join('')}</tbody>
   </table>`;
 }
 
@@ -541,6 +596,7 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 
+updateChannelVisibility();
 syncControls();
 applyRefresh();
 load();
