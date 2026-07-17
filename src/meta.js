@@ -14,13 +14,29 @@ export function isConfigured() {
   return Boolean(TOKEN);
 }
 
-async function graphGet(pathAndQuery) {
+async function graphGetAs(token, pathAndQuery) {
   const sep = pathAndQuery.includes('?') ? '&' : '?';
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${pathAndQuery}${sep}access_token=${TOKEN}`;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${pathAndQuery}${sep}access_token=${token}`;
   const res = await fetch(url);
   const json = await res.json();
   if (json.error) throw new Error(json.error.message || 'Meta Graph API error');
   return json;
+}
+function graphGet(pathAndQuery) { return graphGetAs(TOKEN, pathAndQuery); }
+
+// Page Insights (histórico) exige o token DA PRÓPRIA PÁGINA, não o token de usuário/sistema
+// usado em todo o resto deste arquivo (erro confirmado ao vivo: "(#190) This method must be
+// called with a Page Access Token"). O token de usuário, com pages_show_list +
+// pages_read_engagement, consegue pedir o token da Página — troca única por mercado, não
+// precisa ser salva em lugar nenhum, só usada na hora do backfill.
+const pageTokenCache = {};
+async function fetchPageAccessToken(market) {
+  if (pageTokenCache[market]) return pageTokenCache[market];
+  const id = FB_IDS[market];
+  if (!TOKEN || !id) return null;
+  const json = await graphGet(`${id}?fields=access_token`);
+  pageTokenCache[market] = json.access_token || null;
+  return pageTokenCache[market];
 }
 
 // Instagram Business Account: seguidores, seguindo, nº de posts, e curtidas/comentários somados
@@ -77,15 +93,26 @@ export async function fetchInstagramFollowerDeltas(market) {
   return values.map(v => ({ date: (v.end_time || '').slice(0, 10), delta: v.value }));
 }
 
+// Confirmado ao vivo (17/07/2026): page_fans, page_fan_adds(_unique), page_fan_removes(_unique)
+// não existem mais ("(#100) valid insights metric") — só os "page_follows"/"page_daily_*follow*"
+// são nomes válidos, mas exigem o token DA PÁGINA (ver fetchPageAccessToken acima), não o de
+// usuário/sistema.
+const FB_METRIC_CANDIDATES = [
+  'page_follows',
+  'page_daily_follows', 'page_daily_follows_unique',
+  'page_daily_unfollows', 'page_daily_unfollows_unique',
+];
+
 // Página do Facebook não tem um equivalente direto a follower_count — reconstrói a variação
-// líquida do dia a partir de "ganhou" menos "perdeu" (dois metrics separados na Insights API).
+// líquida do dia a partir de "ganhou" menos "perdeu".
 export async function fetchFacebookNetFanDeltas(market) {
+  const pageToken = await fetchPageAccessToken(market);
   const id = FB_IDS[market];
-  if (!TOKEN || !id) return [];
+  if (!pageToken || !id) return [];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
-  const json = await graphGet(`${id}/insights?metric=page_fan_adds_unique,page_fan_removes_unique&period=day&since=${since}&until=${until}`);
-  const adds = json.data?.find(d => d.name === 'page_fan_adds_unique')?.values || [];
-  const removes = json.data?.find(d => d.name === 'page_fan_removes_unique')?.values || [];
+  const json = await graphGetAs(pageToken, `${id}/insights?metric=page_daily_follows_unique,page_daily_unfollows_unique&period=day&since=${since}&until=${until}`);
+  const adds = json.data?.find(d => d.name === 'page_daily_follows_unique')?.values || [];
+  const removes = json.data?.find(d => d.name === 'page_daily_unfollows_unique')?.values || [];
   const removeMap = new Map(removes.map(v => [(v.end_time || '').slice(0, 10), v.value || 0]));
   return adds.map(v => {
     const date = (v.end_time || '').slice(0, 10);
@@ -96,18 +123,6 @@ export async function fetchFacebookNetFanDeltas(market) {
 // Diagnóstico: devolve a resposta crua dos endpoints de Insights (Instagram e Facebook),
 // sem processar nada — confirma ao vivo quantos dias realmente vêm e se as métricas ainda
 // existem pra essa conta, antes de confiar no backfill. Usado por GET /api/meta/probe-insights.
-// Nomes de métrica de Page Insights mudaram/foram descontinuados várias vezes pela Meta —
-// em vez de assumir um nome fixo, o probe testa cada candidato SEPARADO (pedir vários numa
-// query só faz a chamada inteira falhar se qualquer um for inválido, o que mascarava qual
-// dos dois estava quebrado) e reporta o que funcionou de verdade pra essa conta.
-const FB_METRIC_CANDIDATES = [
-  'page_fans', 'page_follows',
-  'page_fan_adds', 'page_fan_removes',
-  'page_fan_adds_unique', 'page_fan_removes_unique',
-  'page_daily_follows', 'page_daily_follows_unique',
-  'page_daily_unfollows', 'page_daily_unfollows_unique',
-];
-
 export async function probeInsights(market) {
   const igId = IG_IDS[market], fbId = FB_IDS[market];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
@@ -120,14 +135,20 @@ export async function probeInsights(market) {
   } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
 
   if (fbId) {
-    out.facebookMetrics = {};
-    for (const metric of FB_METRIC_CANDIDATES) {
-      try {
-        const json = await graphGet(`${fbId}/insights/${metric}?period=day&since=${since}&until=${until}`);
-        out.facebookMetrics[metric] = { ok: true, points: json.data?.[0]?.values?.length ?? 0 };
-      } catch (e) {
-        out.facebookMetrics[metric] = { ok: false, error: e.message };
+    try {
+      const pageToken = await fetchPageAccessToken(market);
+      out.facebookPageToken = pageToken ? 'obtido' : 'não veio (ver facebookTokenError)';
+      out.facebookMetrics = {};
+      for (const metric of FB_METRIC_CANDIDATES) {
+        try {
+          const json = await graphGetAs(pageToken, `${fbId}/insights/${metric}?period=day&since=${since}&until=${until}`);
+          out.facebookMetrics[metric] = { ok: true, points: json.data?.[0]?.values?.length ?? 0 };
+        } catch (e) {
+          out.facebookMetrics[metric] = { ok: false, error: e.message };
+        }
       }
+    } catch (e) {
+      out.facebookTokenError = e.message;
     }
   } else out.facebookError = 'META_FB_PAGE_ID_' + market.toUpperCase() + ' ausente.';
 
