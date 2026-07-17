@@ -1,0 +1,73 @@
+// ─────────────────────────────────────────────
+//  sidebar.js — sidebar compartilhada (mesmo padrão do live-dashboard: injeta
+//  markup + CSS uma vez, idempotente). Paleta inspirada nas telas de
+//  Configurações do próprio Meta Business Suite — gradiente suave, texto
+//  escuro, item ativo em pílula navy.
+//  Uso: <script src="sidebar.js"></script> logo após <body>.
+// ─────────────────────────────────────────────
+(function () {
+  const html = `
+<button id="sidebarOpen" class="sidebar-open-btn" title="Abrir menu"><i class="bi bi-list"></i></button>
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
+<nav class="sidebar">
+  <div class="brand">
+    <div class="brand-mark"><i class="bi bi-heart-fill"></i></div>
+    <div class="brand-text">
+      <span class="brand-name">Coco and Luna</span>
+      <span class="brand-sub">Redes Sociais</span>
+    </div>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Painel</div>
+    <a class="nav-item active" href="index.html"><i class="bi bi-grid-1x2-fill nav-icon"></i> Visão geral</a>
+  </div>
+</nav>`;
+
+  const css = `
+.sidebar{width:224px;min-height:100vh;background:linear-gradient(160deg,#fbe3e0 0%,#f6e9ec 45%,#eef1fb 100%);
+  border-right:1px solid rgba(28,43,57,.08);display:flex;flex-direction:column;padding:22px 0;
+  position:fixed;top:0;left:0;z-index:200;transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.brand{display:flex;align-items:center;gap:11px;padding:0 20px 22px;margin-bottom:14px;border-bottom:1px solid rgba(28,43,57,.08)}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:#1c2b39;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.brand-text{display:flex;flex-direction:column;line-height:1.3}
+.brand-name{font-size:13px;font-weight:700;color:#1c2b39}
+.brand-sub{font-size:10.5px;color:#6f7c88}
+.nav-group{margin-bottom:22px;padding:0 12px}
+.nav-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#7c8794;padding:0 10px;margin-bottom:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:500;color:#1c2b39;
+  cursor:pointer;transition:background .15s,color .15s;text-decoration:none}
+.nav-item:hover{background:rgba(28,43,57,.07)}
+.nav-item.active{background:#1c2b39;color:#fff}
+.nav-icon{font-size:14px;width:16px;text-align:center;flex-shrink:0;opacity:.85}
+.sidebar-open-btn{display:none;position:fixed;left:14px;top:14px;z-index:300;width:36px;height:36px;border-radius:9px;
+  border:1px solid var(--border2);background:var(--surface);color:var(--sub);cursor:pointer;align-items:center;
+  justify-content:center;font-size:17px;box-shadow:0 2px 10px rgba(28,43,57,.12)}
+.sidebar-overlay{position:fixed;inset:0;background:rgba(28,43,57,.4);z-index:150;opacity:0;pointer-events:none;transition:opacity .2s}
+body.sidebar-mobile-open .sidebar-overlay{opacity:1;pointer-events:auto}
+body.sidebar-mobile-open .sidebar{transform:translateX(0)!important}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar-open-btn{display:flex}
+}
+`;
+
+  function mount() {
+    if (document.querySelector('nav.sidebar')) return;
+    const style = document.createElement('style');
+    style.id = 'sidebarComponentStyle';
+    style.textContent = css;
+    document.head.appendChild(style);
+    document.body.insertAdjacentHTML('afterbegin', html);
+
+    const overlay = document.getElementById('sidebarOverlay');
+    const openBtn = document.getElementById('sidebarOpen');
+    openBtn.addEventListener('click', () => document.body.classList.add('sidebar-mobile-open'));
+    overlay.addEventListener('click', () => document.body.classList.remove('sidebar-mobile-open'));
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) document.body.classList.remove('sidebar-mobile-open');
+    });
+  }
+
+  if (document.body) mount();
+  else document.addEventListener('DOMContentLoaded', mount);
+})();
