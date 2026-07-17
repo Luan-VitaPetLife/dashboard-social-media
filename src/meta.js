@@ -96,18 +96,40 @@ export async function fetchFacebookNetFanDeltas(market) {
 // Diagnóstico: devolve a resposta crua dos endpoints de Insights (Instagram e Facebook),
 // sem processar nada — confirma ao vivo quantos dias realmente vêm e se as métricas ainda
 // existem pra essa conta, antes de confiar no backfill. Usado por GET /api/meta/probe-insights.
+// Nomes de métrica de Page Insights mudaram/foram descontinuados várias vezes pela Meta —
+// em vez de assumir um nome fixo, o probe testa cada candidato SEPARADO (pedir vários numa
+// query só faz a chamada inteira falhar se qualquer um for inválido, o que mascarava qual
+// dos dois estava quebrado) e reporta o que funcionou de verdade pra essa conta.
+const FB_METRIC_CANDIDATES = [
+  'page_fans', 'page_follows',
+  'page_fan_adds', 'page_fan_removes',
+  'page_fan_adds_unique', 'page_fan_removes_unique',
+  'page_daily_follows', 'page_daily_follows_unique',
+  'page_daily_unfollows', 'page_daily_unfollows_unique',
+];
+
 export async function probeInsights(market) {
   const igId = IG_IDS[market], fbId = FB_IDS[market];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const out = { market, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
   if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+
   if (igId) {
     try { out.instagramFollowerCount = await graphGet(`${igId}/insights?metric=follower_count&period=day&since=${since}&until=${until}`); }
     catch (e) { out.instagramError = e.message; }
   } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
+
   if (fbId) {
-    try { out.facebookFanDeltas = await graphGet(`${fbId}/insights?metric=page_fan_adds_unique,page_fan_removes_unique&period=day&since=${since}&until=${until}`); }
-    catch (e) { out.facebookError = e.message; }
+    out.facebookMetrics = {};
+    for (const metric of FB_METRIC_CANDIDATES) {
+      try {
+        const json = await graphGet(`${fbId}/insights/${metric}?period=day&since=${since}&until=${until}`);
+        out.facebookMetrics[metric] = { ok: true, points: json.data?.[0]?.values?.length ?? 0 };
+      } catch (e) {
+        out.facebookMetrics[metric] = { ok: false, error: e.message };
+      }
+    }
   } else out.facebookError = 'META_FB_PAGE_ID_' + market.toUpperCase() + ' ausente.';
+
   return out;
 }
