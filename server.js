@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { initStore, getLastSync } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
+import { probeInsights } from './src/meta.js';
+import { backfillSocialHistory } from './src/backfill.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -30,6 +32,28 @@ app.get('/api/dashboard', (req, res) => {
 app.post('/api/sync', async (req, res) => {
   try { res.json(await runSync()); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Diagnóstico: resposta crua dos endpoints de Insights (Instagram + Facebook), sem
+// processar nada. Ver src/meta.js (probeInsights) — roda antes de confiar no backfill.
+app.get('/api/meta/probe-insights', async (req, res) => {
+  const market = req.query.market === 'us' ? 'us' : 'br';
+  try { res.json(await probeInsights(market)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Preenche dias anteriores ao início do sync via Insights API (nunca sobrescreve snapshot
+// real). Sem ?market, roda BR e US. Ver src/backfill.js.
+app.post('/api/social/backfill', async (req, res) => {
+  const market = req.query.market;
+  try {
+    const markets = market === 'us' || market === 'br' ? [market] : ['br', 'us'];
+    const results = [];
+    for (const m of markets) results.push(await backfillSocialHistory({ market: m }));
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 let syncInFlight = false;
