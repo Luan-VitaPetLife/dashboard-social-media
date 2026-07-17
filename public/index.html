@@ -297,7 +297,6 @@
           <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
           <div class="csel-pop">
             <div class="csel-opt active" data-value="igFollowers">Instagram — Seguidores</div>
-            <div class="csel-opt" data-value="igLikes">Instagram — Curtidas (amostra)</div>
             <div class="csel-opt" data-value="fbLikes">Facebook — Curtidas</div>
             <div class="csel-opt" data-value="fbFollowers">Facebook — Seguidores</div>
           </div>
@@ -348,7 +347,6 @@ let untilDate = localStorage.getItem('coco_sm_until') || todayISO;
 let refreshMin = Number(localStorage.getItem('coco_sm_refresh') ?? 15);
 const METRIC_SOURCES = {
   igFollowers: { label: 'Instagram — Seguidores', key: 'followers', platform: 'instagram' },
-  igLikes:     { label: 'Instagram — Curtidas (amostra)', key: 'recentLikes', platform: 'instagram' },
   fbLikes:     { label: 'Facebook — Curtidas', key: 'likes', platform: 'facebook' },
   fbFollowers: { label: 'Facebook — Seguidores', key: 'followers', platform: 'facebook' },
 };
