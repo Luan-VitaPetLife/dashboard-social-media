@@ -11,10 +11,10 @@
 <div id="sidebarOverlay" class="sidebar-overlay"></div>
 <nav class="sidebar">
   <div class="brand">
-    <div class="brand-mark"><i class="bi bi-heart-fill"></i></div>
+    <img src="Logo2.png" alt="Vita Pet Life" class="brand-mark">
     <div class="brand-text">
-      <span class="brand-name">Coco and Luna</span>
-      <span class="brand-sub">Redes Sociais</span>
+      <span class="brand-name">Vita Pet Life</span>
+      <span class="brand-sub">Coco and Luna · Redes Sociais</span>
     </div>
   </div>
   <div class="nav-group">
@@ -28,7 +28,7 @@
   border-right:1px solid rgba(28,43,57,.08);display:flex;flex-direction:column;padding:22px 0;
   position:fixed;top:0;left:0;z-index:200;transition:transform .25s cubic-bezier(.4,0,.2,1)}
 .brand{display:flex;align-items:center;gap:11px;padding:0 20px 22px;margin-bottom:14px;border-bottom:1px solid rgba(28,43,57,.08)}
-.brand-mark{width:34px;height:34px;border-radius:10px;background:#1c2b39;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.brand-mark{width:34px;height:34px;border-radius:10px;object-fit:cover;flex-shrink:0}
 .brand-text{display:flex;flex-direction:column;line-height:1.3}
 .brand-name{font-size:13px;font-weight:700;color:#1c2b39}
 .brand-sub{font-size:10.5px;color:#6f7c88}
