@@ -177,7 +177,7 @@ export async function probeEngagement(market) {
   if (igId) {
     out.instagramMetrics = {};
     try {
-      const json = await graphGet(`${igId}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&since=${since}&until=${until}`);
+      const json = await graphGet(`${igId}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${since}&until=${until}`);
       out.instagramMetrics.totalValueRaw = json;
     } catch (e) {
       out.instagramMetrics.totalValueError = e.message;
