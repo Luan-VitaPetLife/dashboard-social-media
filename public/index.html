@@ -146,15 +146,30 @@
   .chart-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 
   /* ── Histórico ── */
-  table{width:100%;border-collapse:collapse;font-size:12.5px}
-  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
-  th{color:var(--muted);font-weight:700;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase}
+  td.hist-date{font-weight:600;color:var(--text);white-space:nowrap}
   tbody tr:hover{background:var(--surface2)}
-  .hist-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .hist-card h2{font-size:12.5px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;gap:7px}
-  .hist-card h2 img{width:15px;height:11px;object-fit:cover;border-radius:2px}
-  .hist-card .table-wrap{max-height:340px;overflow-y:auto}
-  @media(max-width:900px){.hist-grid{grid-template-columns:1fr}}
+  /* Cabeçalho em 2 linhas: grupo da plataforma (Instagram/Facebook) em cima, métrica embaixo —
+     separa visualmente os dois em vez de misturar 4 colunas soltas. */
+  th.hist-group{text-align:center;font-size:11px;letter-spacing:.6px;padding:10px 14px 8px;border-bottom:none}
+  th.hist-group.ig{color:var(--ig-2);border-left:2px solid var(--ig-2)}
+  th.hist-group.fb{color:var(--fb);border-left:2px solid var(--fb)}
+  th.hist-metric{text-align:center;font-size:10px}
+  th.hist-metric.group-start{border-left:2px solid var(--border2)}
+  td.hist-cell{text-align:center}
+  td.hist-cell.group-start{border-left:2px solid var(--border2)}
+  th.hist-date-th{vertical-align:bottom;padding-bottom:10px}
+
+  .hist-grid{display:flex;flex-direction:column;gap:18px}
+  .hist-card h2{font-size:13.5px;font-weight:700;margin:0 0 16px;display:flex;align-items:center;gap:8px}
+  .hist-card h2 img{width:16px;height:12px;object-fit:cover;border-radius:2px}
+  .hist-card .table-wrap{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .hist-card .table-wrap table{border-collapse:separate;border-spacing:0}
+  .hist-card .table-wrap thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+  .hist-card .table-wrap thead tr:first-child th{top:0}
+  .hist-card .table-wrap thead tr:nth-child(2) th{top:36px}
 
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
@@ -539,6 +554,10 @@ function renderAccountCard(elId, entity, platform) {
   `;
 }
 
+function fmtDateBR(iso) { return parseISO(iso).toLocaleDateString('pt-BR'); }
+
+// Cabeçalho em 2 linhas — grupo da plataforma (Instagram/Facebook) em cima, métrica embaixo —
+// pra separar visualmente os dados das duas em vez de misturar 4 colunas soltas numa tabela só.
 function renderHistoryTable(elId, igSeries, fbSeries) {
   const showIg = channel !== 'facebook', showFb = channel !== 'instagram';
   const dates = Array.from(new Set([
@@ -549,15 +568,23 @@ function renderHistoryTable(elId, igSeries, fbSeries) {
   if (!dates.length) { el.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
   const igF = seriesMap(igSeries, 'followers'), igL = seriesMap(igSeries, 'recentLikes');
   const fbL = seriesMap(fbSeries, 'likes'), fbF = seriesMap(fbSeries, 'followers');
-  const headers = ['Data'];
-  if (showIg) headers.push('Instagram Seguidores', 'Instagram Curtidas');
-  if (showFb) headers.push('Facebook Curtidas', 'Facebook Seguidores');
+
+  const groupRow = `<th class="hist-date-th" rowspan="2">Data</th>`
+    + (showIg ? `<th class="hist-group ig" colspan="2"><i class="bi bi-instagram"></i> Instagram</th>` : '')
+    + (showFb ? `<th class="hist-group fb" colspan="2"><i class="bi bi-facebook"></i> Facebook</th>` : '');
+  const metricRow =
+    (showIg ? `<th class="hist-metric group-start">Seguidores</th><th class="hist-metric">Curtidas</th>` : '')
+    + (showFb ? `<th class="hist-metric group-start">Curtidas</th><th class="hist-metric">Seguidores</th>` : '');
+
   el.innerHTML = `<table>
-    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <thead>
+      <tr>${groupRow}</tr>
+      <tr>${metricRow}</tr>
+    </thead>
     <tbody>${dates.map(d => {
-      let cells = `<td>${d}</td>`;
-      if (showIg) cells += `<td>${fmt(igF.get(d))}</td><td>${fmt(igL.get(d))}</td>`;
-      if (showFb) cells += `<td>${fmt(fbL.get(d))}</td><td>${fmt(fbF.get(d))}</td>`;
+      let cells = `<td class="hist-date">${fmtDateBR(d)}</td>`;
+      if (showIg) cells += `<td class="hist-cell group-start">${fmt(igF.get(d))}</td><td class="hist-cell">${fmt(igL.get(d))}</td>`;
+      if (showFb) cells += `<td class="hist-cell group-start">${fmt(fbL.get(d))}</td><td class="hist-cell">${fmt(fbF.get(d))}</td>`;
       return `<tr>${cells}</tr>`;
     }).join('')}</tbody>
   </table>`;
