@@ -158,11 +158,14 @@ export async function probeInsights(market) {
 // ── Diagnóstico: visualizações de vídeo + curtidas/comentários somados no período ──────────
 // Pedido do Luan (17/07/2026): total de curtidas em posts E visualizações de vídeo, somados
 // no período — diferente do que já existe (`recentLikes`, amostra dos últimos 25 posts NO
-// MOMENTO do sync, não uma soma do período). Os nomes de métrica de engajamento por conta
-// mudaram bastante nas versões recentes da Graph API (ex: "impressions" foi substituído por
-// "views" em várias contas) — em vez de assumir um nome, testa cada candidato separado, mesmo
-// padrão que já resolveu o caso do Facebook (ver FB_METRIC_CANDIDATES acima).
-const IG_ENGAGEMENT_CANDIDATES = ['likes', 'comments', 'views', 'video_views', 'reach', 'saved', 'shares', 'total_interactions'];
+// MOMENTO do sync, não uma soma do período). Confirmado ao vivo (17/07/2026): likes, comments,
+// views, shares, total_interactions e saves são nomes VÁLIDOS de métrica de conta, mas essa
+// conta só aceita eles com `metric_type=total_value` (dá o total do período numa chamada só,
+// em vez de série diária) — `period=day` sozinho dá erro pedindo esse parâmetro. `video_views`
+// não existe (usar `views`); `saved` não existe (usar `saves`, confirmado na lista de valores
+// aceitos que veio no erro anterior). `reach` já funciona em série diária (period=day), mantido
+// como está.
+const IG_TOTAL_VALUE_CANDIDATES = ['likes', 'comments', 'views', 'shares', 'saves', 'total_interactions'];
 const FB_ENGAGEMENT_CANDIDATES = ['post_video_views', 'page_video_views', 'page_impressions', 'page_posts_impressions'];
 
 export async function probeEngagement(market) {
@@ -173,14 +176,17 @@ export async function probeEngagement(market) {
 
   if (igId) {
     out.instagramMetrics = {};
-    for (const metric of IG_ENGAGEMENT_CANDIDATES) {
-      try {
-        const json = await graphGet(`${igId}/insights?metric=${metric}&period=day&since=${since}&until=${until}`);
-        const values = json.data?.[0]?.values || [];
-        out.instagramMetrics[metric] = { ok: true, points: values.length, sample: values.slice(0, 3) };
-      } catch (e) {
-        out.instagramMetrics[metric] = { ok: false, error: e.message };
-      }
+    try {
+      const json = await graphGet(`${igId}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&since=${since}&until=${until}`);
+      out.instagramMetrics.totalValueRaw = json;
+    } catch (e) {
+      out.instagramMetrics.totalValueError = e.message;
+    }
+    try {
+      const json = await graphGet(`${igId}/insights?metric=reach&period=day&since=${since}&until=${until}`);
+      out.instagramMetrics.reach = { ok: true, points: json.data?.[0]?.values?.length ?? 0 };
+    } catch (e) {
+      out.instagramMetrics.reach = { ok: false, error: e.message };
     }
   } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
 
