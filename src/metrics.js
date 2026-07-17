@@ -62,14 +62,14 @@ function buildEntity(platform, market, since, until) {
 // pareceria crescimento infinito).
 function combinedKpi(a, b, key) {
   const av = a.latest?.[key], bv = b.latest?.[key];
-  if (av == null && bv == null) return { value: null, deltaPct: null };
+  if (av == null && bv == null) return { value: null, previousValue: null, deltaPct: null };
   const value = (av ?? 0) + (bv ?? 0);
 
   const apv = a.previous?.[key], bpv = b.previous?.[key];
   const prevValue = (apv == null && bpv == null) ? null : (apv ?? 0) + (bpv ?? 0);
   const deltaPct = prevValue != null ? pct(prevValue, value) : null;
 
-  return { value, deltaPct };
+  return { value, previousValue: prevValue, deltaPct };
 }
 
 // Soma curtidas/comentários/visualizações do período (Instagram) ou visualizações de vídeo
@@ -77,10 +77,10 @@ function combinedKpi(a, b, key) {
 // vivo na Insights API (cache de 5 min em meta.js), diferente dos campos de `buildEntity`
 // acima (que vêm do snapshot diário já salvo no store).
 function sumWithDelta(curA, curB, prevA, prevB) {
-  if (curA == null && curB == null) return { value: null, deltaPct: null };
+  if (curA == null && curB == null) return { value: null, previousValue: null, deltaPct: null };
   const value = (curA ?? 0) + (curB ?? 0);
   const prevValue = (prevA == null && prevB == null) ? null : (prevA ?? 0) + (prevB ?? 0);
-  return { value, deltaPct: prevValue != null ? pct(prevValue, value) : null };
+  return { value, previousValue: prevValue, deltaPct: prevValue != null ? pct(prevValue, value) : null };
 }
 
 export async function computeSocialDashboard({ since, until }) {

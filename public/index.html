@@ -144,7 +144,10 @@
   .acc-sec-lbl{font-size:10.5px;color:var(--muted)}
   .acc-sec-val{font-size:15px;font-weight:600;color:var(--text)}
 
-  /* ── Gráfico de tendência ── */
+  /* ── Tendência + Comparação lado a lado (usa a largura em vez de empilhar tudo) ── */
+  .dash-grid{display:grid;grid-template-columns:3fr 2fr;gap:16px;align-items:start}
+  @media(max-width:1100px){.dash-grid{grid-template-columns:1fr}}
+
   .chart-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .chart-card-head h2{font-size:13px;font-weight:700;margin:0}
   .legend-row{display:flex;gap:18px;font-size:11.5px;color:var(--sub);margin:14px 0 10px}
@@ -153,6 +156,26 @@
   .legend-dot.us{background:var(--mkt-us)}
   .chart-wrap{height:280px;margin-top:6px}
   .chart-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+
+  /* ── Card de comparação de período ── */
+  .cmp-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px}
+  .cmp-view-btn{border:none;background:none;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:600;
+    color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;font-family:inherit}
+  .cmp-view-btn.active{background:var(--text);color:#fff}
+  .cmp-view-btn:hover:not(.active){color:var(--text)}
+  .cmp-periods{display:flex;gap:16px;margin:16px 0;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .cmp-period{flex:1}
+  .cmp-period-lbl{display:block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .cmp-period-val{font-size:13px;font-weight:600;color:var(--text)}
+  .cmp-list{display:flex;flex-direction:column}
+  .cmp-list-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .cmp-list-row:last-child{border-bottom:none}
+  .cmp-list-name{font-size:12.5px;color:var(--sub);display:flex;align-items:center;gap:8px}
+  .cmp-list-vals{text-align:right}
+  .cmp-list-val{font-size:16px;font-weight:600;color:var(--text);margin-bottom:3px}
+  .cmp-table-wrap table{font-size:12px}
+  .cmp-table-wrap th,.cmp-table-wrap td{padding:9px 10px}
+  .cmp-chart-wrap{height:340px}
 
   /* ── Histórico ── */
   table{width:100%;border-collapse:collapse;font-size:13px}
@@ -258,15 +281,15 @@
           <div class="kc-value" id="kpiIgViewsValue">—</div>
           <div class="kc-delta" id="kpiIgViewsDelta"></div>
         </div>
-        <div class="kpi-mini kpi-fb" id="kpiFbLikesWrap">
-          <div class="kc-label"><i class="bi bi-facebook"></i> Curtidas Facebook</div>
-          <div class="kc-value" id="kpiFbLikesValue">—</div>
-          <div class="kc-delta" id="kpiFbLikesDelta"></div>
-        </div>
         <div class="kpi-mini kpi-fb" id="kpiFbFollowersWrap">
           <div class="kc-label"><i class="bi bi-people"></i> Seguidores Facebook</div>
           <div class="kc-value" id="kpiFbFollowersValue">—</div>
           <div class="kc-delta" id="kpiFbFollowersDelta"></div>
+        </div>
+        <div class="kpi-mini kpi-fb" id="kpiFbLikesWrap">
+          <div class="kc-label"><i class="bi bi-facebook"></i> Curtidas Facebook</div>
+          <div class="kc-value" id="kpiFbLikesValue">—</div>
+          <div class="kc-delta" id="kpiFbLikesDelta"></div>
         </div>
         <div class="kpi-mini kpi-fb" id="kpiFbVideoViewsWrap">
           <div class="kc-label"><i class="bi bi-play-circle"></i> Visualizações de vídeo (Facebook)</div>
@@ -308,22 +331,40 @@
       </div>
     </div>
 
-    <h3 class="section">Tendência</h3>
-    <div class="card">
-      <div class="chart-card-head">
-        <h2>Comparação Brasil × Estados Unidos</h2>
-        <div class="filter-pill csel" id="cselMetric">
-          <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
-          <div class="csel-pop">
-            <div class="csel-opt active" data-value="igFollowers">Instagram — Seguidores</div>
-            <div class="csel-opt" data-value="fbLikes">Facebook — Curtidas</div>
-            <div class="csel-opt" data-value="fbFollowers">Facebook — Seguidores</div>
+    <h3 class="section">Tendência &amp; comparação</h3>
+    <div class="dash-grid">
+      <div class="card">
+        <div class="chart-card-head">
+          <h2>Comparação Brasil × Estados Unidos</h2>
+          <div class="filter-pill csel" id="cselMetric">
+            <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
+            <div class="csel-pop">
+              <div class="csel-opt active" data-value="igFollowers">Instagram — Seguidores</div>
+              <div class="csel-opt" data-value="fbLikes">Facebook — Curtidas</div>
+              <div class="csel-opt" data-value="fbFollowers">Facebook — Seguidores</div>
+            </div>
           </div>
         </div>
+        <div class="legend-row"><span><span class="legend-dot br"></span>Brasil</span><span><span class="legend-dot us"></span>Estados Unidos</span></div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período — o gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
       </div>
-      <div class="legend-row"><span><span class="legend-dot br"></span>Brasil</span><span><span class="legend-dot us"></span>Estados Unidos</span></div>
-      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
-      <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período — o gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
+
+      <div class="card">
+        <div class="chart-card-head">
+          <h2>Comparação de período</h2>
+          <div class="cmp-view-toggle" id="cmpViewToggle">
+            <button class="cmp-view-btn active" data-view="lista"><i class="bi bi-list-ul"></i> Lista</button>
+            <button class="cmp-view-btn" data-view="tabela"><i class="bi bi-table"></i> Tabela</button>
+            <button class="cmp-view-btn" data-view="grafico"><i class="bi bi-bar-chart"></i> Gráfico</button>
+          </div>
+        </div>
+        <div class="cmp-periods">
+          <div class="cmp-period"><span class="cmp-period-lbl">Período atual</span><span class="cmp-period-val" id="cmpCurrentRange">—</span></div>
+          <div class="cmp-period"><span class="cmp-period-lbl">Período anterior</span><span class="cmp-period-val" id="cmpPreviousRange">—</span></div>
+        </div>
+        <div id="cmpBody"><div class="empty">sem dado ainda</div></div>
+      </div>
     </div>
 
     <h3 class="section">Histórico (dentro do período selecionado)</h3>
@@ -460,7 +501,7 @@ setupCsel(document.getElementById('cselChannel'), val => {
   localStorage.setItem('coco_sm_channel', channel);
   updateChannelVisibility();
   syncControls();
-  if (lastData) { drawTrendChart(lastData); renderHistoryTable('histBr', lastData.instagram.br.series, lastData.facebook.br.series); renderHistoryTable('histUs', lastData.instagram.us.series, lastData.facebook.us.series); }
+  if (lastData) { drawTrendChart(lastData); renderComparison(lastData); renderHistoryTable('histBr', lastData.instagram.br.series, lastData.facebook.br.series); renderHistoryTable('histUs', lastData.instagram.us.series, lastData.facebook.us.series); }
 });
 
 // ── Period picker ──
@@ -544,6 +585,102 @@ function drawTrendChart(d) {
   const sparse = dates.length < 2;
   document.getElementById('chartNote').style.display = sparse ? '' : 'none';
 }
+
+// ── Card de comparação de período — Lista / Tabela / Gráfico, mesmos 6 KPIs já calculados
+// no backend (nenhuma chamada nova). "Curtidas Instagram" fica só aqui e na faixa do topo,
+// não no gráfico de Tendência: a Insights API só dá o total do período pra essa métrica
+// nessa conta (confirmado ao vivo), não uma série diária — não dá pra traçar uma linha
+// dia-a-dia de verdade, só comparar um período contra o outro, que é exatamente o que esse
+// card faz.
+const COMPARISON_METRICS = [
+  { key: 'igFollowers',  label: 'Seguidores Instagram',  icon: 'bi-instagram',    group: 'instagram' },
+  { key: 'igLikes',      label: 'Curtidas Instagram',     icon: 'bi-heart',        group: 'instagram' },
+  { key: 'igViews',      label: 'Visualizações Instagram',icon: 'bi-eye',          group: 'instagram' },
+  { key: 'fbFollowers',  label: 'Seguidores Facebook',    icon: 'bi-people',       group: 'facebook' },
+  { key: 'fbLikes',      label: 'Curtidas Facebook',      icon: 'bi-facebook',     group: 'facebook' },
+  { key: 'fbVideoViews', label: 'Visualizações de vídeo (Facebook)', icon: 'bi-play-circle', group: 'facebook' },
+];
+let cmpView = localStorage.getItem('coco_sm_cmpview') || 'lista';
+if (!['lista','tabela','grafico'].includes(cmpView)) cmpView = 'lista';
+
+function activeComparisonMetrics() {
+  return COMPARISON_METRICS.filter(m => channel === 'todos' || m.group === channel);
+}
+
+function renderComparisonPeriods(d) {
+  document.getElementById('cmpCurrentRange').textContent = fmtDateBR(d.period.since) + ' – ' + fmtDateBR(d.period.until);
+  document.getElementById('cmpPreviousRange').textContent = fmtDateBR(d.period.prevSince) + ' – ' + fmtDateBR(d.period.prevUntil);
+}
+
+function renderComparisonList(d) {
+  const rows = activeComparisonMetrics().map(m => {
+    const kpi = d.combined[m.key];
+    return `<div class="cmp-list-row">
+      <span class="cmp-list-name"><i class="bi ${m.icon}"></i> ${m.label}</span>
+      <div class="cmp-list-vals">
+        <div class="cmp-list-val">${fmt(kpi.value)}</div>
+        <div class="kc-delta">${deltaHtml(kpi.deltaPct)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('cmpBody').innerHTML = `<div class="cmp-list">${rows}</div>`;
+}
+
+function renderComparisonTable(d) {
+  const rows = activeComparisonMetrics().map(m => {
+    const kpi = d.combined[m.key];
+    return `<tr>
+      <td>${m.label}</td>
+      <td>${fmt(kpi.value)}</td>
+      <td>${fmt(kpi.previousValue)}</td>
+      <td>${deltaHtml(kpi.deltaPct, '')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('cmpBody').innerHTML = `<div class="cmp-table-wrap"><table>
+    <thead><tr><th>Métrica</th><th>Período atual</th><th>Período anterior</th><th>Variação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderComparisonChart(d) {
+  document.getElementById('cmpBody').innerHTML = `<div class="cmp-chart-wrap"><canvas id="cmpChart"></canvas></div>`;
+  const metrics = activeComparisonMetrics();
+  const labels = metrics.map(m => m.label);
+  const data = metrics.map(m => d.combined[m.key].deltaPct);
+  const colors = data.map(v => v == null ? '#96a3ad' : v >= 0 ? '#2e7d5b' : '#c0392b');
+  setChart('cmpChart', {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, barThickness: 22 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...tip, callbacks: { label: c => c.parsed.x == null ? 'sem período anterior pra comparar' : (c.parsed.x >= 0 ? '+' : '') + c.parsed.x.toLocaleString('pt-BR',{maximumFractionDigits:1}) + '% vs. período anterior' } },
+      },
+      scales: {
+        x: { grid:{color:'rgba(28,43,57,.06)'}, ticks:{callback:v => v+'%'} },
+        y: { grid:{display:false} },
+      },
+    },
+  });
+}
+
+function renderComparison(d) {
+  renderComparisonPeriods(d);
+  if (cmpView === 'lista') renderComparisonList(d);
+  else if (cmpView === 'tabela') renderComparisonTable(d);
+  else renderComparisonChart(d);
+}
+
+document.querySelectorAll('.cmp-view-btn').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.view === cmpView);
+  btn.addEventListener('click', () => {
+    cmpView = btn.dataset.view;
+    localStorage.setItem('coco_sm_cmpview', cmpView);
+    document.querySelectorAll('.cmp-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+    if (lastData) renderComparison(lastData);
+  });
+});
 
 function setKpi(prefix, kpi) {
   document.getElementById(prefix+'Value').textContent = fmt(kpi.value);
@@ -643,6 +780,7 @@ function render(d) {
   renderAccountCard('acc-fb-us', d.facebook.us, 'facebook');
 
   drawTrendChart(d);
+  renderComparison(d);
 
   renderHistoryTable('histBr', d.instagram.br.series, d.facebook.br.series);
   renderHistoryTable('histUs', d.instagram.us.series, d.facebook.us.series);
