@@ -65,6 +65,7 @@
     padding:16px;z-index:500;display:none;flex-direction:column;gap:12px}
   .period-pop.open{display:flex}
   .pp-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .pp-presets.pp-presets-1{grid-template-columns:1fr}
   .pp-presets button{font-size:11px;font-weight:600;padding:8px 0;border:1px solid var(--border2);background:var(--surface2);
     color:var(--sub);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;font-family:inherit}
   .pp-presets button:hover{border-color:var(--text);color:var(--text)}
@@ -360,9 +361,8 @@
                 <span class="lbl">Comparar com</span><span class="val" id="cmpPeriodVal">Automático</span><span class="arr">▾</span>
               </div>
               <div class="period-pop" id="cmpPeriodPop">
-                <div class="pp-presets">
-                  <button data-cmp-preset="auto" class="active">Automático</button>
-                  <button data-cmp-preset="lastyear">Ano passado</button>
+                <div class="pp-presets pp-presets-1">
+                  <button data-cmp-preset="auto" class="active">Automático (período anterior de mesmo tamanho)</button>
                 </div>
                 <div class="pp-divider"></div>
                 <div class="pp-section-label">Intervalo personalizado</div>
@@ -382,8 +382,8 @@
           </div>
         </div>
         <div class="cmp-periods">
-          <div class="cmp-period"><span class="cmp-period-lbl">Período atual</span><span class="cmp-period-val" id="cmpCurrentRange">—</span></div>
           <div class="cmp-period"><span class="cmp-period-lbl">Período anterior</span><span class="cmp-period-val" id="cmpPreviousRange">—</span></div>
+          <div class="cmp-period"><span class="cmp-period-lbl">Período atual</span><span class="cmp-period-val" id="cmpCurrentRange">—</span></div>
         </div>
         <div id="cmpBody"><div class="empty">sem dado ainda</div></div>
       </div>
@@ -579,7 +579,9 @@ document.getElementById('applyRange').addEventListener('click', () => {
 });
 
 // ── Period picker do card de Comparação (independente do período principal) ──
-function shiftYearISO(iso, n) { const d = parseISO(iso); d.setFullYear(d.getFullYear() + n); return isoLocal(d); }
+// Só "Automático" + intervalo personalizado — nada de presets tipo "ano passado" aqui: o
+// histórico guardado é de ~30 dias (Insights API não deixa puxar mais que isso), então um
+// preset que sempre aponta pra fora desse alcance nunca teria dado, é só ruído na tela.
 function cmpPeriodLabel() { return (cmpSince && cmpUntil) ? rangeLabel(cmpSince, cmpUntil) : 'Automático'; }
 function syncCmpPeriodLabel() { document.getElementById('cmpPeriodVal').textContent = cmpPeriodLabel(); }
 
@@ -606,13 +608,6 @@ cmpPeriodPop.addEventListener('click', e => e.stopPropagation());
 document.querySelector('[data-cmp-preset="auto"]').addEventListener('click', () => {
   cmpSince = null; cmpUntil = null;
   localStorage.removeItem('coco_sm_cmpSince'); localStorage.removeItem('coco_sm_cmpUntil');
-  cmpPeriodPop.classList.remove('open');
-  syncCmpPeriodLabel(); load();
-});
-document.querySelector('[data-cmp-preset="lastyear"]').addEventListener('click', () => {
-  cmpSince = shiftYearISO(sinceDate, -1);
-  cmpUntil = shiftYearISO(untilDate, -1);
-  localStorage.setItem('coco_sm_cmpSince', cmpSince); localStorage.setItem('coco_sm_cmpUntil', cmpUntil);
   cmpPeriodPop.classList.remove('open');
   syncCmpPeriodLabel(); load();
 });
@@ -712,13 +707,13 @@ function renderComparisonTable(d) {
     const kpi = d.combined[m.key];
     return `<tr>
       <td>${m.label}</td>
-      <td>${fmt(kpi.value)}</td>
       <td>${fmt(kpi.previousValue)}</td>
+      <td>${fmt(kpi.value)}</td>
       <td>${deltaHtml(kpi.deltaPct, '')}</td>
     </tr>`;
   }).join('');
   document.getElementById('cmpBody').innerHTML = `<div class="cmp-table-wrap"><table>
-    <thead><tr><th>Métrica</th><th>Período atual</th><th>Período anterior</th><th>Variação</th></tr></thead>
+    <thead><tr><th>Métrica</th><th>Período anterior</th><th>Período atual</th><th>Variação</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
