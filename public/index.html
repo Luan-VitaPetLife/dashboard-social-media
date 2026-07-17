@@ -6,6 +6,7 @@
 <title>Redes Sociais · Coco and Luna</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
 <style>
   :root{
     --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
@@ -13,7 +14,8 @@
     --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
     --radius:12px; --radius-sm:8px;
     --ig-1:#f58529; --ig-2:#dd2a7b; --ig-3:#8134af; --ig-4:#515bd4;
-    --fb:#1877f2;
+    --fb:#1877f2; --mkt-br:#1c2b39; --mkt-us:#dd2a7b;
+    --green:#2e7d5b; --red:#c0392b;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
@@ -22,51 +24,137 @@
   .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column}
   @media(max-width:768px){.main{margin-left:0}}
 
-  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;height:60px;
-    display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+  /* ── Topbar ── */
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
   .topbar h1{font-size:16px;font-weight:700;margin:0}
   .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  /* ── Filter pills / dropdowns (mesmo padrão do live-dashboard) ── */
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .period-pill-active{background:var(--text)!important;border-color:var(--text)!important}
+  .period-pill-active .lbl{color:rgba(255,255,255,.55)!important}
+  .period-pill-active .val{color:#fff!important}
+  .period-pill-active .arr{color:rgba(255,255,255,.45)!important}
+
+  .period-pop{position:absolute;top:calc(100% + 6px);right:0;width:270px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    padding:16px;z-index:500;display:none;flex-direction:column;gap:12px}
+  .period-pop.open{display:flex}
+  .pp-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .pp-presets button{font-size:11px;font-weight:600;padding:8px 0;border:1px solid var(--border2);background:var(--surface2);
+    color:var(--sub);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;font-family:inherit}
+  .pp-presets button:hover{border-color:var(--text);color:var(--text)}
+  .pp-presets button.active{background:var(--text);border-color:var(--text);color:#fff}
+  .pp-divider{height:1px;background:var(--border)}
+  .pp-section-label{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .pp-dates{display:flex;flex-direction:column;gap:8px}
+  .pp-field{display:flex;align-items:center;gap:10px}
+  .pp-field label{font-size:11px;font-weight:600;color:var(--sub);width:26px;flex-shrink:0}
+  .pp-field input[type=date]{flex:1;font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none;transition:border-color .12s}
+  .pp-field input[type=date]:focus{border-color:var(--text)}
+  .pp-err{font-size:10px;color:var(--red);min-height:12px}
+  .pp-apply{font-size:12px;font-weight:600;padding:9px 0;background:var(--text);color:#fff;border:none;
+    border-radius:var(--radius-sm);cursor:pointer;transition:opacity .12s;font-family:inherit}
+  .pp-apply:hover{opacity:.9}
 
   .sync-btn{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
     font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px}
   .sync-btn:hover{border-color:var(--text);color:var(--text)}
   .sync-btn:disabled{opacity:.6;cursor:default}
 
-  .content{padding:28px 32px;max-width:1100px;width:100%;margin:0 auto}
+  /* ── Content ── */
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
   h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
   h3.section:first-child{margin-top:0}
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
-
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
-  .card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-  .badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
-    color:#fff;font-size:15px;flex-shrink:0}
+
+  /* ── KPI strip (totais BR+US combinados) ── */
+  .kpi-strip-card{padding:0;overflow:hidden}
+  .kpi-strip-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .kpi-mini{padding:18px 22px;border-right:1px solid var(--border)}
+  .kpi-mini:last-child{border-right:none}
+  .kc-label{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--muted);margin-bottom:9px;
+    display:flex;align-items:center;gap:6px;text-transform:uppercase}
+  .kc-value{font-size:24px;font-weight:300;letter-spacing:-.5px;margin-bottom:7px;color:var(--text)}
+  .kc-delta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  .delta-val{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .delta-val.up{background:rgba(46,125,91,.1);color:var(--green)}
+  .delta-val.down{background:rgba(192,57,43,.09);color:var(--red)}
+  .delta-val.flat{background:rgba(28,43,57,.06);color:var(--muted)}
+  @media(max-width:768px){
+    .kpi-strip-grid{grid-template-columns:1fr 1fr}
+    .kpi-mini{border-bottom:1px solid var(--border)}
+    .kpi-mini:nth-child(2n){border-right:none}
+  }
+
+  /* ── Cards de conta (Instagram/Facebook × BR/US) ── */
+  .acc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+  .acc-card{border-top:3px solid transparent}
+  .acc-card.ig{border-top-color:var(--ig-2)}
+  .acc-card.fb{border-top-color:var(--fb)}
+  .acc-head{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+  .badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0}
   .badge.ig{background:linear-gradient(135deg,var(--ig-1),var(--ig-2) 45%,var(--ig-3) 70%,var(--ig-4))}
   .badge.fb{background:var(--fb)}
   .card-title{display:flex;flex-direction:column;line-height:1.3}
   .card-title .name{font-size:12.5px;font-weight:700}
   .card-title .mkt{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
   .card-title .mkt img{width:13px;height:9px;object-fit:cover;border-radius:2px}
+  .acc-primary{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+  .acc-primary .kc-value{font-size:30px;margin-bottom:0}
+  .acc-primary .kc-label{margin-bottom:6px}
+  .acc-secondary{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .acc-sec-item{display:flex;flex-direction:column;gap:3px}
+  .acc-sec-lbl{font-size:10.5px;color:var(--muted)}
+  .acc-sec-val{font-size:15px;font-weight:600;color:var(--text)}
 
-  .kpi-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border)}
-  .kpi-row:last-child{border-bottom:none;padding-bottom:0}
-  .kpi-lbl{font-size:12px;color:var(--sub)}
-  .kpi-val{font-size:20px;font-weight:300;letter-spacing:-.3px}
+  /* ── Gráfico de tendência ── */
+  .chart-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .chart-card-head h2{font-size:13px;font-weight:700;margin:0}
+  .legend-row{display:flex;gap:18px;font-size:11.5px;color:var(--sub);margin:14px 0 10px}
+  .legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .legend-dot.br{background:var(--mkt-br)}
+  .legend-dot.us{background:var(--mkt-us)}
+  .chart-wrap{height:280px;margin-top:6px}
 
+  /* ── Histórico ── */
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
   th{color:var(--muted);font-weight:700;font-size:10px;letter-spacing:.4px;text-transform:uppercase}
   tbody tr:hover{background:var(--surface2)}
-
-  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
-
-  .hist-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-    padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+  .hist-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .hist-card h2{font-size:12.5px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;gap:7px}
   .hist-card h2 img{width:15px;height:11px;object-fit:cover;border-radius:2px}
+  .hist-card .table-wrap{max-height:340px;overflow-y:auto}
+  @media(max-width:900px){.hist-grid{grid-template-columns:1fr}}
 
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
 </style>
 </head>
@@ -78,45 +166,126 @@
       <h1>Redes Sociais</h1>
       <div class="sub" id="lastSync">carregando…</div>
     </div>
-    <button class="sync-btn" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+    <div class="topbar-controls">
+      <div class="filter-pill csel" id="cselRefresh">
+        <span class="lbl">Atualizar</span><span class="val" id="refreshVal">15 min</span><span class="arr">▾</span>
+        <div class="csel-pop">
+          <div class="csel-opt" data-value="1">1 min</div>
+          <div class="csel-opt" data-value="5">5 min</div>
+          <div class="csel-opt active" data-value="15">15 min</div>
+          <div class="csel-opt" data-value="30">30 min</div>
+          <div class="csel-opt" data-value="0">Desligar</div>
+        </div>
+      </div>
+
+      <div style="position:relative" id="periodWrap">
+        <div class="filter-pill period-pill-active" id="periodPill">
+          <span class="lbl">Período</span><span class="val" id="periodValue">30 dias</span><span class="arr">▾</span>
+        </div>
+        <div class="period-pop" id="periodPop">
+          <div class="pp-presets">
+            <button data-preset="7d">7 dias</button>
+            <button data-preset="30d" class="active">30 dias</button>
+            <button data-preset="90d">90 dias</button>
+            <button data-preset="month">Este mês</button>
+          </div>
+          <div class="pp-divider"></div>
+          <div class="pp-section-label">Intervalo personalizado</div>
+          <div class="pp-dates">
+            <div class="pp-field"><label>De</label><input type="date" id="dateFrom"></div>
+            <div class="pp-field"><label>Até</label><input type="date" id="dateTo"></div>
+          </div>
+          <div class="pp-err" id="ppErr"></div>
+          <button class="pp-apply" id="applyRange">Aplicar intervalo</button>
+        </div>
+      </div>
+
+      <button class="sync-btn" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+    </div>
   </header>
 
   <main class="content">
-    <h3 class="section">Agora</h3>
-    <div class="grid">
-      <div class="card">
-        <div class="card-head">
-          <div class="badge ig"><i class="bi bi-instagram"></i></div>
-          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
+    <h3 class="section">Agora · Brasil + Estados Unidos</h3>
+    <div class="card kpi-strip-card">
+      <div class="kpi-strip-grid">
+        <div class="kpi-mini">
+          <div class="kc-label"><i class="bi bi-instagram"></i> Seguidores Instagram</div>
+          <div class="kc-value" id="kpiIgFollowersValue">—</div>
+          <div class="kc-delta" id="kpiIgFollowersDelta"></div>
         </div>
-        <div id="igBrKpis"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="badge ig"><i class="bi bi-instagram"></i></div>
-          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
+        <div class="kpi-mini">
+          <div class="kc-label"><i class="bi bi-heart"></i> Curtidas Instagram</div>
+          <div class="kc-value" id="kpiIgLikesValue">—</div>
+          <div class="kc-delta" id="kpiIgLikesDelta"></div>
         </div>
-        <div id="igUsKpis"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="badge fb"><i class="bi bi-facebook"></i></div>
-          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
+        <div class="kpi-mini">
+          <div class="kc-label"><i class="bi bi-facebook"></i> Curtidas Facebook</div>
+          <div class="kc-value" id="kpiFbLikesValue">—</div>
+          <div class="kc-delta" id="kpiFbLikesDelta"></div>
         </div>
-        <div id="fbBrKpis"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="badge fb"><i class="bi bi-facebook"></i></div>
-          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
+        <div class="kpi-mini">
+          <div class="kc-label"><i class="bi bi-people"></i> Seguidores Facebook</div>
+          <div class="kc-value" id="kpiFbFollowersValue">—</div>
+          <div class="kc-delta" id="kpiFbFollowersDelta"></div>
         </div>
-        <div id="fbUsKpis"><div class="empty">sem dado ainda</div></div>
       </div>
     </div>
 
-    <h3 class="section">Histórico (últimos snapshots)</h3>
-    <div class="hist-card"><h2><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</h2><div id="histBr"><div class="empty">sem dado ainda</div></div></div>
-    <div class="hist-card"><h2><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</h2><div id="histUs"><div class="empty">sem dado ainda</div></div></div>
+    <h3 class="section">Por conta</h3>
+    <div class="acc-grid">
+      <div class="card acc-card ig" id="acc-ig-br">
+        <div class="acc-head">
+          <div class="badge ig"><i class="bi bi-instagram"></i></div>
+          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
+        </div>
+        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
+      </div>
+      <div class="card acc-card ig" id="acc-ig-us">
+        <div class="acc-head">
+          <div class="badge ig"><i class="bi bi-instagram"></i></div>
+          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
+        </div>
+        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
+      </div>
+      <div class="card acc-card fb" id="acc-fb-br">
+        <div class="acc-head">
+          <div class="badge fb"><i class="bi bi-facebook"></i></div>
+          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
+        </div>
+        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
+      </div>
+      <div class="card acc-card fb" id="acc-fb-us">
+        <div class="acc-head">
+          <div class="badge fb"><i class="bi bi-facebook"></i></div>
+          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
+        </div>
+        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
+      </div>
+    </div>
+
+    <h3 class="section">Tendência</h3>
+    <div class="card">
+      <div class="chart-card-head">
+        <h2>Comparação Brasil × Estados Unidos</h2>
+        <div class="filter-pill csel" id="cselMetric">
+          <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
+          <div class="csel-pop">
+            <div class="csel-opt active" data-value="igFollowers">Instagram — Seguidores</div>
+            <div class="csel-opt" data-value="igLikes">Instagram — Curtidas (amostra)</div>
+            <div class="csel-opt" data-value="fbLikes">Facebook — Curtidas</div>
+            <div class="csel-opt" data-value="fbFollowers">Facebook — Seguidores</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend-row"><span><span class="legend-dot br"></span>Brasil</span><span><span class="legend-dot us"></span>Estados Unidos</span></div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <h3 class="section">Histórico (dentro do período selecionado)</h3>
+    <div class="hist-grid">
+      <div class="card hist-card"><h2><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</h2><div class="table-wrap" id="histBr"><div class="empty">sem dado ainda</div></div></div>
+      <div class="card hist-card"><h2><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</h2><div class="table-wrap" id="histUs"><div class="empty">sem dado ainda</div></div></div>
+    </div>
   </main>
 
   <footer id="footer">Coco and Luna · Redes Sociais</footer>
@@ -124,63 +293,245 @@
 
 <script src="sidebar.js"></script>
 <script>
-function fmt(n) { return n == null ? '—' : n.toLocaleString('pt-BR'); }
-function fmtDate(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+// ── Helpers de data (mesmo padrão do live-dashboard) ──
+function isoLocal(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseISO(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function fmtDM(d) { return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
+const todayISO = isoLocal(new Date());
 
-function latestEntry(snapshots) {
-  const dates = Object.keys(snapshots || {}).sort();
-  if (!dates.length) return null;
-  return { date: dates[dates.length - 1], ...snapshots[dates[dates.length - 1]] };
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+function deltaHtml(p, suffix = 'no período') {
+  if (p == null) return `<span class="delta-val flat">—</span> ${suffix}`;
+  const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
+  return `<span class="delta-val ${cls}">${up ? '↑' : '↓'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span> ${suffix}`;
 }
 
-function renderKpis(el, latest, rows) {
-  if (!latest) { el.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
-  el.innerHTML = rows.map(([label, val]) =>
-    `<div class="kpi-row"><span class="kpi-lbl">${label}</span><span class="kpi-val">${fmt(val)}</span></div>`
-  ).join('');
+function seriesMap(series, key) {
+  const m = new Map();
+  (series?.dates || []).forEach((d, i) => { const v = series[key]?.[i]; if (v != null) m.set(d, v); });
+  return m;
 }
 
-function renderHistory(el, ig, fb) {
-  const dates = Array.from(new Set([...Object.keys(ig || {}), ...Object.keys(fb || {})])).sort().reverse().slice(0, 30);
+// ── Estado persistido ──
+let sinceDate = localStorage.getItem('coco_sm_since') || isoLocal(addDays(new Date(), -29));
+let untilDate = localStorage.getItem('coco_sm_until') || todayISO;
+let refreshMin = Number(localStorage.getItem('coco_sm_refresh') ?? 15);
+const METRIC_SOURCES = {
+  igFollowers: { label: 'Instagram — Seguidores', key: 'followers', platform: 'instagram' },
+  igLikes:     { label: 'Instagram — Curtidas (amostra)', key: 'recentLikes', platform: 'instagram' },
+  fbLikes:     { label: 'Facebook — Curtidas', key: 'likes', platform: 'facebook' },
+  fbFollowers: { label: 'Facebook — Seguidores', key: 'followers', platform: 'facebook' },
+};
+let metric = localStorage.getItem('coco_sm_metric') || 'igFollowers';
+if (!METRIC_SOURCES[metric]) metric = 'igFollowers';
+
+let lastData = null;
+let refreshTimer = null;
+const charts = {};
+
+function presetRange(p) {
+  const n = new Date();
+  if (p === '7d')    return [isoLocal(addDays(n,-6)), todayISO];
+  if (p === '30d')   return [isoLocal(addDays(n,-29)), todayISO];
+  if (p === '90d')   return [isoLocal(addDays(n,-89)), todayISO];
+  if (p === 'month') return [isoLocal(new Date(n.getFullYear(), n.getMonth(), 1)), todayISO];
+  return [isoLocal(addDays(n,-29)), todayISO];
+}
+function rangeLabel(s, u) { return s === u ? fmtDM(parseISO(s)) : fmtDM(parseISO(s)) + ' – ' + fmtDM(parseISO(u)); }
+
+function applyRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (refreshMin > 0) refreshTimer = setInterval(load, refreshMin * 60 * 1000);
+}
+
+function syncControls() {
+  document.getElementById('refreshVal').textContent = refreshMin === 0 ? 'Desligar' : `${refreshMin} min`;
+  document.querySelectorAll('#cselRefresh .csel-opt').forEach(o => o.classList.toggle('active', Number(o.dataset.value) === refreshMin));
+  document.getElementById('metricVal').textContent = METRIC_SOURCES[metric].label;
+  document.querySelectorAll('#cselMetric .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === metric));
+  document.getElementById('periodValue').textContent = rangeLabel(sinceDate, untilDate);
+}
+
+// ── Dropdowns ──
+function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) el.classList.add('open');
+  });
+  el.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      el.classList.remove('open');
+      onSelect(opt.dataset.value);
+    });
+  });
+}
+document.addEventListener('click', () => { closeAllDropdowns(); document.getElementById('periodPop').classList.remove('open'); });
+
+setupCsel(document.getElementById('cselRefresh'), val => {
+  refreshMin = Number(val);
+  localStorage.setItem('coco_sm_refresh', refreshMin);
+  syncControls();
+  applyRefresh();
+});
+setupCsel(document.getElementById('cselMetric'), val => {
+  metric = val;
+  localStorage.setItem('coco_sm_metric', metric);
+  syncControls();
+  if (lastData) drawTrendChart(lastData);
+});
+
+// ── Period picker ──
+const periodPop = document.getElementById('periodPop');
+const fromInp = document.getElementById('dateFrom');
+const toInp = document.getElementById('dateTo');
+const ppErr = document.getElementById('ppErr');
+
+document.getElementById('periodPill').addEventListener('click', e => {
+  e.stopPropagation();
+  closeAllDropdowns();
+  const wasOpen = periodPop.classList.contains('open');
+  periodPop.classList.toggle('open', !wasOpen);
+  if (!wasOpen) {
+    ppErr.textContent = '';
+    fromInp.value = sinceDate; toInp.value = untilDate;
+    fromInp.max = todayISO; toInp.max = todayISO;
+    document.querySelectorAll('.pp-presets button').forEach(b => {
+      const [s, u] = presetRange(b.dataset.preset);
+      b.classList.toggle('active', s === sinceDate && u === untilDate);
+    });
+  }
+});
+periodPop.addEventListener('click', e => e.stopPropagation());
+
+document.querySelectorAll('.pp-presets button').forEach(b => b.addEventListener('click', () => {
+  const [s, u] = presetRange(b.dataset.preset);
+  sinceDate = s; untilDate = u;
+  localStorage.setItem('coco_sm_since', s); localStorage.setItem('coco_sm_until', u);
+  periodPop.classList.remove('open');
+  syncControls(); load();
+}));
+
+document.getElementById('applyRange').addEventListener('click', () => {
+  const s = fromInp.value, u = toInp.value;
+  if (!s || !u) { ppErr.textContent = 'Selecione as duas datas.'; return; }
+  if (parseISO(s) > parseISO(u)) { ppErr.textContent = 'A data inicial deve ser anterior à final.'; return; }
+  ppErr.textContent = '';
+  sinceDate = s; untilDate = u;
+  localStorage.setItem('coco_sm_since', s); localStorage.setItem('coco_sm_until', u);
+  periodPop.classList.remove('open');
+  syncControls(); load();
+});
+
+// ── Render ──
+function setChart(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+Chart.defaults.color = '#96a3ad';
+Chart.defaults.borderColor = 'rgba(28,43,57,.08)';
+Chart.defaults.font.size = 11;
+const tip = { backgroundColor:'#ffffff', borderColor:'rgba(28,43,57,.14)', borderWidth:1, titleColor:'#1c2b39', bodyColor:'#55636f', padding:10, cornerRadius:8 };
+
+function drawTrendChart(d) {
+  const src = METRIC_SOURCES[metric];
+  const brSeries = d[src.platform].br.series, usSeries = d[src.platform].us.series;
+  const brMap = seriesMap(brSeries, src.key), usMap = seriesMap(usSeries, src.key);
+  const dates = [...new Set([...brMap.keys(), ...usMap.keys()])].sort();
+  const labels = dates.map(dt => fmtDM(parseISO(dt)));
+  const brData = dates.map(dt => brMap.has(dt) ? brMap.get(dt) : null);
+  const usData = dates.map(dt => usMap.has(dt) ? usMap.get(dt) : null);
+
+  setChart('trendChart', {
+    type: 'line',
+    data: { labels, datasets: [
+      { label:'Brasil', data:brData, borderColor:'#1c2b39', backgroundColor:'#1c2b39', borderWidth:2, tension:.35, pointRadius:2, pointHoverRadius:5, spanGaps:true, fill:false },
+      { label:'Estados Unidos', data:usData, borderColor:'#dd2a7b', backgroundColor:'#dd2a7b', borderWidth:2, tension:.35, pointRadius:2, pointHoverRadius:5, spanGaps:true, fill:false },
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{display:false}, tooltip:{...tip, callbacks:{ label:c => ' '+c.dataset.label+': '+fmt(c.parsed.y) }} },
+      scales:{
+        x:{ grid:{display:false}, ticks:{maxTicksLimit:10} },
+        y:{ grid:{color:'rgba(28,43,57,.06)'}, ticks:{callback:v => fmt(v)} }
+      }
+    }
+  });
+}
+
+function setKpi(prefix, kpi) {
+  document.getElementById(prefix+'Value').textContent = fmt(kpi.value);
+  document.getElementById(prefix+'Delta').innerHTML = deltaHtml(kpi.deltaPct);
+}
+
+function renderAccountCard(elId, entity, platform) {
+  const body = document.querySelector('#' + elId + ' .acc-body');
+  if (!entity.latest) { body.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
+  const l = entity.latest;
+  const primaryKey = platform === 'instagram' ? 'followers' : 'likes';
+  const primaryLabel = platform === 'instagram' ? 'Seguidores' : 'Curtidas da página';
+  const secondary = platform === 'instagram'
+    ? `<div class="acc-sec-item"><span class="acc-sec-lbl">Seguindo</span><span class="acc-sec-val">${fmt(l.following)}</span></div>
+       <div class="acc-sec-item"><span class="acc-sec-lbl">Posts</span><span class="acc-sec-val">${fmt(l.posts)}</span></div>
+       <div class="acc-sec-item"><span class="acc-sec-lbl">Curtidas recentes</span><span class="acc-sec-val">${fmt(l.recentLikes)}</span></div>
+       <div class="acc-sec-item"><span class="acc-sec-lbl">Comentários recentes</span><span class="acc-sec-val">${fmt(l.recentComments)}</span></div>`
+    : `<div class="acc-sec-item"><span class="acc-sec-lbl">Seguidores da página</span><span class="acc-sec-val">${fmt(l.followers)}</span></div>`;
+  body.innerHTML = `
+    <div class="acc-primary">
+      <div><div class="kc-label">${primaryLabel}</div><div class="kc-value">${fmt(l[primaryKey])}</div></div>
+      <div class="kc-delta">${deltaHtml(entity.delta[primaryKey])}</div>
+    </div>
+    <div class="acc-secondary">${secondary}</div>
+  `;
+}
+
+function renderHistoryTable(elId, igSeries, fbSeries) {
+  const dates = Array.from(new Set([...(igSeries?.dates || []), ...(fbSeries?.dates || [])])).sort().reverse();
+  const el = document.getElementById(elId);
   if (!dates.length) { el.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
+  const igF = seriesMap(igSeries, 'followers'), igL = seriesMap(igSeries, 'recentLikes');
+  const fbL = seriesMap(fbSeries, 'likes'), fbF = seriesMap(fbSeries, 'followers');
   el.innerHTML = `<table>
-    <thead><tr><th>Data</th><th>IG Seguidores</th><th>IG Curtidas (amostra)</th><th>FB Curtidas</th><th>FB Seguidores</th></tr></thead>
+    <thead><tr><th>Data</th><th>IG Seguidores</th><th>IG Curtidas</th><th>FB Curtidas</th><th>FB Seguidores</th></tr></thead>
     <tbody>${dates.map(d => `<tr>
       <td>${d}</td>
-      <td>${fmt(ig?.[d]?.followers)}</td>
-      <td>${fmt(ig?.[d]?.recentLikes)}</td>
-      <td>${fmt(fb?.[d]?.likes)}</td>
-      <td>${fmt(fb?.[d]?.followers)}</td>
+      <td>${fmt(igF.get(d))}</td>
+      <td>${fmt(igL.get(d))}</td>
+      <td>${fmt(fbL.get(d))}</td>
+      <td>${fmt(fbF.get(d))}</td>
     </tr>`).join('')}</tbody>
   </table>`;
 }
 
+function render(d) {
+  lastData = d;
+  document.getElementById('lastSync').textContent = 'última sincronização: ' + fmtDateTime(d.lastSync);
+
+  setKpi('kpiIgFollowers', d.combined.igFollowers);
+  setKpi('kpiIgLikes', d.combined.igLikes);
+  setKpi('kpiFbLikes', d.combined.fbLikes);
+  setKpi('kpiFbFollowers', d.combined.fbFollowers);
+
+  renderAccountCard('acc-ig-br', d.instagram.br, 'instagram');
+  renderAccountCard('acc-ig-us', d.instagram.us, 'instagram');
+  renderAccountCard('acc-fb-br', d.facebook.br, 'facebook');
+  renderAccountCard('acc-fb-us', d.facebook.us, 'facebook');
+
+  drawTrendChart(d);
+
+  renderHistoryTable('histBr', d.instagram.br.series, d.facebook.br.series);
+  renderHistoryTable('histUs', d.instagram.us.series, d.facebook.us.series);
+}
+
 async function load() {
-  const res = await fetch('/api/dashboard');
+  const p = new URLSearchParams({ since: sinceDate, until: untilDate });
+  const res = await fetch('/api/dashboard?' + p);
   const data = await res.json();
-
-  const igBr = latestEntry(data.instagram.br), igUs = latestEntry(data.instagram.us);
-  const fbBr = latestEntry(data.facebook.br),  fbUs = latestEntry(data.facebook.us);
-
-  renderKpis(document.getElementById('igBrKpis'), igBr, [
-    ['Seguidores', igBr?.followers], ['Seguindo', igBr?.following],
-    ['Posts', igBr?.posts], ['Curtidas (últimos posts)', igBr?.recentLikes],
-  ]);
-  renderKpis(document.getElementById('igUsKpis'), igUs, [
-    ['Seguidores', igUs?.followers], ['Seguindo', igUs?.following],
-    ['Posts', igUs?.posts], ['Curtidas (últimos posts)', igUs?.recentLikes],
-  ]);
-  renderKpis(document.getElementById('fbBrKpis'), fbBr, [
-    ['Curtidas da página', fbBr?.likes], ['Seguidores', fbBr?.followers],
-  ]);
-  renderKpis(document.getElementById('fbUsKpis'), fbUs, [
-    ['Curtidas da página', fbUs?.likes], ['Seguidores', fbUs?.followers],
-  ]);
-
-  renderHistory(document.getElementById('histBr'), data.instagram.br, data.facebook.br);
-  renderHistory(document.getElementById('histUs'), data.instagram.us, data.facebook.us);
-
-  document.getElementById('lastSync').textContent = 'última sincronização: ' + fmtDate(data.lastSync);
+  render(data);
 }
 
 document.getElementById('syncBtn').addEventListener('click', async (e) => {
@@ -190,6 +541,8 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 
+syncControls();
+applyRefresh();
 load();
 </script>
 </body>

@@ -2,8 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initStore, getSnapshots, getLastSync } from './src/store.js';
+import { initStore, getLastSync } from './src/store.js';
 import { runSync } from './src/sync.js';
+import { computeSocialDashboard } from './src/metrics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -17,12 +18,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }
+
 app.get('/api/dashboard', (req, res) => {
-  res.json({
-    instagram: { br: getSnapshots('instagram', 'br'), us: getSnapshots('instagram', 'us') },
-    facebook:  { br: getSnapshots('facebook', 'br'),  us: getSnapshots('facebook', 'us') },
-    lastSync: getLastSync(),
-  });
+  const until = req.query.until || todayISO();
+  const since = req.query.since || isoDaysAgo(29);
+  res.json({ ...computeSocialDashboard({ since, until }), lastSync: getLastSync() });
 });
 
 app.post('/api/sync', async (req, res) => {

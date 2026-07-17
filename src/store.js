@@ -55,6 +55,14 @@ export function getSnapshots(platform, market) {
   return (cache.snapshots || {})[platform]?.[market] || {};
 }
 
+// Snapshots dentro de um período, ordenados por data — usado pra montar KPI/série do gráfico.
+export function getSnapshotsInRange(platform, market, since, until) {
+  const all = getSnapshots(platform, market);
+  return Object.entries(all)
+    .filter(([d]) => (!since || d >= since) && (!until || d <= until))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 export function addSnapshot(platform, market, dateISO, data) {
   if (!cache.snapshots) cache.snapshots = {};
   if (!cache.snapshots[platform]) cache.snapshots[platform] = {};
