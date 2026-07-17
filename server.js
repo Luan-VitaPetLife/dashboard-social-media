@@ -40,8 +40,12 @@ function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString(
 app.get('/api/dashboard', async (req, res) => {
   const until = req.query.until || todayISO();
   const since = req.query.since || isoDaysAgo(29);
+  // cmpSince/cmpUntil (opcionais): período de comparação escolhido manualmente no card de
+  // Comparação — ausentes, cai no automático (período anterior de mesmo tamanho).
+  const cmpSince = req.query.cmpSince || undefined;
+  const cmpUntil = req.query.cmpUntil || undefined;
   try {
-    res.json({ ...(await computeSocialDashboard({ since, until })), lastSync: getLastSync() });
+    res.json({ ...(await computeSocialDashboard({ since, until, cmpSince, cmpUntil })), lastSync: getLastSync() });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

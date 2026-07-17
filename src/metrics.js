@@ -38,13 +38,12 @@ function lastValueInRange(platform, market, since, until) {
   return entries[entries.length - 1][1];
 }
 
-function buildEntity(platform, market, since, until) {
+function buildEntity(platform, market, since, until, prevSince, prevUntil) {
   const keys = platform === 'instagram' ? IG_KEYS : FB_KEYS;
   const entries = getSnapshotsInRange(platform, market, since, until);
   const series = { dates: entries.map(([d]) => d) };
   for (const k of keys) series[k] = entries.map(([, v]) => v[k] ?? null);
 
-  const { prevSince, prevUntil } = previousPeriod(since, until);
   const previous = lastValueInRange(platform, market, prevSince, prevUntil);
 
   if (!entries.length) return { latest: null, previous, delta: {}, series };
@@ -83,10 +82,16 @@ function sumWithDelta(curA, curB, prevA, prevB) {
   return { value, previousValue: prevValue, deltaPct: prevValue != null ? pct(prevValue, value) : null };
 }
 
-export async function computeSocialDashboard({ since, until }) {
-  const ig = { br: buildEntity('instagram', 'br', since, until), us: buildEntity('instagram', 'us', since, until) };
-  const fb = { br: buildEntity('facebook', 'br', since, until), us: buildEntity('facebook', 'us', since, until) };
-  const { prevSince, prevUntil } = previousPeriod(since, until);
+// since/until = período atual. cmpSince/cmpUntil = período de comparação escolhido manualmente
+// no card de Comparação (ex: "mesmo período do ano passado", ou um intervalo customizado) —
+// quando ausentes, cai no automático (período anterior de mesmo tamanho).
+export async function computeSocialDashboard({ since, until, cmpSince, cmpUntil }) {
+  const auto = previousPeriod(since, until);
+  const prevSince = cmpSince || auto.prevSince;
+  const prevUntil = cmpUntil || auto.prevUntil;
+
+  const ig = { br: buildEntity('instagram', 'br', since, until, prevSince, prevUntil), us: buildEntity('instagram', 'us', since, until, prevSince, prevUntil) };
+  const fb = { br: buildEntity('facebook', 'br', since, until, prevSince, prevUntil), us: buildEntity('facebook', 'us', since, until, prevSince, prevUntil) };
 
   const [igEngBr, igEngUs, igEngBrPrev, igEngUsPrev, fbVidBr, fbVidUs, fbVidBrPrev, fbVidUsPrev] = await Promise.all([
     fetchInstagramEngagement('br', since, until).catch(() => null),
