@@ -1,14 +1,13 @@
-// meta.js — Meta Graph API: métricas de conta (Instagram Business + Página do Facebook),
-// separado por mercado (br/us) — mesma convenção do live-dashboard. As 4 contas (2 Páginas do
-// Facebook + 2 Instagram Business, uma BR e uma US) vivem no mesmo Business Manager, então o
-// mesmo META_ACCESS_TOKEN serve pras quatro; só o ID do recurso muda por mercado.
+// meta.js — Meta Graph API: métricas de conta (Instagram Business + Página do Facebook).
+// Cada função recebe o `metaId` da conta já resolvido pelo registry (src/registry.js) — este
+// arquivo não conhece marca/país, só fala com a Graph API dado um ID de recurso. As contas de
+// uma mesma marca costumam viver no mesmo Business Manager, então um único META_ACCESS_TOKEN
+// serve pra todas; só o ID do recurso muda por conta.
 import 'dotenv/config';
+import { getAccounts } from './registry.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v20.0';
 const TOKEN = process.env.META_ACCESS_TOKEN;
-
-const IG_IDS = { br: process.env.META_IG_ACCOUNT_ID_BR, us: process.env.META_IG_ACCOUNT_ID_US };
-const FB_IDS = { br: process.env.META_FB_PAGE_ID_BR, us: process.env.META_FB_PAGE_ID_US };
 
 export function isConfigured() {
   return Boolean(TOKEN);
@@ -27,23 +26,22 @@ function graphGet(pathAndQuery) { return graphGetAs(TOKEN, pathAndQuery); }
 // Page Insights (histórico) exige o token DA PRÓPRIA PÁGINA, não o token de usuário/sistema
 // usado em todo o resto deste arquivo (erro confirmado ao vivo: "(#190) This method must be
 // called with a Page Access Token"). O token de usuário, com pages_show_list +
-// pages_read_engagement, consegue pedir o token da Página — troca única por mercado, não
-// precisa ser salva em lugar nenhum, só usada na hora do backfill.
+// pages_read_engagement, consegue pedir o token da Página — troca única por conta, não precisa
+// ser salva em lugar nenhum, só usada na hora do backfill. Cache chaveado pelo próprio ID da
+// Página (não por marca/país) — cada conta troca seu token uma vez só.
 const pageTokenCache = {};
-async function fetchPageAccessToken(market) {
-  if (pageTokenCache[market]) return pageTokenCache[market];
-  const id = FB_IDS[market];
+async function fetchPageAccessToken(id) {
   if (!TOKEN || !id) return null;
+  if (pageTokenCache[id]) return pageTokenCache[id];
   const json = await graphGet(`${id}?fields=access_token`);
-  pageTokenCache[market] = json.access_token || null;
-  return pageTokenCache[market];
+  pageTokenCache[id] = json.access_token || null;
+  return pageTokenCache[id];
 }
 
 // Instagram Business Account: seguidores, seguindo, nº de posts, e curtidas/comentários somados
 // dos últimos `mediaSample` posts — a Graph API não expõe um "total de curtidas da conta"
 // agregado, só por post, então isso é uma amostra recente, não o histórico completo.
-export async function fetchInstagramSnapshot(market, mediaSample = 25) {
-  const id = IG_IDS[market];
+export async function fetchInstagramSnapshot(id, mediaSample = 25) {
   if (!TOKEN || !id) return null;
   const acc = await graphGet(`${id}?fields=followers_count,follows_count,media_count`);
   const media = await graphGet(`${id}/media?fields=like_count,comments_count&limit=${mediaSample}`);
@@ -59,8 +57,7 @@ export async function fetchInstagramSnapshot(market, mediaSample = 25) {
 }
 
 // Página do Facebook: curtidas (fan_count) e seguidores.
-export async function fetchFacebookSnapshot(market) {
-  const id = FB_IDS[market];
+export async function fetchFacebookSnapshot(id) {
   if (!TOKEN || !id) return null;
   const page = await graphGet(`${id}?fields=fan_count,followers_count,name`);
   return {
@@ -68,6 +65,132 @@ export async function fetchFacebookSnapshot(market) {
     likes: page.fan_count ?? null,
     followers: page.followers_count ?? null,
   };
+}
+
+// ── Conteúdo individual (ficha de post) ─────────────────────────────────────────────────────
+// Diferente do snapshot de conta (agregado): aqui é um post/Reel específico. Confirmado ao vivo
+// (21/07/2026) que reach, likes, comments, saved, shares, total_interactions e views funcionam
+// de forma uniforme pra REELS, CAROUSEL_ALBUM e IMAGE — sem precisar de conjunto de métrica
+// diferente por media_product_type. `impressions` foi descontinuada pela API (todas as versões
+// ≥v22.0); `follows`/`profile_visits` só existem no nível de conta, não por mídia.
+const CONTENT_METRICS = ['reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'views'];
+
+// Pagina /{id}/media até achar um item publicado antes de `sinceUnix` (ou acabar a paginação) —
+// usado pra montar a janela de retenção de conteúdo (ver contentSync.js). Corta assim que o item
+// mais antigo da página já é mais velho que a janela, em vez de paginar o histórico inteiro.
+export async function fetchInstagramMediaList(id, sinceUnix) {
+  if (!TOKEN || !id) return [];
+  const items = [];
+  let url = `${id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink&limit=25`;
+  for (let page = 0; page < 20; page++) {
+    const json = await graphGet(url);
+    const data = json.data || [];
+    for (const item of data) {
+      items.push(item);
+      if (Math.floor(Date.parse(item.timestamp) / 1000) < sinceUnix) return items;
+    }
+    const next = json.paging?.next;
+    if (!next || !data.length) break;
+    url = next.replace(`https://graph.facebook.com/${GRAPH_VERSION}/`, '');
+  }
+  return items;
+}
+
+// Métricas de um post/Reel específico — usado por contentSync.js pra gravar o snapshot diário
+// de conteúdo. Tenta o conjunto completo numa chamada só; se algum nome não for aceito por essa
+// conta/tipo (a API já demonstrou variar por versão), cai pra buscar métrica por métrica e
+// descarta silenciosamente a que falhar, igual ao padrão já usado nas métricas de conta.
+export async function fetchInstagramMediaInsights(mediaId) {
+  if (!TOKEN || !mediaId) return null;
+  try {
+    const json = await graphGet(`${mediaId}/insights?metric=${CONTENT_METRICS.join(',')}`);
+    const byName = {};
+    for (const m of json.data || []) byName[m.name] = m.values?.[0]?.value ?? null;
+    return {
+      reach: byName.reach ?? null,
+      likes: byName.likes ?? null,
+      comments: byName.comments ?? null,
+      saved: byName.saved ?? null,
+      shares: byName.shares ?? null,
+      totalInteractions: byName.total_interactions ?? null,
+      views: byName.views ?? null,
+    };
+  } catch {
+    const byName = {};
+    for (const metric of CONTENT_METRICS) {
+      try {
+        const json = await graphGet(`${mediaId}/insights?metric=${metric}`);
+        byName[metric] = json.data?.[0]?.values?.[0]?.value ?? null;
+      } catch {
+        byName[metric] = null;
+      }
+    }
+    return {
+      reach: byName.reach ?? null,
+      likes: byName.likes ?? null,
+      comments: byName.comments ?? null,
+      saved: byName.saved ?? null,
+      shares: byName.shares ?? null,
+      totalInteractions: byName.total_interactions ?? null,
+      views: byName.views ?? null,
+    };
+  }
+}
+
+// ── Stories 24h ──────────────────────────────────────────────────────────────────────────────
+// /{ig-id}/stories só lista stories ATIVOS agora (o Instagram os remove desse endpoint assim que
+// expiram, ~24h depois de publicados) — não existe um jeito de "puxar o histórico de stories
+// antigos" depois que somem, então a cobertura aqui depende de sincronizar com frequência
+// suficiente pra pegar cada story pelo menos uma vez antes de expirar (ver storySync.js, que roda
+// num intervalo próprio, mais curto que o sync de perfil/conteúdo).
+export async function fetchInstagramActiveStories(id) {
+  if (!TOKEN || !id) return [];
+  const json = await graphGet(`${id}/stories?fields=id,media_type,timestamp,permalink`);
+  return json.data || [];
+}
+
+// Confirmado ao vivo (21/07/2026): likes/comments/saved NÃO existem pra stories (o Instagram não
+// mostra esses conceitos em stories) — só reach, replies, navigation, shares, total_interactions,
+// profile_activity e follows são aceitos. `navigation` é o total agregado de ações de navegação
+// (avançar/voltar/sair) — a API não expõe mais essas três separadas (ver probe de 21/07/2026),
+// então a leitura "tela a tela" que o briefing pede não é possível hoje, só esse agregado.
+const STORY_METRICS = ['reach', 'replies', 'navigation', 'shares', 'total_interactions', 'profile_activity', 'follows'];
+
+export async function fetchInstagramStoryInsights(storyId) {
+  if (!TOKEN || !storyId) return null;
+  try {
+    const json = await graphGet(`${storyId}/insights?metric=${STORY_METRICS.join(',')}`);
+    const byName = {};
+    for (const m of json.data || []) byName[m.name] = m.values?.[0]?.value ?? null;
+    return {
+      reach: byName.reach ?? null,
+      replies: byName.replies ?? null,
+      navigation: byName.navigation ?? null,
+      shares: byName.shares ?? null,
+      totalInteractions: byName.total_interactions ?? null,
+      profileActivity: byName.profile_activity ?? null,
+      follows: byName.follows ?? null,
+    };
+  } catch {
+    const byName = {};
+    for (const metric of STORY_METRICS) {
+      try {
+        const json = await graphGet(`${storyId}/insights?metric=${metric}`);
+        byName[metric] = json.data?.[0]?.values?.[0]?.value ?? null;
+      } catch {
+        byName[metric] = null;
+      }
+    }
+    return {
+      reach: byName.reach ?? null,
+      replies: byName.replies ?? null,
+      navigation: byName.navigation ?? null,
+      shares: byName.shares ?? null,
+      totalInteractions: byName.total_interactions ?? null,
+      profileActivity: byName.profile_activity ?? null,
+      follows: byName.follows ?? null,
+    };
+  }
 }
 
 // ── Backfill histórico (Insights API) ──────────────────────────────
@@ -84,8 +207,7 @@ export async function fetchFacebookSnapshot(market) {
 const INSIGHTS_LOOKBACK_DAYS = 30;
 function unixDaysAgo(n) { return Math.floor(Date.now() / 1000) - n * 86400; }
 
-export async function fetchInstagramFollowerDeltas(market) {
-  const id = IG_IDS[market];
+export async function fetchInstagramFollowerDeltas(id) {
   if (!TOKEN || !id) return [];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const json = await graphGet(`${id}/insights?metric=follower_count&period=day&since=${since}&until=${until}`);
@@ -105,9 +227,8 @@ const FB_METRIC_CANDIDATES = [
 
 // Página do Facebook não tem um equivalente direto a follower_count — reconstrói a variação
 // líquida do dia a partir de "ganhou" menos "perdeu".
-export async function fetchFacebookNetFanDeltas(market) {
-  const pageToken = await fetchPageAccessToken(market);
-  const id = FB_IDS[market];
+export async function fetchFacebookNetFanDeltas(id) {
+  const pageToken = await fetchPageAccessToken(id);
   if (!pageToken || !id) return [];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const json = await graphGetAs(pageToken, `${id}/insights?metric=page_daily_follows_unique,page_daily_unfollows_unique&period=day&since=${since}&until=${until}`);
@@ -124,9 +245,9 @@ export async function fetchFacebookNetFanDeltas(market) {
 // Diferente do `recentLikes`/`recentComments` do snapshot diário (amostra dos últimos 25
 // posts NO MOMENTO do sync) — aqui é o total de verdade dentro do período escolhido na tela,
 // via Insights com metric_type=total_value (confirmado ao vivo 17/07/2026, ver probeEngagement
-// acima). Cache leve em memória (5 min) — o auto-refresh do front pode rodar a cada 1 min, e
+// abaixo). Cache leve em memória (5 min) — o auto-refresh do front pode rodar a cada 1 min, e
 // não faz sentido bater na Insights API a cada esses ciclos pra um número que não muda tão
-// rápido assim.
+// rápido assim. Chaveado por metaId (não por marca/país) — cada conta tem sua própria entrada.
 const engagementCache = new Map();
 const ENGAGEMENT_CACHE_TTL_MS = 5 * 60 * 1000;
 async function cached(key, fn) {
@@ -138,10 +259,9 @@ async function cached(key, fn) {
 }
 function isoToUnix(iso) { return Math.floor(Date.parse(iso + 'T00:00:00Z') / 1000); }
 
-export async function fetchInstagramEngagement(market, since, until) {
-  const id = IG_IDS[market];
+export async function fetchInstagramEngagement(id, since, until) {
   if (!TOKEN || !id) return null;
-  return cached(`ig-eng-${market}-${since}-${until}`, async () => {
+  return cached(`ig-eng-${id}-${since}-${until}`, async () => {
     const sinceU = isoToUnix(since), untilU = isoToUnix(until);
     const json = await graphGet(`${id}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${sinceU}&until=${untilU}`);
     const byName = {};
@@ -159,11 +279,10 @@ export async function fetchInstagramEngagement(market, since, until) {
 
 // Página do Facebook: page_video_views vem como série diária (confirmado ao vivo) — soma
 // dentro do período pedido.
-export async function fetchFacebookVideoViews(market, since, until) {
-  const pageToken = await fetchPageAccessToken(market);
-  const id = FB_IDS[market];
+export async function fetchFacebookVideoViews(id, since, until) {
+  const pageToken = await fetchPageAccessToken(id);
   if (!pageToken || !id) return null;
-  return cached(`fb-video-${market}-${since}-${until}`, async () => {
+  return cached(`fb-video-${id}-${since}-${until}`, async () => {
     const sinceU = isoToUnix(since), untilU = isoToUnix(until);
     const json = await graphGetAs(pageToken, `${id}/insights/page_video_views?period=day&since=${sinceU}&until=${untilU}`);
     const values = json.data?.[0]?.values || [];
@@ -172,23 +291,57 @@ export async function fetchFacebookVideoViews(market, since, until) {
   });
 }
 
+// ── Orgânico × pago (conteúdo impulsionado) ─────────────────────────────────────────────────
+// Confirmado ao vivo (21/07/2026): o mesmo META_ACCESS_TOKEN já usado no resto deste arquivo tem
+// acesso de leitura à conta de anúncios do mesmo Business Manager (nenhum token/permissão nova
+// precisou ser gerada) — só faltava o ID da conta (mesmo valor já usado no projeto de vendas
+// ../dashboard, ver registry.js). O criativo de cada anúncio (`creative.instagram_permalink_url`)
+// devolve o link exato do post orgânico usado no anúncio — é isso que cruza com o `permalink` já
+// guardado por post em contentSync.js pra marcar "impulsionado". Cache de 5 min (mesmo padrão de
+// `cached()` acima) — não precisa bater na Marketing API a cada request de /api/content.
+export async function fetchBoostedPermalinks(adAccountId) {
+  if (!TOKEN || !adAccountId) return new Set();
+  return cached(`boosted-${adAccountId}`, async () => {
+    const permalinks = new Set();
+    let url = `act_${adAccountId}/ads?fields=creative{instagram_permalink_url}&limit=100`;
+    for (let page = 0; page < 20; page++) {
+      const json = await graphGet(url);
+      for (const ad of json.data || []) {
+        const link = ad.creative?.instagram_permalink_url;
+        if (link) permalinks.add(link.replace(/\/$/, ''));
+      }
+      const next = json.paging?.next;
+      if (!next || !(json.data || []).length) break;
+      url = next.replace(`https://graph.facebook.com/${GRAPH_VERSION}/`, '');
+    }
+    return permalinks;
+  });
+}
+
+// ── Diagnóstico ─────────────────────────────────────────────────────────────────────────────
+// probeInsights/probeEngagement resolvem a conta pelo registry (brandId + countryId) em vez de
+// receber o metaId direto — são pensados pra chamada manual via navegador/curl com parâmetros
+// legíveis (?brand=&country=), não pelo resto do código.
+
 // Diagnóstico: devolve a resposta crua dos endpoints de Insights (Instagram e Facebook),
 // sem processar nada — confirma ao vivo quantos dias realmente vêm e se as métricas ainda
 // existem pra essa conta, antes de confiar no backfill. Usado por GET /api/meta/probe-insights.
-export async function probeInsights(market) {
-  const igId = IG_IDS[market], fbId = FB_IDS[market];
+export async function probeInsights(brandId, countryId) {
+  const accounts = getAccounts(brandId, countryId);
+  const igId = accounts.find(a => a.platform === 'instagram')?.metaId;
+  const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
-  const out = { market, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
+  const out = { brandId, countryId, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
   if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
 
   if (igId) {
     try { out.instagramFollowerCount = await graphGet(`${igId}/insights?metric=follower_count&period=day&since=${since}&until=${until}`); }
     catch (e) { out.instagramError = e.message; }
-  } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
+  } else out.instagramError = 'Nenhuma conta Instagram configurada para essa marca/país.';
 
   if (fbId) {
     try {
-      const pageToken = await fetchPageAccessToken(market);
+      const pageToken = await fetchPageAccessToken(fbId);
       out.facebookPageToken = pageToken ? 'obtido' : 'não veio (ver facebookTokenError)';
       out.facebookMetrics = {};
       for (const metric of FB_METRIC_CANDIDATES) {
@@ -202,7 +355,7 @@ export async function probeInsights(market) {
     } catch (e) {
       out.facebookTokenError = e.message;
     }
-  } else out.facebookError = 'META_FB_PAGE_ID_' + market.toUpperCase() + ' ausente.';
+  } else out.facebookError = 'Nenhuma conta Facebook configurada para essa marca/país.';
 
   return out;
 }
@@ -220,10 +373,12 @@ export async function probeInsights(market) {
 const IG_TOTAL_VALUE_CANDIDATES = ['likes', 'comments', 'views', 'shares', 'saves', 'total_interactions'];
 const FB_ENGAGEMENT_CANDIDATES = ['post_video_views', 'page_video_views', 'page_impressions', 'page_posts_impressions'];
 
-export async function probeEngagement(market) {
-  const igId = IG_IDS[market], fbId = FB_IDS[market];
+export async function probeEngagement(brandId, countryId) {
+  const accounts = getAccounts(brandId, countryId);
+  const igId = accounts.find(a => a.platform === 'instagram')?.metaId;
+  const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
-  const out = { market, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
+  const out = { brandId, countryId, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
   if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
 
   if (igId) {
@@ -240,11 +395,11 @@ export async function probeEngagement(market) {
     } catch (e) {
       out.instagramMetrics.reach = { ok: false, error: e.message };
     }
-  } else out.instagramError = 'META_IG_ACCOUNT_ID_' + market.toUpperCase() + ' ausente.';
+  } else out.instagramError = 'Nenhuma conta Instagram configurada para essa marca/país.';
 
   if (fbId) {
     try {
-      const pageToken = await fetchPageAccessToken(market);
+      const pageToken = await fetchPageAccessToken(fbId);
       out.facebookEngagementMetrics = {};
       for (const metric of FB_ENGAGEMENT_CANDIDATES) {
         try {
@@ -258,7 +413,7 @@ export async function probeEngagement(market) {
     } catch (e) {
       out.facebookTokenError = e.message;
     }
-  } else out.facebookError = 'META_FB_PAGE_ID_' + market.toUpperCase() + ' ausente.';
+  } else out.facebookError = 'Nenhuma conta Facebook configurada para essa marca/país.';
 
   return out;
 }

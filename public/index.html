@@ -50,6 +50,7 @@
     z-index:500;display:none;flex-direction:column;overflow:hidden}
   .csel.open .csel-pop{display:flex}
   .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
   .csel-opt:hover{background:var(--surface2);color:var(--text)}
   .csel-opt.active{color:var(--text);font-weight:600}
   .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
@@ -153,8 +154,6 @@
   .chart-card-head h2{font-size:13px;font-weight:700;margin:0}
   .legend-row{display:flex;gap:18px;font-size:11.5px;color:var(--sub);margin:14px 0 10px}
   .legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-  .legend-dot.br{background:var(--mkt-br)}
-  .legend-dot.us{background:var(--mkt-us)}
   .chart-wrap{height:280px;margin-top:6px}
   .chart-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 
@@ -227,6 +226,19 @@
           <div class="csel-opt" data-value="30">30 min</div>
           <div class="csel-opt" data-value="0">Desligar</div>
         </div>
+      </div>
+
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
       </div>
 
       <div class="filter-pill csel" id="cselChannel">
@@ -302,42 +314,15 @@
     </div>
 
     <h3 class="section">Por conta</h3>
-    <div class="acc-grid">
-      <div class="card acc-card ig" id="acc-ig-br">
-        <div class="acc-head">
-          <div class="badge ig"><i class="bi bi-instagram"></i></div>
-          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
-        </div>
-        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card acc-card ig" id="acc-ig-us">
-        <div class="acc-head">
-          <div class="badge ig"><i class="bi bi-instagram"></i></div>
-          <div class="card-title"><span class="name">Instagram</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
-        </div>
-        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card acc-card fb" id="acc-fb-br">
-        <div class="acc-head">
-          <div class="badge fb"><i class="bi bi-facebook"></i></div>
-          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</span></div>
-        </div>
-        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
-      </div>
-      <div class="card acc-card fb" id="acc-fb-us">
-        <div class="acc-head">
-          <div class="badge fb"><i class="bi bi-facebook"></i></div>
-          <div class="card-title"><span class="name">Facebook</span><span class="mkt"><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</span></div>
-        </div>
-        <div class="acc-body"><div class="empty">sem dado ainda</div></div>
-      </div>
+    <div class="acc-grid" id="accGrid">
+      <div class="empty">carregando…</div>
     </div>
 
     <h3 class="section">Tendência &amp; comparação</h3>
     <div class="dash-grid">
       <div class="card">
         <div class="chart-card-head">
-          <h2>Comparação Brasil × Estados Unidos</h2>
+          <h2 id="trendTitle">Comparação por país</h2>
           <div class="filter-pill csel" id="cselMetric">
             <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
             <div class="csel-pop">
@@ -347,7 +332,7 @@
             </div>
           </div>
         </div>
-        <div class="legend-row"><span><span class="legend-dot br"></span>Brasil</span><span><span class="legend-dot us"></span>Estados Unidos</span></div>
+        <div class="legend-row" id="trendLegend"></div>
         <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
         <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período — o gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
       </div>
@@ -390,9 +375,8 @@
     </div>
 
     <h3 class="section">Histórico (dentro do período selecionado)</h3>
-    <div class="hist-grid">
-      <div class="card hist-card"><h2><img src="https://flagcdn.com/w40/br.png" alt="BR"> Brasil</h2><div class="table-wrap" id="histBr"><div class="empty">sem dado ainda</div></div></div>
-      <div class="card hist-card"><h2><img src="https://flagcdn.com/w40/us.png" alt="EUA"> Estados Unidos</h2><div class="table-wrap" id="histUs"><div class="empty">sem dado ainda</div></div></div>
+    <div class="hist-grid" id="histGrid">
+      <div class="empty">carregando…</div>
     </div>
   </main>
 
@@ -431,6 +415,20 @@ let untilDate = localStorage.getItem('coco_sm_until') || todayISO;
 let cmpSince = localStorage.getItem('coco_sm_cmpSince') || null;
 let cmpUntil = localStorage.getItem('coco_sm_cmpUntil') || null;
 let refreshMin = Number(localStorage.getItem('coco_sm_refresh') ?? 15);
+// ── Marca/país (fundação multimarca/multipaís) ──
+// registryTree vem de GET /api/registry (empresa → marcas → países → plataformas, sem
+// credenciais) — os seletores de Marca e País são montados dinamicamente a partir dele; nenhuma
+// marca/país fica hardcoded no HTML/JS. countryScope 'all' = todos os países da marca selecionada.
+let registryTree = null;
+let brandId = localStorage.getItem('coco_sm_brand') || null;
+let countryScope = localStorage.getItem('coco_sm_country') || 'all';
+const COUNTRY_PALETTE = ['#1c2b39', '#dd2a7b', '#2e7d5b', '#8134af', '#f58529'];
+function countryColor(countryId, idx) {
+  if (countryId === 'br') return '#1c2b39';
+  if (countryId === 'us') return '#dd2a7b';
+  return COUNTRY_PALETTE[idx % COUNTRY_PALETTE.length];
+}
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
 const METRIC_SOURCES = {
   igFollowers: { label: 'Instagram — Seguidores', key: 'followers', platform: 'instagram' },
   fbLikes:     { label: 'Facebook — Curtidas', key: 'likes', platform: 'facebook' },
@@ -477,8 +475,6 @@ function syncControls() {
 // afetados são estáticos no HTML (só o conteúdo interno é re-renderizado), então o
 // display:none aplicado aqui sobrevive a cada render() novo — não precisa reaplicar toda vez.
 function updateChannelVisibility() {
-  document.querySelectorAll('.acc-card.ig').forEach(el => el.style.display = channel === 'facebook' ? 'none' : '');
-  document.querySelectorAll('.acc-card.fb').forEach(el => el.style.display = channel === 'instagram' ? 'none' : '');
   document.querySelectorAll('.kpi-mini.kpi-ig').forEach(el => el.style.display = channel === 'facebook' ? 'none' : '');
   document.querySelectorAll('.kpi-mini.kpi-fb').forEach(el => el.style.display = channel === 'instagram' ? 'none' : '');
 
@@ -532,8 +528,59 @@ setupCsel(document.getElementById('cselChannel'), val => {
   localStorage.setItem('coco_sm_channel', channel);
   updateChannelVisibility();
   syncControls();
-  if (lastData) { drawTrendChart(lastData); renderComparison(lastData); renderHistoryTable('histBr', lastData.instagram.br.series, lastData.facebook.br.series); renderHistoryTable('histUs', lastData.instagram.us.series, lastData.facebook.us.series); }
+  if (lastData) { renderAccountCards(lastData); drawTrendChart(lastData); renderComparison(lastData); renderHistoryTables(lastData); }
 });
+
+// ── Seletores de Marca/País — construídos a partir de /api/registry ──
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_sm_brand', brandId);
+    countryScope = 'all';
+    localStorage.removeItem('coco_sm_country');
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_sm_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+    load();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
 
 // ── Period picker ──
 const periodPop = document.getElementById('periodPop');
@@ -631,19 +678,22 @@ const tip = { backgroundColor:'#ffffff', borderColor:'rgba(28,43,57,.14)', borde
 
 function drawTrendChart(d) {
   const src = METRIC_SOURCES[metric];
-  const brSeries = d[src.platform].br.series, usSeries = d[src.platform].us.series;
-  const brMap = seriesMap(brSeries, src.key), usMap = seriesMap(usSeries, src.key);
-  const dates = [...new Set([...brMap.keys(), ...usMap.keys()])].sort();
+  const countries = Object.values(d.byCountry || {});
+  const seriesByCountry = countries.map((c, i) => ({
+    id: c.id, name: c.name, color: countryColor(c.id, i),
+    map: seriesMap(c[src.platform]?.series, src.key),
+  }));
+  const dates = [...new Set(seriesByCountry.flatMap(s => [...s.map.keys()]))].sort();
   const labels = dates.map(dt => fmtDM(parseISO(dt)));
-  const brData = dates.map(dt => brMap.has(dt) ? brMap.get(dt) : null);
-  const usData = dates.map(dt => usMap.has(dt) ? usMap.get(dt) : null);
+  const datasets = seriesByCountry.map(s => ({
+    label: s.name, data: dates.map(dt => s.map.has(dt) ? s.map.get(dt) : null),
+    borderColor: s.color, backgroundColor: s.color,
+    borderWidth: 2, tension: .35, pointRadius: 2, pointHoverRadius: 5, spanGaps: true, fill: false,
+  }));
 
   setChart('trendChart', {
     type: 'line',
-    data: { labels, datasets: [
-      { label:'Brasil', data:brData, borderColor:'#1c2b39', backgroundColor:'#1c2b39', borderWidth:2, tension:.35, pointRadius:2, pointHoverRadius:5, spanGaps:true, fill:false },
-      { label:'Estados Unidos', data:usData, borderColor:'#dd2a7b', backgroundColor:'#dd2a7b', borderWidth:2, tension:.35, pointRadius:2, pointHoverRadius:5, spanGaps:true, fill:false },
-    ]},
+    data: { labels, datasets },
     options: {
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
@@ -654,6 +704,14 @@ function drawTrendChart(d) {
       }
     }
   });
+
+  document.getElementById('trendLegend').innerHTML = seriesByCountry.map(s =>
+    `<span><span class="legend-dot" style="background:${s.color}"></span>${s.name}</span>`
+  ).join('');
+  document.getElementById('trendTitle').textContent = seriesByCountry.length > 1
+    ? 'Comparação ' + seriesByCountry.map(s => s.name).join(' × ')
+    : seriesByCountry.length === 1 ? 'Tendência — ' + seriesByCountry[0].name
+    : 'Comparação por país';
 
   // Com menos de 2 pontos numa das linhas, o Chart.js não tem o que traçar (só um ponto
   // solto) — não é erro, é só o começo da coleta. Avisa em vez de deixar o gráfico
@@ -763,21 +821,22 @@ function setKpi(prefix, kpi) {
   document.getElementById(prefix+'Delta').innerHTML = deltaHtml(kpi.deltaPct);
 }
 
-function renderAccountCard(elId, entity, platform) {
-  const body = document.querySelector('#' + elId + ' .acc-body');
-  if (!entity.latest) { body.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
-  const l = entity.latest;
-  const primaryKey = platform === 'instagram' ? 'followers' : 'likes';
-  const primaryLabel = platform === 'instagram' ? 'Seguidores' : 'Curtidas da página';
+// Metadados fixos de plataforma (ícone/cor/rótulos) — só o loop de países é dinâmico via
+// registry; TikTok/outras redes entram aqui no dia em que forem implementadas.
+const PLATFORM_META = {
+  instagram: { label: 'Instagram', icon: 'bi-instagram', badgeClass: 'ig', primaryKey: 'followers', primaryLabel: 'Seguidores' },
+  facebook:  { label: 'Facebook',  icon: 'bi-facebook',  badgeClass: 'fb', primaryKey: 'likes',     primaryLabel: 'Curtidas da página' },
+};
 
-  let secondary;
+function accountSecondaryHtml(platform, entity) {
+  const l = entity.latest;
   if (platform === 'instagram') {
     const e = entity.engagement;
     // Curtidas/comentários/visualizações do PERÍODO (via Insights, e.engagement) substituem a
     // amostra dos últimos 25 posts (recentLikes/recentComments do snapshot diário) quando
     // disponíveis — é o dado real que o Luan pediu. Sem engagement (API fora do ar/sem
     // credencial), cai de volta pra amostra, com o rótulo deixando claro que é amostra.
-    secondary = `
+    return `
       <div class="acc-sec-item"><span class="acc-sec-lbl">Seguindo</span><span class="acc-sec-val">${fmt(l.following)}</span></div>
       <div class="acc-sec-item"><span class="acc-sec-lbl">Posts</span><span class="acc-sec-val">${fmt(l.posts)}</span></div>
       ${e ? `
@@ -789,18 +848,38 @@ function renderAccountCard(elId, entity, platform) {
       <div class="acc-sec-item"><span class="acc-sec-lbl">Curtidas (amostra)</span><span class="acc-sec-val">${fmt(l.recentLikes)}</span></div>
       <div class="acc-sec-item"><span class="acc-sec-lbl">Comentários (amostra)</span><span class="acc-sec-val">${fmt(l.recentComments)}</span></div>
       `}`;
-  } else {
-    secondary = `<div class="acc-sec-item"><span class="acc-sec-lbl">Seguidores da página</span><span class="acc-sec-val">${fmt(l.followers)}</span></div>`
-      + (entity.videoViews != null ? `<div class="acc-sec-item"><span class="acc-sec-lbl">Visualizações de vídeo no período</span><span class="acc-sec-val">${fmt(entity.videoViews)}</span></div>` : '');
   }
+  return `<div class="acc-sec-item"><span class="acc-sec-lbl">Seguidores da página</span><span class="acc-sec-val">${fmt(l.followers)}</span></div>`
+    + (entity.videoViews != null ? `<div class="acc-sec-item"><span class="acc-sec-lbl">Visualizações de vídeo no período</span><span class="acc-sec-val">${fmt(entity.videoViews)}</span></div>` : '');
+}
 
-  body.innerHTML = `
+function accountCardHtml(country, platform, entity) {
+  const meta = PLATFORM_META[platform];
+  const body = !entity.latest ? '<div class="empty">sem dado ainda</div>' : `
     <div class="acc-primary">
-      <div><div class="kc-label">${primaryLabel}</div><div class="kc-value">${fmt(l[primaryKey])}</div></div>
-      <div class="kc-delta">${deltaHtml(entity.delta[primaryKey])}</div>
+      <div><div class="kc-label">${meta.primaryLabel}</div><div class="kc-value">${fmt(entity.latest[meta.primaryKey])}</div></div>
+      <div class="kc-delta">${deltaHtml(entity.delta[meta.primaryKey])}</div>
     </div>
-    <div class="acc-secondary">${secondary}</div>
+    <div class="acc-secondary">${accountSecondaryHtml(platform, entity)}</div>
   `;
+  return `<div class="card acc-card ${meta.badgeClass}">
+    <div class="acc-head">
+      <div class="badge ${meta.badgeClass}"><i class="bi ${meta.icon}"></i></div>
+      <div class="card-title"><span class="name">${meta.label}</span><span class="mkt">${country.flag ? `<img src="${country.flag}" alt="">` : ''} ${country.name}</span></div>
+    </div>
+    <div class="acc-body">${body}</div>
+  </div>`;
+}
+
+function renderAccountCards(d) {
+  const showIg = channel !== 'facebook', showFb = channel !== 'instagram';
+  const countries = Object.values(d.byCountry || {});
+  const cards = [];
+  for (const c of countries) {
+    if (showIg && c.instagram) cards.push(accountCardHtml(c, 'instagram', c.instagram));
+    if (showFb && c.facebook) cards.push(accountCardHtml(c, 'facebook', c.facebook));
+  }
+  document.getElementById('accGrid').innerHTML = cards.join('') || '<div class="empty">sem dado ainda</div>';
 }
 
 function fmtDateBR(iso) { return parseISO(iso).toLocaleDateString('pt-BR'); }
@@ -839,6 +918,19 @@ function renderHistoryTable(elId, igSeries, fbSeries) {
   </table>`;
 }
 
+function renderHistoryTables(d) {
+  const countries = Object.values(d.byCountry || {});
+  const grid = document.getElementById('histGrid');
+  if (!countries.length) { grid.innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
+  grid.innerHTML = countries.map(c => `
+    <div class="card hist-card">
+      <h2>${c.flag ? `<img src="${c.flag}" alt="">` : ''} ${c.name}</h2>
+      <div class="table-wrap" id="hist-${c.id}"></div>
+    </div>
+  `).join('');
+  countries.forEach(c => renderHistoryTable('hist-' + c.id, c.instagram?.series, c.facebook?.series));
+}
+
 function render(d) {
   lastData = d;
   document.getElementById('lastSync').textContent = 'última sincronização: ' + fmtDateTime(d.lastSync);
@@ -850,20 +942,15 @@ function render(d) {
   setKpi('kpiFbFollowers', d.combined.fbFollowers);
   setKpi('kpiFbVideoViews', d.combined.fbVideoViews);
 
-  renderAccountCard('acc-ig-br', d.instagram.br, 'instagram');
-  renderAccountCard('acc-ig-us', d.instagram.us, 'instagram');
-  renderAccountCard('acc-fb-br', d.facebook.br, 'facebook');
-  renderAccountCard('acc-fb-us', d.facebook.us, 'facebook');
-
+  renderAccountCards(d);
   drawTrendChart(d);
   renderComparison(d);
-
-  renderHistoryTable('histBr', d.instagram.br.series, d.facebook.br.series);
-  renderHistoryTable('histUs', d.instagram.us.series, d.facebook.us.series);
+  renderHistoryTables(d);
 }
 
 async function load() {
-  const params = { since: sinceDate, until: untilDate };
+  const params = { since: sinceDate, until: untilDate, country: countryScope };
+  if (brandId) params.brand = brandId;
   if (cmpSince && cmpUntil) { params.cmpSince = cmpSince; params.cmpUntil = cmpUntil; }
   const p = new URLSearchParams(params);
   const res = await fetch('/api/dashboard?' + p);
@@ -881,7 +968,7 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
 updateChannelVisibility();
 syncControls();
 applyRefresh();
-load();
+loadRegistry().then(load);
 </script>
 </body>
 </html>

@@ -22,7 +22,11 @@
   </div>
   <div class="nav-group">
     <div class="nav-label">Painel</div>
-    <a class="nav-item active" href="index.html"><i class="bi bi-grid-1x2-fill nav-icon"></i> Visão geral</a>
+    <a class="nav-item" href="index.html"><i class="bi bi-grid-1x2-fill nav-icon"></i> Visão geral</a>
+    <a class="nav-item" href="conteudos.html"><i class="bi bi-images nav-icon"></i> Conteúdos</a>
+    <a class="nav-item" href="metas.html"><i class="bi bi-bullseye nav-icon"></i> Metas</a>
+    <a class="nav-item" href="stories.html"><i class="bi bi-play-circle nav-icon"></i> Stories</a>
+    <a class="nav-item" href="cofrinho.html"><i class="bi bi-piggy-bank-fill nav-icon"></i> Cofrinho</a>
   </div>
 </nav>`;
 
@@ -67,6 +71,13 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
     style.textContent = css;
     document.head.appendChild(style);
     document.body.insertAdjacentHTML('afterbegin', html);
+
+    // Marca o item ativo pela página atual (path do arquivo) — precisa disso agora que existe
+    // mais de uma página; antes "Visão geral" ficava fixo como ativo no próprio HTML.
+    const current = (location.pathname.split('/').pop() || 'index.html');
+    document.querySelectorAll('nav.sidebar .nav-item').forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === current);
+    });
 
     const overlay  = document.getElementById('sidebarOverlay');
     const closeBtn = document.getElementById('sidebarToggle');

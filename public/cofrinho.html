@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cofrinho do Social · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:20px 22px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  .limit-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
+  .limit-note i{color:var(--gold);font-size:16px;margin-top:1px}
+  .limit-note p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.6}
+
+  .country-block{margin-bottom:32px}
+  .country-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .country-head img{width:18px;height:13px;object-fit:cover;border-radius:2px}
+  .country-head h2{font-size:14px;font-weight:700;margin:0}
+
+  .cof-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px;margin-bottom:20px}
+  .cof-kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .cof-kpi-val{font-size:22px;font-weight:300;color:var(--text)}
+  .cof-kpi-sub{font-size:10.5px;color:var(--muted);margin-top:4px}
+
+  .goal-bar-wrap{height:22px;border-radius:20px;background:var(--surface2);overflow:hidden;margin-bottom:16px;position:relative;border:1px solid var(--border)}
+  .goal-bar-fill{height:100%;border-radius:20px;transition:width .4s ease;background:linear-gradient(90deg,#f58529,#dd2a7b)}
+  .goal-bar-fill.achieved{background:linear-gradient(90deg,var(--green),#4caf7d)}
+  .goal-bar-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--text)}
+
+  .goal-table{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .goal-cell-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .goal-cell-val{font-size:15px;font-weight:600;color:var(--text)}
+
+  .goal-pace{font-size:11.5px;color:var(--sub);padding:12px 0;border-top:1px solid var(--border);margin-bottom:16px;line-height:1.6}
+  .goal-pace.achieved{color:var(--green);font-weight:600}
+
+  .btn{font-size:11.5px;font-weight:600;padding:8px 15px;border-radius:20px;border:1px solid var(--border2);
+    background:var(--surface2);color:var(--sub);cursor:pointer;transition:all .15s;font-family:inherit}
+  .btn:hover{border-color:var(--text);color:var(--text)}
+  .cof-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+
+  .inline-form{display:none;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap;align-items:flex-end}
+  .inline-form.open{display:flex}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+  .field input{font-size:12px;font-family:inherit;color:var(--text);padding:8px 10px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none;width:150px}
+  .field input:focus{border-color:var(--text)}
+  .form-err{font-size:10.5px;color:var(--red);width:100%}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase}
+  .table-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-top:8px}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Cofrinho do Social</h1>
+      <div class="sub">Vendas rastreadas por cupom/link do Social</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="limit-note">
+      <i class="bi bi-info-circle-fill"></i>
+      <p><b>Limite:</b> o cofrinho mostra apenas vendas rastreadas por cupom ou link específico do Social,
+      informadas manualmente pelo setor responsável (print, planilha, relatório ou confirmação). Ele não
+      representa sozinho toda a influência das redes sociais sobre as compras, e não analisa investimento
+      nem desempenho de tráfego pago.</p>
+    </div>
+
+    <div id="cofrinhoRoot"><div class="empty">carregando…</div></div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtMoney(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function fmtDateBR(iso) { if (!iso) return '—'; const [y,m,d] = iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
+function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_cof_brand') || null;
+let countryScope = localStorage.getItem('coco_cof_country') || 'all';
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+
+function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) el.classList.add('open');
+  });
+  el.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      el.classList.remove('open');
+      onSelect(opt.dataset.value);
+    });
+  });
+}
+document.addEventListener('click', closeAllDropdowns);
+
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_cof_brand', brandId);
+    countryScope = 'all';
+    localStorage.removeItem('coco_cof_country');
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_cof_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+    load();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
+
+const METRIC_LABEL = { vendas: 'Vendas rastreadas', faturamento: 'Faturamento informado' };
+
+function paceHtml(g) {
+  if (!g) return '';
+  if (g.achieved) return '<div class="goal-pace achieved"><i class="bi bi-trophy-fill"></i> Meta atingida! Defina uma nova meta pra continuar acompanhando.</div>';
+  if (g.daysLeft <= 0) return `<div class="goal-pace">Prazo vencido (${fmtDateBR(g.deadline)}).</div>`;
+  const unit = g.metric === 'faturamento' ? fmtMoney(g.dailyPaceNeeded) : fmt(Math.ceil(g.dailyPaceNeeded));
+  return `<div class="goal-pace">Ritmo necessário: <b>${unit}/dia</b> para bater a meta até ${fmtDateBR(g.deadline)} (${g.daysLeft} dia(s) restantes).</div>`;
+}
+
+function goalHtml(country, g) {
+  const fmtVal = g && g.metric === 'faturamento' ? fmtMoney : fmt;
+  if (!g) return `
+    <div class="empty">Nenhuma meta definida ainda.</div>
+    <div class="cof-actions"><button class="btn" data-open-goal-form>Criar meta</button></div>`;
+  return `
+    <div class="goal-bar-wrap">
+      <div class="goal-bar-fill${g.achieved ? ' achieved' : ''}" style="width:${g.progressPct ?? 0}%"></div>
+      <div class="goal-bar-pct">${g.progressPct != null ? g.progressPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—'}</div>
+    </div>
+    <div class="goal-table">
+      <div><div class="goal-cell-lbl">Meta (${METRIC_LABEL[g.metric]})</div><div class="goal-cell-val">${fmtVal(g.target)}</div></div>
+      <div><div class="goal-cell-lbl">Atual</div><div class="goal-cell-val">${fmtVal(g.currentValue)}</div></div>
+      <div><div class="goal-cell-lbl">Falta</div><div class="goal-cell-val">${g.achieved ? '—' : fmtVal(g.remaining)}</div></div>
+      <div><div class="goal-cell-lbl">Prazo</div><div class="goal-cell-val">${fmtDateBR(g.deadline)}</div></div>
+    </div>
+    ${paceHtml(g)}
+    <div class="cof-actions"><button class="btn" data-open-goal-form>${g.achieved ? 'Definir nova meta' : 'Ajustar meta'}</button></div>`;
+}
+
+function entriesTableHtml(entries) {
+  if (!entries.length) return '<div class="empty">nenhum registro ainda</div>';
+  const rows = entries.map(e => `
+    <tr>
+      <td>${e.period || '—'}</td>
+      <td>${e.cupom || '—'}</td>
+      <td>${fmt(e.usos)}</td>
+      <td>${fmt(e.vendas)}</td>
+      <td>${e.faturamento != null ? fmtMoney(e.faturamento) : '—'}</td>
+      <td>${e.observacao || '—'}</td>
+    </tr>`).join('');
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Período</th><th>Cupom/link</th><th>Usos</th><th>Vendas</th><th>Faturamento</th><th>Observação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function countryBlockHtml(item) {
+  const cid = item.countryId;
+  return `<div class="country-block" data-country-id="${cid}">
+    <div class="country-head">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''}<h2>${item.countryName}</h2></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="cof-kpis">
+        <div><div class="cof-kpi-lbl">Usos do cupom</div><div class="cof-kpi-val">${fmt(item.totals.usos)}</div><div class="cof-kpi-sub">pedidos identificados no período</div></div>
+        <div><div class="cof-kpi-lbl">Vendas rastreadas</div><div class="cof-kpi-val">${fmt(item.totals.vendas)}</div><div class="cof-kpi-sub">total atribuído ao cupom/link</div></div>
+        <div><div class="cof-kpi-lbl">Faturamento informado</div><div class="cof-kpi-val">${item.totals.faturamento != null ? fmtMoney(item.totals.faturamento) : '—'}</div><div class="cof-kpi-sub">${item.totals.faturamentoCount} de ${item.totals.entryCount} registro(s) informaram</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div data-goal-body>${goalHtml(item, item.goal)}</div>
+      <div class="inline-form" id="goal-form-${cid}">
+        <div class="field"><label>Métrica</label>
+          <select data-goal-metric style="font-size:12px;font-family:inherit;color:var(--text);padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);width:170px">
+            <option value="vendas">Vendas rastreadas</option>
+            <option value="faturamento">Faturamento informado</option>
+          </select>
+        </div>
+        <div class="field"><label>Meta</label><input type="number" min="1" data-goal-target></div>
+        <div class="field"><label>Prazo</label><input type="date" data-goal-deadline></div>
+        <button class="btn" data-submit-goal>Salvar</button>
+        <div class="form-err" data-goal-err></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cof-actions"><button class="btn" data-open-entry-form>Adicionar registro</button></div>
+      <div class="inline-form" id="entry-form-${cid}">
+        <div class="field"><label>Período</label><input type="text" placeholder="Julho/2026" data-entry-period style="width:120px"></div>
+        <div class="field"><label>Cupom/link</label><input type="text" placeholder="SOCIAL10" data-entry-cupom style="width:120px"></div>
+        <div class="field"><label>Usos do cupom</label><input type="number" min="0" data-entry-usos></div>
+        <div class="field"><label>Vendas rastreadas</label><input type="number" min="0" data-entry-vendas></div>
+        <div class="field"><label>Faturamento (opcional)</label><input type="number" min="0" step="0.01" data-entry-faturamento></div>
+        <div class="field" style="flex:1;min-width:200px"><label>Observação</label><input type="text" data-entry-obs style="width:100%"></div>
+        <button class="btn" data-submit-entry>Salvar</button>
+        <div class="form-err" data-entry-err></div>
+      </div>
+      <div data-entries-table>${entriesTableHtml(item.entries)}</div>
+    </div>
+  </div>`;
+}
+
+function attachHandlers(root) {
+  root.querySelectorAll('.country-block').forEach(block => {
+    const countryId = block.dataset.countryId;
+
+    const goalForm = block.querySelector(`#goal-form-${countryId}`);
+    block.querySelector('[data-goal-body] [data-open-goal-form]')?.addEventListener('click', () => goalForm.classList.toggle('open'));
+    goalForm.querySelector('[data-submit-goal]').addEventListener('click', async () => {
+      const metric = goalForm.querySelector('[data-goal-metric]').value;
+      const target = goalForm.querySelector('[data-goal-target]').value;
+      const deadline = goalForm.querySelector('[data-goal-deadline]').value;
+      const errEl = goalForm.querySelector('[data-goal-err]');
+      errEl.textContent = '';
+      if (!target || Number(target) <= 0) { errEl.textContent = 'Informe uma meta válida.'; return; }
+      if (!deadline) { errEl.textContent = 'Informe um prazo.'; return; }
+      try {
+        const res = await fetch('/api/cofrinho/goals', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId, countryId, metric, target, deadline }),
+        });
+        if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
+        await load();
+      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+    });
+
+    const entryForm = block.querySelector(`#entry-form-${countryId}`);
+    block.querySelector('[data-open-entry-form]').addEventListener('click', () => entryForm.classList.toggle('open'));
+    entryForm.querySelector('[data-submit-entry]').addEventListener('click', async () => {
+      const period = entryForm.querySelector('[data-entry-period]').value;
+      const cupom = entryForm.querySelector('[data-entry-cupom]').value;
+      const usos = entryForm.querySelector('[data-entry-usos]').value;
+      const vendas = entryForm.querySelector('[data-entry-vendas]').value;
+      const faturamento = entryForm.querySelector('[data-entry-faturamento]').value;
+      const observacao = entryForm.querySelector('[data-entry-obs]').value;
+      const errEl = entryForm.querySelector('[data-entry-err]');
+      errEl.textContent = '';
+      if (usos === '' || Number(usos) < 0) { errEl.textContent = 'Informe a quantidade de usos do cupom.'; return; }
+      if (vendas === '' || Number(vendas) < 0) { errEl.textContent = 'Informe as vendas rastreadas.'; return; }
+      try {
+        const res = await fetch('/api/cofrinho/entries', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId, countryId, period, cupom, usos, vendas, faturamento: faturamento || null, observacao }),
+        });
+        if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
+        await load();
+      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+    });
+  });
+}
+
+async function load() {
+  const params = { country: countryScope };
+  if (brandId) params.brand = brandId;
+  const p = new URLSearchParams(params);
+  const res = await fetch('/api/cofrinho?' + p);
+  const data = await res.json();
+  render(data);
+}
+
+function render(d) {
+  const root = document.getElementById('cofrinhoRoot');
+  root.innerHTML = d.items.length ? d.items.map(countryBlockHtml).join('') : '<div class="empty">sem países configurados</div>';
+  attachHandlers(root);
+}
+
+loadRegistry().then(load);
+</script>
+</body>
+</html>

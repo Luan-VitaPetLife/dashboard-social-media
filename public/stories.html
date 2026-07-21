@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stories · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --ig-1:#f58529; --ig-2:#dd2a7b; --ig-3:#8134af; --ig-4:#515bd4;
+    --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .sync-btn{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px}
+  .sync-btn:hover{border-color:var(--text);color:var(--text)}
+  .sync-btn:disabled{opacity:.6;cursor:default}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  .coverage-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
+  .coverage-note i{color:var(--gold);font-size:16px;margin-top:1px}
+  .coverage-note p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.6}
+
+  .delta-val{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .delta-val.up{background:rgba(46,125,91,.1);color:var(--green)}
+  .delta-val.down{background:rgba(192,57,43,.09);color:var(--red)}
+  .delta-val.flat{background:rgba(28,43,57,.06);color:var(--muted)}
+
+  .story-grid{display:flex;flex-direction:column;gap:16px}
+  .story-card{border-top:3px solid var(--ig-2)}
+  .story-card.expired{border-top-color:var(--muted)}
+  .story-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .story-head-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .story-format{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ig-2)}
+  .story-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .story-meta img{width:13px;height:9px;object-fit:cover;border-radius:2px}
+  .story-expired-badge{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;
+    color:var(--muted);background:var(--surface2);padding:3px 9px;border-radius:20px}
+  .story-link{font-size:11px;color:var(--sub);text-decoration:none;display:flex;align-items:center;gap:4px}
+  .story-link:hover{color:var(--text)}
+
+  .story-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .story-metric-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .story-metric-val{font-size:18px;font-weight:600;color:var(--text);margin-bottom:6px}
+
+  .story-footnote{font-size:11px;color:var(--muted);line-height:1.6}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Stories</h1>
+      <div class="sub" id="footerNote">carregando…</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
+
+      <button class="sync-btn" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="coverage-note">
+      <i class="bi bi-info-circle-fill"></i>
+      <p><b>Cobertura parcial, por limite real da API do Instagram:</b> stories somem da API assim que expiram
+      (24h após publicar) e a Graph API não expõe mais avanços/voltas/saídas separados, só um total agregado
+      de navegação. Este painel captura uma leitura a cada ~2h enquanto o story está ativo — um story
+      publicado e expirado entre duas capturas pode não ser registrado por completo.</p>
+    </div>
+
+    <h3 class="section">Stories rastreados (últimas 48h)</h3>
+    <div class="story-grid" id="storyGrid">
+      <div class="empty">carregando…</div>
+    </div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+function deltaHtml(p) {
+  if (p == null) return `<span class="delta-val flat">—</span>`;
+  const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
+  return `<span class="delta-val ${cls}">${up ? '▲' : '▼'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span>`;
+}
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_story_brand') || null;
+let countryScope = localStorage.getItem('coco_story_country') || 'all';
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+
+function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) el.classList.add('open');
+  });
+  el.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      el.classList.remove('open');
+      onSelect(opt.dataset.value);
+    });
+  });
+}
+document.addEventListener('click', closeAllDropdowns);
+
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_story_brand', brandId);
+    countryScope = 'all';
+    localStorage.removeItem('coco_story_country');
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_story_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+    load();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
+
+const METRIC_META = [
+  { key: 'reach', label: 'Alcance' },
+  { key: 'replies', label: 'Respostas' },
+  { key: 'navigation', label: 'Navegação' },
+  { key: 'shares', label: 'Compartilhamentos' },
+  { key: 'totalInteractions', label: 'Interações totais' },
+  { key: 'follows', label: 'Seguidores atribuídos' },
+];
+
+function metricsHtml(item) {
+  const showGrowth = item.sampleCount >= 2;
+  return METRIC_META.filter(m => item.latest?.[m.key] != null).map(m => `
+    <div>
+      <div class="story-metric-lbl">${m.label}</div>
+      <div class="story-metric-val">${fmt(item.latest[m.key])}</div>
+      ${showGrowth ? deltaHtml(item.growth[m.key]) : ''}
+    </div>
+  `).join('');
+}
+
+function footnoteHtml(item) {
+  if (item.sampleCount >= 2) {
+    return `<div class="story-footnote">${item.sampleCount} leituras capturadas — primeira em ${fmtDateTimeBR(item.first.polledAt)}, última em ${fmtDateTimeBR(item.latest.polledAt)}. Variação acima é entre essas duas leituras, não o ciclo de vida completo do story.</div>`;
+  }
+  return `<div class="story-footnote">Só 1 leitura capturada até agora (${fmtDateTimeBR(item.latest?.polledAt)}) — ainda sem base pra medir evolução.</div>`;
+}
+
+function cardHtml(item) {
+  const icon = item.meta.mediaType === 'VIDEO' ? 'bi-camera-reels-fill' : 'bi-image-fill';
+  return `<div class="card story-card${item.expired ? ' expired' : ''}">
+    <div class="story-head">
+      <div class="story-head-left">
+        <span class="story-format"><i class="bi ${icon}"></i> ${item.meta.mediaType === 'VIDEO' ? 'Vídeo' : 'Imagem'}</span>
+        <span class="story-meta">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName} · publicado ${fmtDateTimeBR(item.meta.timestamp)} · há ${item.ageHours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h</span>
+        ${item.expired ? `<span class="story-expired-badge">Expirado</span>` : ''}
+      </div>
+      ${item.meta.permalink ? `<a class="story-link" href="${item.meta.permalink}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>` : ''}
+    </div>
+    ${item.latest ? `<div class="story-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}
+    ${footnoteHtml(item)}
+  </div>`;
+}
+
+async function load() {
+  const params = { country: countryScope };
+  if (brandId) params.brand = brandId;
+  const p = new URLSearchParams(params);
+  const res = await fetch('/api/stories?' + p);
+  const data = await res.json();
+  render(data);
+}
+
+function render(d) {
+  const grid = document.getElementById('storyGrid');
+  document.getElementById('footerNote').textContent = d.items.length
+    ? `${d.items.length} story(s) rastreado(s) nas últimas ${d.retentionHours}h`
+    : 'nenhum story rastreado ainda';
+  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda — pode ser que não haja stories ativos, ou que ainda não tenha passado uma sincronização desde a publicação</div>';
+}
+
+document.getElementById('syncBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
+  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
+});
+
+loadRegistry().then(load);
+</script>
+</body>
+</html>

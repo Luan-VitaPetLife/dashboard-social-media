@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metas · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --ig-1:#f58529; --ig-2:#dd2a7b; --ig-3:#8134af; --ig-4:#515bd4;
+    --fb:#1877f2; --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .sync-btn{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px}
+  .sync-btn:hover{border-color:var(--text);color:var(--text)}
+  .sync-btn:disabled{opacity:.6;cursor:default}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  .goal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+  .goal-card{border-top:3px solid transparent}
+  .goal-card.ig{border-top-color:var(--ig-2)}
+  .goal-card.fb{border-top-color:var(--fb)}
+  .goal-head{display:flex;align-items:center;gap:11px;margin-bottom:16px}
+  .badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0}
+  .badge.ig{background:linear-gradient(135deg,var(--ig-1),var(--ig-2) 45%,var(--ig-3) 70%,var(--ig-4))}
+  .badge.fb{background:var(--fb)}
+  .goal-title{display:flex;flex-direction:column;line-height:1.3}
+  .goal-title .name{font-size:12.5px;font-weight:700}
+  .goal-title .mkt{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
+  .goal-title .mkt img{width:13px;height:9px;object-fit:cover;border-radius:2px}
+
+  .goal-bar-wrap{height:22px;border-radius:20px;background:var(--surface2);overflow:hidden;margin-bottom:14px;position:relative;border:1px solid var(--border)}
+  .goal-bar-fill{height:100%;border-radius:20px;transition:width .4s ease;background:linear-gradient(90deg,var(--ig-2),var(--ig-4))}
+  .goal-bar-fill.achieved{background:linear-gradient(90deg,var(--green),#4caf7d)}
+  .goal-bar-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--text)}
+
+  .goal-table{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .goal-cell-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .goal-cell-val{font-size:15px;font-weight:600;color:var(--text)}
+
+  .goal-pace{font-size:11.5px;color:var(--sub);padding:12px 0;border-top:1px solid var(--border);margin-bottom:16px;line-height:1.6}
+  .goal-pace.achieved{color:var(--green);font-weight:600}
+  .goal-pace.overdue{color:var(--red)}
+
+  .goal-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .goal-btn{font-size:11.5px;font-weight:600;padding:8px 15px;border-radius:20px;border:1px solid var(--border2);
+    background:var(--surface2);color:var(--sub);cursor:pointer;transition:all .15s;font-family:inherit}
+  .goal-btn:hover{border-color:var(--text);color:var(--text)}
+  .goal-hist-toggle{font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;user-select:none;display:inline-block;margin-top:2px}
+
+  .goal-form{display:none;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);flex-wrap:wrap;align-items:flex-end}
+  .goal-form.open{display:flex}
+  .goal-field{display:flex;flex-direction:column;gap:4px}
+  .goal-field label{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+  .goal-field input{font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none;width:150px}
+  .goal-field input:focus{border-color:var(--text)}
+  .goal-form-err{font-size:10.5px;color:var(--red);width:100%}
+
+  .goal-history{display:none;margin-top:10px;font-size:11px;color:var(--muted)}
+  .goal-history.open{display:block}
+  .goal-history-row{padding:6px 0;border-bottom:1px solid var(--border)}
+  .goal-history-row:last-child{border-bottom:none}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Metas</h1>
+      <div class="sub">Bateria de crescimento por conta e rede</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
+
+      <button class="sync-btn" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <h3 class="section">Bateria de crescimento (seguidores)</h3>
+    <div class="goal-grid" id="goalGrid">
+      <div class="empty">carregando…</div>
+    </div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtDateBR(iso) { if (!iso) return '—'; const [y,m,d] = iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
+function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_meta_brand') || null;
+let countryScope = localStorage.getItem('coco_meta_country') || 'all';
+let lastData = null;
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+
+function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) el.classList.add('open');
+  });
+  el.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      el.classList.remove('open');
+      onSelect(opt.dataset.value);
+    });
+  });
+}
+document.addEventListener('click', closeAllDropdowns);
+
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_meta_brand', brandId);
+    countryScope = 'all';
+    localStorage.removeItem('coco_meta_country');
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_meta_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+    load();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
+
+const PLATFORM_META = {
+  instagram: { label: 'Instagram', icon: 'bi-instagram', badgeClass: 'ig' },
+  facebook: { label: 'Facebook', icon: 'bi-facebook', badgeClass: 'fb' },
+};
+
+function paceText(g) {
+  if (!g) return '';
+  if (g.achieved) return '<span class="goal-pace achieved"><i class="bi bi-trophy-fill"></i> Meta atingida! Defina uma nova meta pra continuar acompanhando.</span>';
+  if (g.daysLeft <= 0) return `<span class="goal-pace overdue">Prazo vencido (${fmtDateBR(g.deadline)}) — ainda faltam ${fmt(g.remaining)} seguidores.</span>`;
+  return `<span class="goal-pace">Ritmo necessário: <b>${fmt(Math.ceil(g.dailyPaceNeeded))}/dia</b> para bater a meta até ${fmtDateBR(g.deadline)} (${g.daysLeft} dia(s) restantes).</span>`;
+}
+
+function historyHtml(item) {
+  if (!item.goal.history.length) return '';
+  const rows = item.goal.history.map(h => `
+    <div class="goal-history-row">Meta de ${fmt(h.target)} até ${fmtDateBR(h.deadline)} — criada em ${fmtDateTimeBR(h.createdAt)}</div>
+  `).join('');
+  return `
+    <div class="goal-hist-toggle" data-hist-toggle>Ver histórico de metas (${item.goal.history.length})</div>
+    <div class="goal-history">${rows}</div>`;
+}
+
+function cardHtml(item) {
+  const meta = PLATFORM_META[item.platform];
+  const g = item.goal.current;
+  const idBase = `${item.platform}-${item.countryId}`;
+
+  const body = !g ? `
+    <div class="empty">Nenhuma meta definida ainda.</div>
+    <div class="goal-actions"><button class="goal-btn" data-open-form>Criar meta</button></div>
+  ` : `
+    <div class="goal-bar-wrap">
+      <div class="goal-bar-fill${g.achieved ? ' achieved' : ''}" style="width:${g.progressPct ?? 0}%"></div>
+      <div class="goal-bar-pct">${g.progressPct != null ? g.progressPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—'}</div>
+    </div>
+    <div class="goal-table">
+      <div><div class="goal-cell-lbl">Meta</div><div class="goal-cell-val">${fmt(g.target)}</div></div>
+      <div><div class="goal-cell-lbl">Atual</div><div class="goal-cell-val">${fmt(item.goal.currentValue)}</div></div>
+      <div><div class="goal-cell-lbl">Falta</div><div class="goal-cell-val">${g.achieved ? '—' : fmt(g.remaining)}</div></div>
+      <div><div class="goal-cell-lbl">Prazo</div><div class="goal-cell-val">${fmtDateBR(g.deadline)}</div></div>
+    </div>
+    ${paceText(g)}
+    <div class="goal-actions"><button class="goal-btn" data-open-form>${g.achieved ? 'Definir nova meta' : 'Ajustar meta'}</button></div>
+    ${historyHtml(item)}
+  `;
+
+  return `<div class="card goal-card ${meta.badgeClass}" data-platform="${item.platform}" data-country-id="${item.countryId}">
+    <div class="goal-head">
+      <div class="badge ${meta.badgeClass}"><i class="bi ${meta.icon}"></i></div>
+      <div class="goal-title"><span class="name">${meta.label}</span><span class="mkt">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName}</span></div>
+    </div>
+    ${body}
+    <div class="goal-form" id="form-${idBase}">
+      <div class="goal-field"><label>Meta de seguidores</label><input type="number" min="1" data-target></div>
+      <div class="goal-field"><label>Prazo</label><input type="date" data-deadline></div>
+      <button class="goal-btn" data-submit-form>Salvar</button>
+      <div class="goal-form-err" data-form-err></div>
+    </div>
+  </div>`;
+}
+
+function attachHandlers(grid) {
+  grid.querySelectorAll('.goal-card').forEach(card => {
+    const platform = card.dataset.platform, countryId = card.dataset.countryId;
+    const form = card.querySelector('.goal-form');
+    const openBtn = card.querySelector('[data-open-form]');
+    if (openBtn) openBtn.addEventListener('click', () => form.classList.toggle('open'));
+
+    const histToggle = card.querySelector('[data-hist-toggle]');
+    if (histToggle) histToggle.addEventListener('click', () => card.querySelector('.goal-history').classList.toggle('open'));
+
+    const submitBtn = form.querySelector('[data-submit-form]');
+    submitBtn.addEventListener('click', async () => {
+      const target = form.querySelector('[data-target]').value;
+      const deadline = form.querySelector('[data-deadline]').value;
+      const errEl = form.querySelector('[data-form-err]');
+      errEl.textContent = '';
+      if (!target || Number(target) <= 0) { errEl.textContent = 'Informe uma meta de seguidores válida.'; return; }
+      if (!deadline) { errEl.textContent = 'Informe um prazo.'; return; }
+      try {
+        const res = await fetch('/api/goals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId, countryId, platform, target, deadline }),
+        });
+        if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
+        await load();
+      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+    });
+  });
+}
+
+async function load() {
+  const params = { country: countryScope };
+  if (brandId) params.brand = brandId;
+  const p = new URLSearchParams(params);
+  const res = await fetch('/api/goals?' + p);
+  const data = await res.json();
+  render(data);
+}
+
+function render(d) {
+  lastData = d;
+  const grid = document.getElementById('goalGrid');
+  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem contas configuradas</div>';
+  attachHandlers(grid);
+}
+
+document.getElementById('syncBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
+  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
+});
+
+loadRegistry().then(load);
+</script>
+</body>
+</html>

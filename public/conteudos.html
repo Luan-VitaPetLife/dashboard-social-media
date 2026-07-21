@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conteúdos · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --ig-1:#f58529; --ig-2:#dd2a7b; --ig-3:#8134af; --ig-4:#515bd4;
+    --green:#2e7d5b; --red:#c0392b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .sync-btn{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px}
+  .sync-btn:hover{border-color:var(--text);color:var(--text)}
+  .sync-btn:disabled{opacity:.6;cursor:default}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  .delta-val{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .delta-val.up{background:rgba(46,125,91,.1);color:var(--green)}
+  .delta-val.down{background:rgba(192,57,43,.09);color:var(--red)}
+  .delta-val.flat{background:rgba(28,43,57,.06);color:var(--muted)}
+
+  .cnt-grid{display:flex;flex-direction:column;gap:14px}
+  .cnt-card{border-top:3px solid var(--ig-2)}
+  .cnt-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  .cnt-head-left{display:flex;align-items:center;gap:10px}
+  .cnt-format{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ig-2)}
+  .cnt-format i{font-size:13px}
+  .cnt-boosted{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.3px;
+    text-transform:uppercase;color:#946200;background:rgba(148,98,0,.1);padding:3px 8px;border-radius:20px}
+  .cnt-median-note{font-size:10.5px;color:var(--muted);margin-top:8px;font-style:italic}
+  .cnt-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .cnt-meta img{width:13px;height:9px;object-fit:cover;border-radius:2px}
+  .cnt-link{font-size:11px;color:var(--sub);text-decoration:none;display:flex;align-items:center;gap:4px}
+  .cnt-link:hover{color:var(--text)}
+  .cnt-caption{font-size:12.5px;color:var(--sub);margin:0 0 14px;max-width:760px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+  .cnt-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .cnt-metric-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+  .cnt-metric-val{font-size:18px;font-weight:600;color:var(--text);margin-bottom:5px}
+  .cnt-checkpoints{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding:10px 0}
+
+  .cnt-toggle{font-size:11px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px;user-select:none}
+  .cnt-toggle:hover{color:var(--text)}
+  .cnt-context{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .cnt-card.open .cnt-context{display:grid}
+  .cnt-card.open .cnt-toggle .bi-chevron-down{transform:rotate(180deg)}
+  .cnt-field{display:flex;flex-direction:column;gap:4px}
+  .cnt-field label{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+  .cnt-field input,.cnt-field textarea{font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none;transition:border-color .12s;resize:vertical}
+  .cnt-field input:focus,.cnt-field textarea:focus{border-color:var(--text)}
+  .cnt-field.wide{grid-column:1/-1}
+  .cnt-saved{font-size:10px;color:var(--green);opacity:0;transition:opacity .3s}
+  .cnt-saved.show{opacity:1}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+
+  /* ── Resumo (gráfico/tabela/lista + ocultar) ── */
+  .sum-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .sum-head h2{font-size:13px;font-weight:700;margin:0}
+  .sum-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .sum-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px}
+  .sum-view-btn{border:none;background:none;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:600;
+    color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;font-family:inherit}
+  .sum-view-btn.active{background:var(--text);color:#fff}
+  .sum-view-btn:hover:not(.active){color:var(--text)}
+  .sum-hide-btn{border:none;background:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px 6px;border-radius:6px;transition:all .15s}
+  .sum-hide-btn:hover{color:var(--text);background:var(--surface2)}
+  .sum-body{margin-top:16px}
+  body.cnt-summary-hidden #summaryBody,body.cnt-summary-hidden #sumViewToggle{display:none!important}
+  body.cnt-summary-hidden .sum-head{margin-bottom:0}
+
+  .sum-list{display:flex;flex-direction:column}
+  .sum-list-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .sum-list-row:last-child{border-bottom:none}
+  .sum-list-name{font-size:12.5px;color:var(--sub);display:flex;align-items:center;gap:8px}
+  .sum-list-vals{text-align:right}
+  .sum-list-val{font-size:16px;font-weight:600;color:var(--text);margin-bottom:2px}
+  .sum-list-sub{font-size:10.5px;color:var(--muted)}
+
+  .sum-table-wrap table{width:100%;border-collapse:collapse;font-size:12px}
+  .sum-table-wrap th,.sum-table-wrap td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
+  .sum-table-wrap th{color:var(--muted);font-weight:700;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase}
+
+  .sum-chart-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:20px}
+  @media(max-width:800px){.sum-chart-grid{grid-template-columns:1fr}}
+  .sum-chart-wrap{height:220px;position:relative}
+  .sum-donut-legend{display:flex;flex-direction:column;gap:8px;margin-top:14px;font-size:11.5px;color:var(--sub)}
+  .sum-donut-legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Conteúdos</h1>
+      <div class="sub" id="footerNote">carregando…</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
+
+      <button class="sync-btn" id="syncBtn"><i class="bi bi-arrow-repeat"></i> Sincronizar agora</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <h3 class="section">Resumo</h3>
+    <div class="card">
+      <div class="sum-head">
+        <h2>Orgânico × impulsionado e desempenho por formato</h2>
+        <div class="sum-controls">
+          <div class="sum-view-toggle" id="sumViewToggle">
+            <button class="sum-view-btn active" data-view="lista"><i class="bi bi-list-ul"></i> Lista</button>
+            <button class="sum-view-btn" data-view="tabela"><i class="bi bi-table"></i> Tabela</button>
+            <button class="sum-view-btn" data-view="grafico"><i class="bi bi-pie-chart"></i> Gráfico</button>
+          </div>
+          <button class="sum-hide-btn" id="sumHideBtn" title="Ocultar resumo"><i class="bi bi-eye-slash"></i></button>
+        </div>
+      </div>
+      <div class="sum-body" id="summaryBody"></div>
+    </div>
+
+    <h3 class="section">Posts e Reels recentes (Instagram · últimos 35 dias)</h3>
+    <div class="cnt-grid" id="cntGrid">
+      <div class="empty">carregando…</div>
+    </div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtDateBR(iso) { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
+function deltaHtml(p) {
+  if (p == null) return `<span class="delta-val flat">—</span>`;
+  const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
+  return `<span class="delta-val ${cls}">${up ? '▲' : '▼'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span>`;
+}
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_cnt_brand') || null;
+let countryScope = localStorage.getItem('coco_cnt_country') || 'all';
+let lastData = null;
+let sumView = localStorage.getItem('coco_cnt_sumview') || 'lista';
+if (!['lista','tabela','grafico'].includes(sumView)) sumView = 'lista';
+let sumHidden = localStorage.getItem('coco_cnt_sumhidden') === '1';
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+
+function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = el.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) el.classList.add('open');
+  });
+  el.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      el.classList.remove('open');
+      onSelect(opt.dataset.value);
+    });
+  });
+}
+document.addEventListener('click', closeAllDropdowns);
+
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_cnt_brand', brandId);
+    countryScope = 'all';
+    localStorage.removeItem('coco_cnt_country');
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_cnt_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+    load();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
+
+const METRIC_META = [
+  { key: 'reach', label: 'Alcance' },
+  { key: 'likes', label: 'Curtidas' },
+  { key: 'comments', label: 'Comentários' },
+  { key: 'saved', label: 'Salvamentos' },
+  { key: 'shares', label: 'Compartilhamentos' },
+  { key: 'totalInteractions', label: 'Interações totais' },
+  { key: 'views', label: 'Visualizações' },
+];
+
+const CONTEXT_FIELDS = [
+  { key: 'tema', label: 'Tema' },
+  { key: 'objetivo', label: 'Objetivo' },
+  { key: 'pilar', label: 'Pilar' },
+  { key: 'produto', label: 'Produto' },
+  { key: 'gancho', label: 'Gancho' },
+  { key: 'cta', label: 'CTA' },
+  { key: 'observacao', label: 'Observação', wide: true },
+];
+
+function checkpointLabel(item, days, checkpoint) {
+  if (checkpoint) return `D+${days}: ${fmt(checkpoint.reach)} alcance`;
+  if (item.ageDays < days) return `D+${days}: post tem ${item.ageDays} dia(s) — ainda sem esse checkpoint`;
+  return `D+${days}: ainda sem leitura registrada nesse checkpoint`;
+}
+
+function metricsHtml(item) {
+  return METRIC_META.filter(m => item.latest?.[m.key] != null).map(m => `
+    <div>
+      <div class="cnt-metric-lbl">${m.label}</div>
+      <div class="cnt-metric-val">${fmt(item.latest[m.key])}</div>
+      ${deltaHtml(item.vsMedian[m.key])}
+    </div>
+  `).join('');
+}
+
+function contextFieldsHtml(item) {
+  return CONTEXT_FIELDS.map(f => `
+    <div class="cnt-field${f.wide ? ' wide' : ''}">
+      <label>${f.label}</label>
+      ${f.wide
+        ? `<textarea rows="2" data-field="${f.key}">${item.context[f.key] || ''}</textarea>`
+        : `<input type="text" data-field="${f.key}" value="${(item.context[f.key] || '').replace(/"/g, '&quot;')}">`}
+    </div>
+  `).join('');
+}
+
+function cardHtml(item) {
+  const captionPreview = (item.meta.caption || '(sem legenda)').slice(0, 220);
+  return `<div class="card cnt-card" data-media-id="${item.mediaId}" data-country-id="${item.countryId}">
+    <div class="cnt-head">
+      <div class="cnt-head-left">
+        <span class="cnt-format"><i class="bi bi-instagram"></i> ${item.formatLabel}</span>
+        <span class="cnt-meta">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName} · ${item.ageDays} dia(s) · publicado em ${fmtDateBR(item.meta.publishedAt.slice(0,10))}</span>
+        ${item.isBoosted ? `<span class="cnt-boosted"><i class="bi bi-megaphone-fill"></i> Impulsionado</span>` : ''}
+      </div>
+      <a class="cnt-link" href="${item.meta.permalink}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
+    </div>
+    <p class="cnt-caption">${captionPreview}</p>
+    ${item.latest ? `<div class="cnt-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}
+    ${item.isBoosted ? `<div class="cnt-median-note">Comparado com a mediana de conteúdo orgânico — não entra no cálculo dessa mediana, por ter tido distribuição paga.</div>` : ''}
+    <div class="cnt-checkpoints">
+      <span>${checkpointLabel(item, 7, item.checkpoint7)}</span>
+      <span>${checkpointLabel(item, 14, item.checkpoint14)}</span>
+      <span>${checkpointLabel(item, 30, item.checkpoint30)}</span>
+    </div>
+    <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
+    <div class="cnt-context">${contextFieldsHtml(item)}</div>
+    <div class="cnt-saved" data-saved>Salvo</div>
+  </div>`;
+}
+
+function attachCardHandlers(grid) {
+  grid.querySelectorAll('.cnt-card').forEach(card => {
+    card.querySelector('[data-toggle]').addEventListener('click', () => card.classList.toggle('open'));
+    const savedEl = card.querySelector('[data-saved]');
+    card.querySelectorAll('[data-field]').forEach(input => {
+      input.addEventListener('blur', async () => {
+        const mediaId = card.dataset.mediaId;
+        const countryId = card.dataset.countryId;
+        const body = { brandId, countryId, [input.dataset.field]: input.value };
+        try {
+          await fetch(`/api/content/${mediaId}/context`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          savedEl.classList.add('show');
+          setTimeout(() => savedEl.classList.remove('show'), 1500);
+        } catch { /* falha silenciosa de rede — o campo continua editável, tenta de novo no próximo blur */ }
+      });
+    });
+  });
+}
+
+// ── Resumo: Orgânico×Impulsionado + desempenho médio por formato ──
+// Tudo calculado no front a partir dos itens já devolvidos por /api/content — sem chamada nova.
+const FORMAT_COLORS = { 'Reels': '#dd2a7b', 'Carrossel': '#8134af', 'Estático': '#515bd4', 'Vídeo': '#f58529' };
+function avg(values) {
+  const nums = values.filter(v => v != null);
+  if (!nums.length) return null;
+  return nums.reduce((a, v) => a + v, 0) / nums.length;
+}
+
+function computeSummary(items) {
+  const organic = items.filter(i => i.isBoosted === false);
+  const boosted = items.filter(i => i.isBoosted === true);
+  const unknown = items.filter(i => i.isBoosted == null);
+
+  const formats = [...new Set(items.map(i => i.formatLabel))];
+  const perFormat = formats.map(label => {
+    const group = items.filter(i => i.formatLabel === label);
+    return {
+      label,
+      count: group.length,
+      avgReach: avg(group.map(i => i.latest?.reach)),
+      avgInteractions: avg(group.map(i => i.latest?.totalInteractions)),
+    };
+  }).sort((a, b) => b.count - a.count);
+
+  return { total: items.length, organic, boosted, unknown, perFormat };
+}
+
+function renderSummaryList(s) {
+  const pct = (n) => s.total ? ((n / s.total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—';
+  const rows = [
+    { name: '<i class="bi bi-flower1"></i> Orgânico', val: s.organic.length, sub: `${pct(s.organic.length)} do total` },
+    { name: '<i class="bi bi-megaphone-fill"></i> Impulsionado', val: s.boosted.length, sub: `${pct(s.boosted.length)} do total` },
+  ];
+  if (s.unknown.length) rows.push({ name: '<i class="bi bi-question-circle"></i> Sem verificação (país sem conta de anúncio)', val: s.unknown.length, sub: `${pct(s.unknown.length)} do total` });
+  const formatRows = s.perFormat.map(f => ({
+    name: `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${FORMAT_COLORS[f.label]||'#96a3ad'};margin-right:6px"></span>${f.label}`,
+    val: f.count,
+    sub: `alcance médio ${fmt(Math.round(f.avgReach))}`,
+  }));
+  const html = (rowList) => rowList.map(r => `
+    <div class="sum-list-row">
+      <span class="sum-list-name">${r.name}</span>
+      <div class="sum-list-vals"><div class="sum-list-val">${r.val}</div><div class="sum-list-sub">${r.sub}</div></div>
+    </div>`).join('');
+  document.getElementById('summaryBody').innerHTML = `<div class="sum-list">${html(rows)}${html(formatRows)}</div>`;
+}
+
+function renderSummaryTable(s) {
+  const rows = s.perFormat.map(f => `
+    <tr>
+      <td>${f.label}</td>
+      <td>${f.count}</td>
+      <td>${fmt(f.avgReach != null ? Math.round(f.avgReach) : null)}</td>
+      <td>${fmt(f.avgInteractions != null ? Math.round(f.avgInteractions) : null)}</td>
+    </tr>`).join('');
+  document.getElementById('summaryBody').innerHTML = `
+    <div class="sum-table-wrap"><table>
+      <thead><tr><th>Formato</th><th>Qtd.</th><th>Alcance médio</th><th>Interações médias</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div class="sum-list" style="margin-top:14px">
+      <div class="sum-list-row"><span class="sum-list-name"><i class="bi bi-flower1"></i> Orgânico</span><div class="sum-list-vals"><div class="sum-list-val">${s.organic.length}</div></div></div>
+      <div class="sum-list-row"><span class="sum-list-name"><i class="bi bi-megaphone-fill"></i> Impulsionado</span><div class="sum-list-vals"><div class="sum-list-val">${s.boosted.length}</div></div></div>
+    </div>`;
+}
+
+let summaryCharts = {};
+function setSummaryChart(id, cfg) {
+  if (summaryCharts[id]) summaryCharts[id].destroy();
+  summaryCharts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function renderSummaryChart(s) {
+  document.getElementById('summaryBody').innerHTML = `
+    <div class="sum-chart-grid">
+      <div>
+        <div class="sum-chart-wrap"><canvas id="orgPagoChart"></canvas></div>
+        <div class="sum-donut-legend" id="orgPagoLegend"></div>
+      </div>
+      <div class="sum-chart-wrap"><canvas id="formatChart"></canvas></div>
+    </div>`;
+
+  const donutData = [
+    { label: 'Orgânico', value: s.organic.length, color: '#2e7d5b' },
+    { label: 'Impulsionado', value: s.boosted.length, color: '#946200' },
+  ];
+  if (s.unknown.length) donutData.push({ label: 'Sem verificação', value: s.unknown.length, color: '#96a3ad' });
+
+  setSummaryChart('orgPagoChart', {
+    type: 'doughnut',
+    data: { labels: donutData.map(d => d.label), datasets: [{ data: donutData.map(d => d.value), backgroundColor: donutData.map(d => d.color), borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' },
+  });
+  document.getElementById('orgPagoLegend').innerHTML = donutData.map(d =>
+    `<span><span class="dot" style="background:${d.color}"></span>${d.label} — ${d.value} (${s.total ? ((d.value/s.total)*100).toLocaleString('pt-BR',{maximumFractionDigits:1}) : 0}%)</span>`
+  ).join('');
+
+  setSummaryChart('formatChart', {
+    type: 'bar',
+    data: {
+      labels: s.perFormat.map(f => f.label),
+      datasets: [{ label: 'Alcance médio', data: s.perFormat.map(f => f.avgReach != null ? Math.round(f.avgReach) : null),
+        backgroundColor: s.perFormat.map(f => FORMAT_COLORS[f.label] || '#96a3ad'), borderRadius: 4 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' Alcance médio: ' + fmt(c.parsed.y) } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(28,43,57,.06)' }, ticks: { callback: v => fmt(v) } } },
+    },
+  });
+}
+
+function renderSummary(d) {
+  const s = computeSummary(d.items);
+  if (!s.total) { document.getElementById('summaryBody').innerHTML = '<div class="empty">sem dado ainda</div>'; return; }
+  if (sumView === 'lista') renderSummaryList(s);
+  else if (sumView === 'tabela') renderSummaryTable(s);
+  else renderSummaryChart(s);
+}
+
+document.querySelectorAll('.sum-view-btn').forEach(btn => {
+  btn.classList.toggle('active', btn.dataset.view === sumView);
+  btn.addEventListener('click', () => {
+    sumView = btn.dataset.view;
+    localStorage.setItem('coco_cnt_sumview', sumView);
+    document.querySelectorAll('.sum-view-btn').forEach(b => b.classList.toggle('active', b === btn));
+    if (lastData) renderSummary(lastData);
+  });
+});
+
+function applySumHidden() {
+  document.body.classList.toggle('cnt-summary-hidden', sumHidden);
+  document.getElementById('sumHideBtn').innerHTML = sumHidden ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+  document.getElementById('sumHideBtn').title = sumHidden ? 'Mostrar resumo' : 'Ocultar resumo';
+}
+document.getElementById('sumHideBtn').addEventListener('click', () => {
+  sumHidden = !sumHidden;
+  localStorage.setItem('coco_cnt_sumhidden', sumHidden ? '1' : '0');
+  applySumHidden();
+  if (!sumHidden && lastData) renderSummary(lastData);
+});
+applySumHidden();
+
+async function load() {
+  const params = { country: countryScope };
+  if (brandId) params.brand = brandId;
+  const p = new URLSearchParams(params);
+  const res = await fetch('/api/content?' + p);
+  const data = await res.json();
+  render(data);
+}
+
+function render(d) {
+  lastData = d;
+  const grid = document.getElementById('cntGrid');
+  document.getElementById('footerNote').textContent = d.items.length
+    ? `${d.items.length} conteúdo(s) rastreado(s)`
+    : 'nenhum conteúdo rastreado ainda — rode uma sincronização';
+  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda</div>';
+  attachCardHandlers(grid);
+  if (!sumHidden) renderSummary(d);
+}
+
+document.getElementById('syncBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
+  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
+});
+
+loadRegistry().then(load);
+</script>
+</body>
+</html>
