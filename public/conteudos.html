@@ -323,14 +323,16 @@ function contextFieldsHtml(item) {
     <div class="cnt-field${f.wide ? ' wide' : ''}">
       <label>${f.label}</label>
       ${f.wide
-        ? `<textarea rows="2" data-field="${f.key}">${item.context[f.key] || ''}</textarea>`
-        : `<input type="text" data-field="${f.key}" value="${(item.context[f.key] || '').replace(/"/g, '&quot;')}">`}
+        ? `<textarea rows="2" data-field="${f.key}">${escapeHtml(item.context[f.key] || '')}</textarea>`
+        : `<input type="text" data-field="${f.key}" value="${escapeHtml(item.context[f.key] || '')}">`}
     </div>
   `).join('');
 }
 
 function cardHtml(item) {
-  const captionPreview = (item.meta.caption || '(sem legenda)').slice(0, 220);
+  // caption vem da legenda real do post (texto de terceiros) e context/etc. vêm de PATCH
+  // /api/content/:id/context sem autenticação nenhuma hoje — nunca interpolar sem escapeHtml.
+  const captionPreview = escapeHtml((item.meta.caption || '(sem legenda)').slice(0, 220));
   return `<div class="card cnt-card" data-media-id="${item.mediaId}" data-country-id="${item.countryId}">
     <div class="cnt-head">
       <div class="cnt-head-left">
@@ -338,7 +340,7 @@ function cardHtml(item) {
         <span class="cnt-meta">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName} · ${item.ageDays} dia(s) · publicado em ${fmtDateBR(item.meta.publishedAt.slice(0,10))}</span>
         ${item.isBoosted ? `<span class="cnt-boosted"><i class="bi bi-megaphone-fill"></i> Impulsionado</span>` : ''}
       </div>
-      <a class="cnt-link" href="${item.meta.permalink}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
+      <a class="cnt-link" href="${escapeHtml(item.meta.permalink)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
     </div>
     <p class="cnt-caption">${captionPreview}</p>
     ${item.latest ? `<div class="cnt-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}

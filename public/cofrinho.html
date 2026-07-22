@@ -258,15 +258,17 @@ function goalHtml(country, g) {
 }
 
 function entriesTableHtml(entries) {
+  // period/cupom/observacao vêm de POST /api/cofrinho/entries, texto livre sem autenticação
+  // nenhuma hoje — sempre escapar antes de jogar em innerHTML (ver escapeHtml em sidebar.js).
   if (!entries.length) return '<div class="empty">nenhum registro ainda</div>';
   const rows = entries.map(e => `
     <tr>
-      <td>${e.period || '—'}</td>
-      <td>${e.cupom || '—'}</td>
+      <td>${e.period ? escapeHtml(e.period) : '—'}</td>
+      <td>${e.cupom ? escapeHtml(e.cupom) : '—'}</td>
       <td>${fmt(e.usos)}</td>
       <td>${fmt(e.vendas)}</td>
       <td>${e.faturamento != null ? fmtMoney(e.faturamento) : '—'}</td>
-      <td>${e.observacao || '—'}</td>
+      <td>${e.observacao ? escapeHtml(e.observacao) : '—'}</td>
     </tr>`).join('');
   return `<div class="table-wrap"><table>
     <thead><tr><th>Período</th><th>Cupom/link</th><th>Usos</th><th>Vendas</th><th>Faturamento</th><th>Observação</th></tr></thead>

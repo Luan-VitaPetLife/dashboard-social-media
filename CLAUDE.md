@@ -246,6 +246,16 @@ Implementado em 22/07/2026 a pedido do Luan — não é do briefing da Aline, é
 pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso backlog técnico.
 - **Escopo geral, não por marca/país** — um quadro só pra empresa toda (`people`/`tickets` em
   `store.js`, fora do padrão empresa→marca→país usado no resto do produto).
+- **3 modos de visualização** (`viewMode`: `lista`/`quadro`/`cards`, botão segmentado na toolbar,
+  mesmo padrão visual do `.cmp-view-toggle` já usado em `index.html`) — **salvos só em
+  `localStorage`** (`coco_chamados_viewmode`), de propósito por pedido do Luan: é preferência de
+  tela de cada pessoa, não deve virar padrão pra equipe toda. Lista (linhas compactas agrupadas,
+  o original) e Quadro (Kanban — mesmo agrupamento, só que em colunas lado a lado, rolagem
+  horizontal) reaproveitam o mesmo `groupBy`/`computeGroups()`; Cards é uma grade solta sem
+  agrupamento nenhum, então o pill "Agrupar por" some da toolbar nesse modo
+  (`updateGroupByVisibility()`) em vez de ficar visível sem efeito. Quadro e Cards compartilham o
+  mesmo componente de card (`ticketCardHtml()`), mais espaçoso que a linha da Lista
+  (`ticketRowHtml()`) — mostra prévia da descrição truncada em 110 caracteres.
 - **`people`**: cadastro simples (CRUD: `GET/POST /api/people`, `PATCH/DELETE /api/people/:id`) —
   sem senha nem login próprio, só um jeito de marcar responsável/criador/autor de comentário. Sem
   cascata ao apagar: um chamado ou comentário que apontava pra um id apagado mostra "pessoa
@@ -457,6 +467,14 @@ por severidade, o que foi corrigido e o que ficou só documentado.
   `public/stories.html` não têm ponto equivalente (só título/meta/número, sem campo de texto livre
   renderizado) — nada a corrigir ali. `public/index.html` também não tem — todo dado exibido vem de
   agregados calculados no servidor ou do registry, nunca de texto livre gravado por usuário.
+  **Correção real só em 22/07/2026 (mais tarde):** o merge original (patch do agente de segurança via
+  `git apply`, feito antes deste dia) tinha sido reportado como aplicado mas **não pegou** em
+  `conteudos.html`/`cofrinho.html` — o commit que devia conter a correção só trouxe as mudanças de
+  `--gold`/padding do outro patch (frontend), sem nenhum `escapeHtml()`. Descoberto por acaso enquanto
+  mexia em outra coisa (não por auditoria). Reaplicado manualmente (Edit direto, não `git apply`) e
+  confirmado com `grep -c escapeHtml` nos dois arquivos antes de comitar. **Lição:** depois de aplicar
+  patch via `git apply` em cima de um merge de múltiplos patches concorrentes, sempre confirmar o
+  resultado final com grep/leitura direta do arquivo — não confiar só na mensagem "APPLIED" do comando.
 - **Vazamento de segredo em mensagem de erro (corrigido):** várias rotas fazem
   `res.status(500).json({ error: e.message })`; em teoria um erro de rede na chamada à Graph API
   (`meta.js`, `graphGetAs`) pode incluir a URL completa da requisição — com `?access_token=...` — na
