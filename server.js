@@ -15,7 +15,11 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
-import { setContentContext, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings } from './src/store.js';
+import {
+  setContentContext, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings,
+  getPeople, addPerson, updatePerson, deletePerson,
+  getTickets, addTicket, updateTicket, deleteTicket, addTicketComment, deleteTicketComment,
+} from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,7 +112,10 @@ app.use(express.json());
 // Roda antes do estático e de toda rota /api — decide se a requisição pode passar (login
 // desligado, rota pública, ou sessão válida) ou se precisa ir pra tela de login. Ver src/auth.js.
 app.use(authGate);
-app.use(express.static(path.join(__dirname, 'public')));
+// extensions:['html'] deixa a URL limpa (/conteudos em vez de /conteudos.html) sem precisar de
+// rota nem redirect pra cada página — o arquivo .html continua acessível pelo nome completo
+// também (compatibilidade com link antigo/favorito), só não é mais o que a gente linka.
+app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -151,6 +158,89 @@ app.post('/api/settings', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Chamados (quadro estilo Monday) + cadastro de pessoas ──────────────────────────────────
+const TICKET_TIPOS = ['sugestao', 'bug', 'duvida', 'dado', 'programacao', 'outro'];
+const TICKET_URGENCIAS = ['baixa', 'media', 'alta', 'urgente'];
+const TICKET_STATUSES = ['aberto', 'andamento', 'concluido'];
+
+app.get('/api/people', (req, res) => res.json(getPeople()));
+
+app.post('/api/people', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome é obrigatório.' });
+  res.json(addPerson(name));
+});
+
+app.patch('/api/people/:id', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome é obrigatório.' });
+  const person = updatePerson(req.params.id, { name });
+  if (!person) return res.status(404).json({ error: 'Pessoa não encontrada.' });
+  res.json(person);
+});
+
+app.delete('/api/people/:id', (req, res) => {
+  deletePerson(req.params.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/tickets', (req, res) => res.json(getTickets()));
+
+app.post('/api/tickets', (req, res) => {
+  const titulo = String(req.body.titulo || '').trim();
+  const { tipo, urgencia, responsavelId, criadoPorId } = req.body;
+  if (!titulo) return res.status(400).json({ error: 'Título é obrigatório.' });
+  if (!TICKET_TIPOS.includes(tipo)) return res.status(400).json({ error: 'Tipo inválido.' });
+  if (!TICKET_URGENCIAS.includes(urgencia)) return res.status(400).json({ error: 'Urgência inválida.' });
+  const descricao = String(req.body.descricao || '').trim();
+  res.json(addTicket({ titulo, descricao, tipo, urgencia, responsavelId: responsavelId || null, criadoPorId: criadoPorId || null }));
+});
+
+app.patch('/api/tickets/:id', (req, res) => {
+  const patch = {};
+  if ('titulo' in req.body) {
+    const titulo = String(req.body.titulo).trim();
+    if (!titulo) return res.status(400).json({ error: 'Título não pode ficar vazio.' });
+    patch.titulo = titulo;
+  }
+  if ('descricao' in req.body) patch.descricao = String(req.body.descricao || '').trim();
+  if ('tipo' in req.body) {
+    if (!TICKET_TIPOS.includes(req.body.tipo)) return res.status(400).json({ error: 'Tipo inválido.' });
+    patch.tipo = req.body.tipo;
+  }
+  if ('urgencia' in req.body) {
+    if (!TICKET_URGENCIAS.includes(req.body.urgencia)) return res.status(400).json({ error: 'Urgência inválida.' });
+    patch.urgencia = req.body.urgencia;
+  }
+  if ('status' in req.body) {
+    if (!TICKET_STATUSES.includes(req.body.status)) return res.status(400).json({ error: 'Status inválido.' });
+    patch.status = req.body.status;
+  }
+  if ('responsavelId' in req.body) patch.responsavelId = req.body.responsavelId || null;
+  const ticket = updateTicket(req.params.id, patch);
+  if (!ticket) return res.status(404).json({ error: 'Chamado não encontrado.' });
+  res.json(ticket);
+});
+
+app.delete('/api/tickets/:id', (req, res) => {
+  deleteTicket(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/tickets/:id/comments', (req, res) => {
+  const text = String(req.body.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'Comentário vazio.' });
+  const comment = addTicketComment(req.params.id, { personId: req.body.personId || null, text });
+  if (!comment) return res.status(404).json({ error: 'Chamado não encontrado.' });
+  res.json(comment);
+});
+
+app.delete('/api/tickets/:id/comments/:commentId', (req, res) => {
+  const ticket = deleteTicketComment(req.params.id, req.params.commentId);
+  if (!ticket) return res.status(404).json({ error: 'Chamado não encontrado.' });
+  res.json(ticket);
 });
 
 // Árvore empresa → marca → país → plataformas (sem credenciais) — o front monta os seletores

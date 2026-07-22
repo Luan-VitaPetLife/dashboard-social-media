@@ -38,14 +38,15 @@ window.escapeHtml = escapeHtml;
   </div>
   <div class="nav-group">
     <div class="nav-label">Painel</div>
-    <a class="nav-item" href="index.html"><i class="bi bi-grid-1x2-fill nav-icon"></i> Visão geral</a>
-    <a class="nav-item" href="conteudos.html"><i class="bi bi-images nav-icon"></i> Conteúdos</a>
-    <a class="nav-item" href="metas.html"><i class="bi bi-bullseye nav-icon"></i> Metas</a>
-    <a class="nav-item" href="stories.html"><i class="bi bi-play-circle nav-icon"></i> Stories</a>
-    <a class="nav-item" href="cofrinho.html"><i class="bi bi-piggy-bank-fill nav-icon"></i> Cofrinho</a>
+    <a class="nav-item" href="/"><i class="bi bi-grid-1x2-fill nav-icon"></i> Visão geral</a>
+    <a class="nav-item" href="/conteudos"><i class="bi bi-images nav-icon"></i> Conteúdos</a>
+    <a class="nav-item" href="/metas"><i class="bi bi-bullseye nav-icon"></i> Metas</a>
+    <a class="nav-item" href="/stories"><i class="bi bi-play-circle nav-icon"></i> Stories</a>
+    <a class="nav-item" href="/cofrinho"><i class="bi bi-piggy-bank-fill nav-icon"></i> Cofrinho</a>
+    <a class="nav-item" href="/chamados"><i class="bi bi-kanban-fill nav-icon"></i> Chamados</a>
   </div>
   <div class="nav-group" id="sidebarBottomGroup" style="margin-top:auto">
-    <a class="nav-item" href="configuracoes.html"><i class="bi bi-gear-fill nav-icon"></i> Configurações</a>
+    <a class="nav-item" href="/configuracoes"><i class="bi bi-gear-fill nav-icon"></i> Configurações</a>
     <a class="nav-item" href="#" id="sidebarLogout" style="display:none"><i class="bi bi-box-arrow-right nav-icon"></i> Sair</a>
   </div>
 </nav>`;
@@ -92,9 +93,11 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
     document.head.appendChild(style);
     document.body.insertAdjacentHTML('afterbegin', html);
 
-    // Marca o item ativo pela página atual (path do arquivo) — precisa disso agora que existe
-    // mais de uma página; antes "Visão geral" ficava fixo como ativo no próprio HTML.
-    const current = (location.pathname.split('/').pop() || 'index.html');
+    // Marca o item ativo pela página atual — URL limpa agora (/conteudos, não /conteudos.html,
+    // ver extensions:['html'] em server.js), mas ainda normaliza .html/"/index" caso alguém
+    // chegue por um link antigo ou favorito salvo com o nome completo do arquivo.
+    let current = location.pathname.replace(/\.html$/, '');
+    if (current === '/index' || current === '') current = '/';
     document.querySelectorAll('nav.sidebar .nav-item').forEach(a => {
       a.classList.toggle('active', a.getAttribute('href') === current);
     });
@@ -108,7 +111,7 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
     logoutLink.addEventListener('click', async (e) => {
       e.preventDefault();
       await fetch('/api/auth/logout', { method: 'POST' });
-      location.href = '/login.html';
+      location.href = '/login';
     });
 
     const overlay  = document.getElementById('sidebarOverlay');

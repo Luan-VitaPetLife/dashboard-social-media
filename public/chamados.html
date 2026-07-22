@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chamados · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --green:#2e7d5b; --red:#c0392b; --gold:#946200; --fb:#1877f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden;max-height:280px;overflow-y:auto}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .btn-primary{height:34px;padding:0 16px;border-radius:20px;border:none;background:var(--text);color:#fff;
+    font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .btn-primary:hover{background:#0f1922}
+  .btn-secondary{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:7px}
+  .btn-secondary:hover{border-color:var(--text);color:var(--text)}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  .toolbar-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+
+  /* ── Board: grupos coloridos estilo Monday ── */
+  .board-group{margin-bottom:22px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .board-group-head{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--surface2);
+    border-bottom:1px solid var(--border);cursor:pointer}
+  .board-group-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .board-group-title{font-size:12.5px;font-weight:700;flex:1}
+  .board-group-count{font-size:11px;color:var(--muted);font-weight:600}
+  .board-group-arr{color:var(--muted);font-size:11px;transition:transform .15s}
+  .board-group.collapsed .board-group-arr{transform:rotate(-90deg)}
+  .board-group.collapsed .board-group-rows{display:none}
+
+  .ticket-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);
+    cursor:pointer;transition:background .1s}
+  .ticket-row:last-child{border-bottom:none}
+  .ticket-row:hover{background:var(--surface2)}
+  .ticket-title{font-size:12.5px;font-weight:600;flex:1;min-width:160px}
+  .ticket-desc-preview{font-size:11px;color:var(--muted);display:none}
+
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:.3px;
+    text-transform:uppercase;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .badge-tipo{background:var(--surface2);color:var(--sub);border:1px solid var(--border2)}
+
+  .avatar{width:22px;height:22px;border-radius:50%;background:var(--text);color:#fff;font-size:9.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .avatar.empty-avatar{background:var(--surface2);color:var(--muted);border:1px dashed var(--border2)}
+
+  .ticket-meta-right{display:flex;align-items:center;gap:14px;flex-shrink:0}
+  .comment-count{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+
+  /* ── Modais ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(28,43,57,.45);z-index:1000;display:none;
+    align-items:flex-start;justify-content:center;padding:60px 20px;overflow-y:auto}
+  .modal-overlay.open{display:flex}
+  .modal-box{background:var(--surface);border-radius:var(--radius);width:100%;max-width:560px;
+    box-shadow:0 20px 60px rgba(28,43,57,.25);padding:26px 28px}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .modal-head h2{font-size:15px;font-weight:700;margin:0}
+  .modal-close{width:28px;height:28px;border-radius:8px;border:none;background:var(--surface2);color:var(--sub);
+    cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+  .modal-close:hover{background:var(--border2);color:var(--text)}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .field input[type="text"], .field textarea{
+    width:100%;font-size:13px;font-family:inherit;color:var(--text);padding:9px 11px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none}
+  .field input[type="text"]:focus, .field textarea:focus{border-color:var(--text)}
+  .field textarea{resize:vertical;min-height:64px;font-family:inherit}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* ── Dropdown customizado pra dentro de formulário (mesmo espírito do .csel, mas em bloco) ── */
+  .field-dd{position:relative}
+  .field-dd-btn{width:100%;font-size:13px;font-family:inherit;color:var(--text);padding:9px 11px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);
+    cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+  .field-dd-btn:hover{border-color:var(--text)}
+  .field-dd.open .field-dd-btn{border-color:var(--text)}
+  .field-dd-btn .field-dd-val{display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .field-dd-btn .arr{color:var(--muted);font-size:10px;transition:transform .15s;flex-shrink:0}
+  .field-dd.open .field-dd-btn .arr{transform:rotate(180deg)}
+  .field-dd-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius-sm);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:1200;display:none;flex-direction:column;max-height:220px;overflow-y:auto}
+  .field-dd.open .field-dd-pop{display:flex}
+  .field-dd-opt{padding:9px 11px;font-size:12.5px;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:7px}
+  .field-dd-opt:hover{background:var(--surface2);color:var(--text)}
+  .field-dd-opt.active{color:var(--text);font-weight:600;background:var(--surface2)}
+  .dd-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .modal-err{font-size:11.5px;color:var(--red);margin-bottom:12px;display:none}
+  .modal-err.show{display:block}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+  .modal-actions-split{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  .link-danger{color:var(--red);font-size:11.5px;font-weight:600;cursor:pointer;background:none;border:none;padding:0;display:flex;align-items:center;gap:5px}
+  .link-danger:hover{text-decoration:underline}
+
+  .comments-section{border-top:1px solid var(--border);margin-top:18px;padding-top:16px}
+  .comments-section h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 12px}
+  .comment{display:flex;gap:10px;margin-bottom:14px}
+  .comment-body{flex:1}
+  .comment-author{font-size:11.5px;font-weight:700}
+  .comment-date{font-size:10px;color:var(--muted);font-weight:500;margin-left:6px}
+  .comment-text{font-size:12px;color:var(--sub);margin-top:2px;white-space:pre-wrap;line-height:1.5}
+  .comment-del{font-size:10.5px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;margin-top:2px}
+  .comment-del:hover{color:var(--red)}
+  .comment-form{display:flex;gap:8px;margin-top:10px;align-items:flex-start}
+  .comment-form .field-dd{width:130px;flex-shrink:0}
+  .comment-form textarea{flex:1;min-height:40px}
+  .comment-form button{flex-shrink:0}
+
+  /* ── Gerenciar pessoas ── */
+  .people-list{max-height:260px;overflow-y:auto;margin-bottom:14px}
+  .people-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .people-row:last-child{border-bottom:none}
+  .people-row input{flex:1;border:1px solid transparent;background:transparent;font-size:12.5px;font-family:inherit;
+    color:var(--text);padding:5px 7px;border-radius:6px}
+  .people-row input:focus{border-color:var(--border2);background:var(--surface2);outline:none}
+  .people-add-row{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:14px}
+  .people-add-row input{flex:1}
+  .people-del{font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0}
+  .people-del:hover{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Chamados</h1>
+      <div class="sub">Sugestões, dúvidas e pendências da equipe — quadro estilo Monday</div>
+    </div>
+    <div class="topbar-controls">
+      <button class="btn-secondary" id="managePeopleBtn"><i class="bi bi-people-fill"></i> Gerenciar pessoas</button>
+      <button class="btn-primary" id="newTicketBtn"><i class="bi bi-plus-lg"></i> Novo chamado</button>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="toolbar">
+      <div class="toolbar-filters">
+        <div class="filter-pill csel" id="cselGroupBy">
+          <span class="lbl">Agrupar por</span><span class="val" id="groupByVal">Status</span><span class="arr">▾</span>
+          <div class="csel-pop">
+            <div class="csel-opt active" data-value="status">Status</div>
+            <div class="csel-opt" data-value="tipo">Tipo</div>
+            <div class="csel-opt" data-value="urgencia">Urgência</div>
+            <div class="csel-opt" data-value="pessoa">Pessoa responsável</div>
+          </div>
+        </div>
+        <div class="filter-pill csel" id="cselFilterTipo">
+          <span class="lbl">Tipo</span><span class="val" id="filterTipoVal">Todos</span><span class="arr">▾</span>
+          <div class="csel-pop" id="filterTipoPop"></div>
+        </div>
+        <div class="filter-pill csel" id="cselFilterUrgencia">
+          <span class="lbl">Urgência</span><span class="val" id="filterUrgenciaVal">Todas</span><span class="arr">▾</span>
+          <div class="csel-pop" id="filterUrgenciaPop"></div>
+        </div>
+        <div class="filter-pill csel" id="cselFilterPessoa">
+          <span class="lbl">Pessoa</span><span class="val" id="filterPessoaVal">Todas</span><span class="arr">▾</span>
+          <div class="csel-pop" id="filterPessoaPop"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="board"><div class="empty">carregando…</div></div>
+  </div>
+
+  <footer style="padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center">Vita Pet Life · Coco and Luna · Redes Sociais</footer>
+</div>
+
+<!-- Modal: detalhe/edição de chamado -->
+<div class="modal-overlay" id="ticketModalOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Chamado</h2>
+      <button class="modal-close" id="ticketModalClose"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="field">
+      <label>Título</label>
+      <input type="text" id="tmTitulo">
+    </div>
+    <div class="field">
+      <label>Descrição</label>
+      <textarea id="tmDescricao"></textarea>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Tipo</label>
+        <div class="field-dd" id="tmTipoDD"></div>
+      </div>
+      <div class="field">
+        <label>Urgência</label>
+        <div class="field-dd" id="tmUrgenciaDD"></div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Status</label>
+        <div class="field-dd" id="tmStatusDD"></div>
+      </div>
+      <div class="field">
+        <label>Responsável</label>
+        <div class="field-dd" id="tmResponsavelDD"></div>
+      </div>
+    </div>
+    <div class="field" style="font-size:11px;color:var(--muted)" id="tmMeta"></div>
+
+    <div class="comments-section">
+      <h3>Comentários</h3>
+      <div id="tmComments"></div>
+      <div class="comment-form">
+        <div class="field-dd" id="tmCommentPessoaDD"></div>
+        <textarea id="tmCommentText" placeholder="Escrever um comentário…"></textarea>
+        <button class="btn-primary" id="tmCommentSubmit"><i class="bi bi-send-fill"></i></button>
+      </div>
+    </div>
+
+    <div class="modal-actions-split" style="margin-top:20px">
+      <button class="link-danger" id="tmDelete"><i class="bi bi-trash3"></i> Excluir chamado</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: novo chamado -->
+<div class="modal-overlay" id="newTicketModalOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Novo chamado</h2>
+      <button class="modal-close" id="newTicketModalClose"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-err" id="newTicketErr"></div>
+    <div class="field">
+      <label>Título</label>
+      <input type="text" id="ntTitulo" placeholder="Ex: Adicionar métrica X na tela Y">
+    </div>
+    <div class="field">
+      <label>Descrição</label>
+      <textarea id="ntDescricao" placeholder="Detalhe o pedido, dúvida ou problema…"></textarea>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Tipo</label>
+        <div class="field-dd" id="ntTipoDD"></div>
+      </div>
+      <div class="field">
+        <label>Urgência</label>
+        <div class="field-dd" id="ntUrgenciaDD"></div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Responsável (opcional)</label>
+        <div class="field-dd" id="ntResponsavelDD"></div>
+      </div>
+      <div class="field">
+        <label>Criado por (opcional)</label>
+        <div class="field-dd" id="ntCriadoPorDD"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="ntCancel">Cancelar</button>
+      <button class="btn-primary" id="ntSubmit"><i class="bi bi-check-lg"></i> Criar chamado</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: gerenciar pessoas -->
+<div class="modal-overlay" id="peopleModalOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Gerenciar pessoas</h2>
+      <button class="modal-close" id="peopleModalClose"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="people-list" id="peopleList"></div>
+    <div class="people-add-row">
+      <input type="text" id="newPersonName" placeholder="Nome da pessoa">
+      <button class="btn-primary" id="addPersonBtn"><i class="bi bi-plus-lg"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmação (substitui window.confirm nativo) -->
+<div class="modal-overlay" id="confirmModalOverlay" style="z-index:1100">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-head"><h2>Confirmar</h2></div>
+    <p id="confirmMessage" style="font-size:12.5px;color:var(--sub);line-height:1.6;margin:0 0 20px"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="confirmCancelBtn">Cancelar</button>
+      <button class="btn-primary" id="confirmOkBtn" style="background:var(--red)"><i class="bi bi-trash3"></i> Excluir</button>
+    </div>
+  </div>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+const TIPO_META = {
+  sugestao:    { label: 'Sugestão de melhoria', icon: 'bi-lightbulb' },
+  bug:         { label: 'Bug / Erro', icon: 'bi-bug' },
+  duvida:      { label: 'Dúvida', icon: 'bi-question-circle' },
+  dado:        { label: 'Pedido de dado/relatório', icon: 'bi-bar-chart' },
+  programacao: { label: 'Programação', icon: 'bi-code-slash' },
+  outro:       { label: 'Outro', icon: 'bi-three-dots' },
+};
+const URGENCIA_META = {
+  baixa:   { label: 'Baixa', color: '#96a3ad' },
+  media:   { label: 'Média', color: '#1877f2' },
+  alta:    { label: 'Alta', color: '#946200' },
+  urgente: { label: 'Urgente', color: '#c0392b' },
+};
+const STATUS_META = {
+  aberto:    { label: 'Aberto', color: '#96a3ad' },
+  andamento: { label: 'Em andamento', color: '#1877f2' },
+  concluido: { label: 'Concluído', color: '#2e7d5b' },
+};
+const GROUPBY_LABELS = { status: 'Status', tipo: 'Tipo', urgencia: 'Urgência', pessoa: 'Pessoa responsável' };
+
+let people = [];
+let tickets = [];
+let groupBy = localStorage.getItem('coco_chamados_groupby') || 'status';
+let filters = { tipo: null, urgencia: null, pessoa: null };
+let openTicketId = null;
+
+function personName(id) {
+  if (!id) return null;
+  const p = people.find(p => p.id === id);
+  return p ? p.name : 'pessoa removida';
+}
+function initials(name) {
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── csel dropdowns genéricos (mesmo padrão de index.html) ──
+function closeAllCsel() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.csel').forEach(csel => {
+    if (!csel.contains(e.target)) csel.classList.remove('open');
+    else if (e.target.closest('.filter-pill') && !e.target.closest('.csel-opt')) csel.classList.toggle('open');
+  });
+  document.querySelectorAll('.field-dd').forEach(dd => {
+    if (!dd.contains(e.target)) dd.classList.remove('open');
+  });
+});
+
+// ── dropdown customizado de formulário (substitui <select> — ver .field-dd no CSS) ──
+// options: [{value, label, icon?, color?}]. currentValue null/'' vira o item vazio, se existir.
+function renderFieldDropdown(containerId, options, currentValue, onChange) {
+  const el = document.getElementById(containerId);
+  const value = currentValue ?? '';
+  el.dataset.value = value;
+  const markerHtml = (o) => o.color ? `<span class="dd-dot" style="background:${o.color}"></span>` : (o.icon ? `<i class="bi ${o.icon}"></i>` : '');
+  const current = options.find(o => o.value === value);
+  el.innerHTML = `
+    <button type="button" class="field-dd-btn"><span class="field-dd-val">${current ? markerHtml(current) + escapeHtml(current.label) : ''}</span><span class="arr">▾</span></button>
+    <div class="field-dd-pop">${options.map(o => `<div class="field-dd-opt${o.value === value ? ' active' : ''}" data-value="${o.value}">${markerHtml(o)}${escapeHtml(o.label)}</div>`).join('')}</div>
+  `;
+  el.querySelector('.field-dd-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.field-dd.open, .csel.open').forEach(o => { if (o !== el) o.classList.remove('open'); });
+    el.classList.toggle('open');
+  });
+  el.querySelectorAll('.field-dd-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      el.classList.remove('open');
+      const v = opt.dataset.value;
+      if (v === el.dataset.value) return;
+      el.dataset.value = v;
+      renderFieldDropdown(containerId, options, v, onChange);
+      onChange(v === '' ? null : v);
+    });
+  });
+}
+function ddValue(containerId) { return document.getElementById(containerId).dataset.value || null; }
+
+function metaOptions(meta) { return Object.entries(meta).map(([value, m]) => ({ value, label: m.label, icon: m.icon, color: m.color })); }
+function peopleOptions(includeEmpty, emptyLabel) {
+  const opts = people.map(p => ({ value: p.id, label: p.name }));
+  return includeEmpty ? [{ value: '', label: emptyLabel }, ...opts] : opts;
+}
+
+// ── modal de confirmação (substitui window.confirm — nunca usar dialog nativo aqui) ──
+let confirmResolver = null;
+function showConfirm(message) {
+  document.getElementById('confirmMessage').textContent = message;
+  document.getElementById('confirmModalOverlay').classList.add('open');
+  return new Promise(resolve => { confirmResolver = resolve; });
+}
+function resolveConfirm(result) {
+  document.getElementById('confirmModalOverlay').classList.remove('open');
+  if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
+}
+document.getElementById('confirmCancelBtn').addEventListener('click', () => resolveConfirm(false));
+document.getElementById('confirmOkBtn').addEventListener('click', () => resolveConfirm(true));
+document.getElementById('confirmModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'confirmModalOverlay') resolveConfirm(false); });
+
+function buildFilterPop(popId, meta, current, onPick) {
+  const pop = document.getElementById(popId);
+  const opts = [{ value: null, label: 'Todos' }, ...Object.entries(meta).map(([value, m]) => ({ value, label: m.label || m.name }))];
+  pop.innerHTML = opts.map(o => `<div class="csel-opt${current === o.value ? ' active' : ''}" data-value="${o.value ?? ''}">${o.label}</div>`).join('');
+  pop.querySelectorAll('.csel-opt').forEach((el, i) => {
+    el.addEventListener('click', () => { onPick(opts[i].value); closeAllCsel(); });
+  });
+}
+
+function renderFilterPops() {
+  buildFilterPop('filterTipoPop', TIPO_META, filters.tipo, (v) => { filters.tipo = v; document.getElementById('filterTipoVal').textContent = v ? TIPO_META[v].label : 'Todos'; renderFilterPops(); render(); });
+  buildFilterPop('filterUrgenciaPop', URGENCIA_META, filters.urgencia, (v) => { filters.urgencia = v; document.getElementById('filterUrgenciaVal').textContent = v ? URGENCIA_META[v].label : 'Todas'; renderFilterPops(); render(); });
+  const peopleMeta = Object.fromEntries(people.map(p => [p.id, { label: p.name }]));
+  buildFilterPop('filterPessoaPop', peopleMeta, filters.pessoa, (v) => { filters.pessoa = v; document.getElementById('filterPessoaVal').textContent = v ? personName(v) : 'Todas'; renderFilterPops(); render(); });
+}
+
+document.getElementById('cselGroupBy').querySelectorAll('.csel-opt').forEach(el => {
+  el.addEventListener('click', () => {
+    groupBy = el.dataset.value;
+    localStorage.setItem('coco_chamados_groupby', groupBy);
+    document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];
+    document.getElementById('cselGroupBy').querySelectorAll('.csel-opt').forEach(o => o.classList.toggle('active', o === el));
+    render();
+  });
+});
+
+// ── board ──
+function groupKeyFor(t) {
+  if (groupBy === 'tipo') return t.tipo;
+  if (groupBy === 'urgencia') return t.urgencia;
+  if (groupBy === 'pessoa') return t.responsavelId || '__none__';
+  return t.status;
+}
+function groupLabelFor(key) {
+  if (groupBy === 'tipo') return TIPO_META[key]?.label || key;
+  if (groupBy === 'urgencia') return URGENCIA_META[key]?.label || key;
+  if (groupBy === 'pessoa') return key === '__none__' ? 'Sem responsável' : personName(key);
+  return STATUS_META[key]?.label || key;
+}
+function groupColorFor(key) {
+  if (groupBy === 'urgencia') return URGENCIA_META[key]?.color || '#96a3ad';
+  if (groupBy === 'status') return STATUS_META[key]?.color || '#96a3ad';
+  return '#96a3ad';
+}
+const GROUP_ORDER = { status: ['aberto', 'andamento', 'concluido'], urgencia: ['urgente', 'alta', 'media', 'baixa'], tipo: Object.keys(TIPO_META), pessoa: null };
+
+function ticketRowHtml(t) {
+  const resp = t.responsavelId ? personName(t.responsavelId) : null;
+  return `<div class="ticket-row" data-id="${t.id}">
+    <span class="badge badge-tipo"><i class="bi ${TIPO_META[t.tipo]?.icon || 'bi-tag'}"></i> ${escapeHtml(TIPO_META[t.tipo]?.label || t.tipo)}</span>
+    <span class="ticket-title">${escapeHtml(t.titulo)}</span>
+    <span class="ticket-meta-right">
+      <span class="badge" style="background:${URGENCIA_META[t.urgencia]?.color}22;color:${URGENCIA_META[t.urgencia]?.color}">${escapeHtml(URGENCIA_META[t.urgencia]?.label || t.urgencia)}</span>
+      ${groupBy !== 'status' ? `<span class="badge" style="background:${STATUS_META[t.status]?.color}22;color:${STATUS_META[t.status]?.color}">${escapeHtml(STATUS_META[t.status]?.label || t.status)}</span>` : ''}
+      ${t.comments.length ? `<span class="comment-count"><i class="bi bi-chat-left-text"></i> ${t.comments.length}</span>` : ''}
+      ${resp ? `<span class="avatar" title="${escapeHtml(resp)}">${escapeHtml(initials(resp))}</span>` : `<span class="avatar empty-avatar" title="Sem responsável"><i class="bi bi-dash"></i></span>`}
+    </span>
+  </div>`;
+}
+
+function render() {
+  const filtered = tickets.filter(t =>
+    (!filters.tipo || t.tipo === filters.tipo) &&
+    (!filters.urgencia || t.urgencia === filters.urgencia) &&
+    (!filters.pessoa || t.responsavelId === filters.pessoa)
+  );
+
+  const groups = new Map();
+  for (const t of filtered) {
+    const k = groupKeyFor(t);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+
+  let keys = [...groups.keys()];
+  const order = GROUP_ORDER[groupBy];
+  if (order) keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  else keys.sort((a, b) => groupLabelFor(a).localeCompare(groupLabelFor(b)));
+
+  const board = document.getElementById('board');
+  if (!keys.length) { board.innerHTML = '<div class="empty">nenhum chamado encontrado</div>'; return; }
+
+  board.innerHTML = keys.map(k => {
+    const items = groups.get(k).slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const collapsed = localStorage.getItem('coco_chamados_collapsed_' + groupBy + '_' + k) === '1';
+    return `<div class="board-group${collapsed ? ' collapsed' : ''}" data-group-key="${k}">
+      <div class="board-group-head">
+        <span class="board-group-dot" style="background:${groupColorFor(k)}"></span>
+        <span class="board-group-title">${escapeHtml(groupLabelFor(k))}</span>
+        <span class="board-group-count">${items.length}</span>
+        <span class="board-group-arr"><i class="bi bi-chevron-down"></i></span>
+      </div>
+      <div class="board-group-rows">${items.map(ticketRowHtml).join('')}</div>
+    </div>`;
+  }).join('');
+
+  board.querySelectorAll('.board-group-head').forEach(head => {
+    head.addEventListener('click', () => {
+      const group = head.closest('.board-group');
+      group.classList.toggle('collapsed');
+      localStorage.setItem('coco_chamados_collapsed_' + groupBy + '_' + group.dataset.groupKey, group.classList.contains('collapsed') ? '1' : '0');
+    });
+  });
+  board.querySelectorAll('.ticket-row').forEach(row => {
+    row.addEventListener('click', () => openTicketModal(row.dataset.id));
+  });
+}
+
+// ── modal: detalhe do chamado ──
+function openTicketModal(id) {
+  const t = tickets.find(t => t.id === id);
+  if (!t) return;
+  openTicketId = id;
+  document.getElementById('tmTitulo').value = t.titulo;
+  document.getElementById('tmDescricao').value = t.descricao || '';
+  renderFieldDropdown('tmTipoDD', metaOptions(TIPO_META), t.tipo, (v) => patchOpenTicket({ tipo: v }));
+  renderFieldDropdown('tmUrgenciaDD', metaOptions(URGENCIA_META), t.urgencia, (v) => patchOpenTicket({ urgencia: v }));
+  renderFieldDropdown('tmStatusDD', metaOptions(STATUS_META), t.status, (v) => patchOpenTicket({ status: v }));
+  renderFieldDropdown('tmResponsavelDD', peopleOptions(true, 'Sem responsável'), t.responsavelId, (v) => patchOpenTicket({ responsavelId: v }));
+  const criadoPor = t.criadoPorId ? personName(t.criadoPorId) : 'não informado';
+  document.getElementById('tmMeta').textContent = `Criado por ${criadoPor} em ${fmtDateTime(t.createdAt)}`;
+  renderFieldDropdown('tmCommentPessoaDD', peopleOptions(true, 'Quem comenta?'), null, () => {});
+  renderComments(t);
+  document.getElementById('ticketModalOverlay').classList.add('open');
+}
+function closeTicketModal() { document.getElementById('ticketModalOverlay').classList.remove('open'); openTicketId = null; }
+
+function renderComments(t) {
+  const box = document.getElementById('tmComments');
+  if (!t.comments.length) { box.innerHTML = '<div class="empty" style="padding:8px 0">nenhum comentário ainda</div>'; return; }
+  box.innerHTML = t.comments.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).map(c => {
+    const author = c.personId ? personName(c.personId) : 'anônimo';
+    return `<div class="comment" data-comment-id="${c.id}">
+      <span class="avatar">${escapeHtml(initials(author))}</span>
+      <div class="comment-body">
+        <span class="comment-author">${escapeHtml(author)}</span><span class="comment-date">${fmtDateTime(c.createdAt)}</span>
+        <div class="comment-text">${escapeHtml(c.text)}</div>
+        <button class="comment-del" data-comment-id="${c.id}"><i class="bi bi-trash3"></i> excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.comment-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await showConfirm('Excluir este comentário?'))) return;
+      await fetch(`/api/tickets/${openTicketId}/comments/${btn.dataset.commentId}`, { method: 'DELETE' });
+      await load();
+      const t2 = tickets.find(t => t.id === openTicketId);
+      if (t2) renderComments(t2);
+    });
+  });
+}
+
+async function patchOpenTicket(patch) {
+  if (!openTicketId) return;
+  await fetch(`/api/tickets/${openTicketId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  await load();
+}
+
+document.getElementById('tmTitulo').addEventListener('blur', (e) => { if (e.target.value.trim()) patchOpenTicket({ titulo: e.target.value.trim() }); });
+document.getElementById('tmDescricao').addEventListener('blur', (e) => patchOpenTicket({ descricao: e.target.value }));
+
+document.getElementById('tmCommentSubmit').addEventListener('click', async () => {
+  const text = document.getElementById('tmCommentText').value.trim();
+  if (!text || !openTicketId) return;
+  const personId = ddValue('tmCommentPessoaDD');
+  await fetch(`/api/tickets/${openTicketId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personId, text }) });
+  document.getElementById('tmCommentText').value = '';
+  await load();
+  const t2 = tickets.find(t => t.id === openTicketId);
+  if (t2) renderComments(t2);
+});
+
+document.getElementById('tmDelete').addEventListener('click', async () => {
+  if (!openTicketId) return;
+  if (!(await showConfirm('Excluir este chamado? Essa ação não pode ser desfeita.'))) return;
+  await fetch(`/api/tickets/${openTicketId}`, { method: 'DELETE' });
+  closeTicketModal();
+  await load();
+});
+document.getElementById('ticketModalClose').addEventListener('click', closeTicketModal);
+document.getElementById('ticketModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'ticketModalOverlay') closeTicketModal(); });
+
+// ── modal: novo chamado ──
+function openNewTicketModal() {
+  document.getElementById('ntTitulo').value = '';
+  document.getElementById('ntDescricao').value = '';
+  renderFieldDropdown('ntTipoDD', metaOptions(TIPO_META), Object.keys(TIPO_META)[0], () => {});
+  renderFieldDropdown('ntUrgenciaDD', metaOptions(URGENCIA_META), Object.keys(URGENCIA_META)[0], () => {});
+  renderFieldDropdown('ntResponsavelDD', peopleOptions(true, 'Sem responsável'), null, () => {});
+  renderFieldDropdown('ntCriadoPorDD', peopleOptions(true, 'Não informado'), null, () => {});
+  document.getElementById('newTicketErr').classList.remove('show');
+  document.getElementById('newTicketModalOverlay').classList.add('open');
+}
+function closeNewTicketModal() { document.getElementById('newTicketModalOverlay').classList.remove('open'); }
+document.getElementById('newTicketBtn').addEventListener('click', openNewTicketModal);
+document.getElementById('newTicketModalClose').addEventListener('click', closeNewTicketModal);
+document.getElementById('ntCancel').addEventListener('click', closeNewTicketModal);
+document.getElementById('newTicketModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'newTicketModalOverlay') closeNewTicketModal(); });
+
+document.getElementById('ntSubmit').addEventListener('click', async () => {
+  const titulo = document.getElementById('ntTitulo').value.trim();
+  const errBox = document.getElementById('newTicketErr');
+  if (!titulo) { errBox.textContent = 'Título é obrigatório.'; errBox.classList.add('show'); return; }
+  const body = {
+    titulo,
+    descricao: document.getElementById('ntDescricao').value.trim(),
+    tipo: ddValue('ntTipoDD'),
+    urgencia: ddValue('ntUrgenciaDD'),
+    responsavelId: ddValue('ntResponsavelDD'),
+    criadoPorId: ddValue('ntCriadoPorDD'),
+  };
+  const res = await fetch('/api/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) { errBox.textContent = data.error || 'Erro ao criar chamado.'; errBox.classList.add('show'); return; }
+  closeNewTicketModal();
+  await load();
+});
+
+// ── modal: gerenciar pessoas ──
+function renderPeopleList() {
+  const box = document.getElementById('peopleList');
+  if (!people.length) { box.innerHTML = '<div class="empty">nenhuma pessoa cadastrada ainda</div>'; return; }
+  box.innerHTML = people.map(p => `<div class="people-row" data-id="${p.id}">
+    <span class="avatar">${escapeHtml(initials(p.name))}</span>
+    <input type="text" value="${escapeHtml(p.name)}" data-id="${p.id}">
+    <button class="people-del" data-id="${p.id}"><i class="bi bi-trash3"></i></button>
+  </div>`).join('');
+  box.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('blur', async () => {
+      const name = inp.value.trim();
+      if (!name) return;
+      await fetch(`/api/people/${inp.dataset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      await load();
+      renderPeopleList();
+    });
+  });
+  box.querySelectorAll('.people-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await showConfirm('Remover esta pessoa? Chamados/comentários que apontavam pra ela vão mostrar "pessoa removida".'))) return;
+      await fetch(`/api/people/${btn.dataset.id}`, { method: 'DELETE' });
+      await load();
+      renderPeopleList();
+    });
+  });
+}
+document.getElementById('managePeopleBtn').addEventListener('click', () => {
+  renderPeopleList();
+  document.getElementById('peopleModalOverlay').classList.add('open');
+});
+document.getElementById('peopleModalClose').addEventListener('click', () => document.getElementById('peopleModalOverlay').classList.remove('open'));
+document.getElementById('peopleModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'peopleModalOverlay') document.getElementById('peopleModalOverlay').classList.remove('open'); });
+document.getElementById('addPersonBtn').addEventListener('click', async () => {
+  const inp = document.getElementById('newPersonName');
+  const name = inp.value.trim();
+  if (!name) return;
+  await fetch('/api/people', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  inp.value = '';
+  await load();
+  renderPeopleList();
+});
+document.getElementById('newPersonName').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('addPersonBtn').click(); });
+
+async function load() {
+  const [peopleRes, ticketsRes] = await Promise.all([fetch('/api/people'), fetch('/api/tickets')]);
+  people = await peopleRes.json();
+  tickets = await ticketsRes.json();
+  renderFilterPops();
+  render();
+}
+
+document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];
+document.querySelectorAll('#cselGroupBy .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === groupBy));
+load();
+</script>
+</body>
+</html>

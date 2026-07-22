@@ -72,6 +72,7 @@ public/stories.html   Tela de Stories 24h (versão limitada)
 src/cofrinho.js       Cofrinho do Social (vendas rastreadas, 100% entrada manual) — ver seção
                       própria abaixo
 public/cofrinho.html  Tela do Cofrinho do Social
+public/chamados.html  Quadro de Chamados (estilo Monday) — ver seção própria abaixo
 public/sidebar.js     Sidebar compartilhada (mesmo padrão IIFE do dashboard principal); marca o item
                       ativo pelo nome do arquivo atual (`location.pathname`); expõe `window.escapeHtml`
                       global usado por qualquer página que injete texto livre via innerHTML
@@ -240,6 +241,53 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
   sozinho toda a influência das redes sociais sobre as compras"*) fica fixo no topo da tela — não
   remover, é uma ressalva deliberada do briefing, não um aviso genérico de UI.
 
+### Chamados — quadro estilo Monday (`public/chamados.html`)
+Implementado em 22/07/2026 a pedido do Luan — não é do briefing da Aline, é uma ferramenta interna
+pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso backlog técnico.
+- **Escopo geral, não por marca/país** — um quadro só pra empresa toda (`people`/`tickets` em
+  `store.js`, fora do padrão empresa→marca→país usado no resto do produto).
+- **`people`**: cadastro simples (CRUD: `GET/POST /api/people`, `PATCH/DELETE /api/people/:id`) —
+  sem senha nem login próprio, só um jeito de marcar responsável/criador/autor de comentário. Sem
+  cascata ao apagar: um chamado ou comentário que apontava pra um id apagado mostra "pessoa
+  removida" em vez de adivinhar quem era.
+- **`tickets`**: `titulo`, `descricao`, `tipo`, `urgencia`, `status`, `responsavelId`,
+  `criadoPorId`, `comments[]`. Validação server-side contra listas fixas (`TICKET_TIPOS`,
+  `TICKET_URGENCIAS`, `TICKET_STATUSES` em `server.js`) — mesma lista duplicada no front
+  (`TIPO_META`/`URGENCIA_META`/`STATUS_META` em `chamados.html`), sem módulo compartilhado entre
+  back e front (mesmo padrão já usado em `FORMAT_LABELS` de `contentMetrics.js`/`conteudos.html`).
+- **Além do que foi pedido, acrescentei três coisas** (o Luan pediu explicitamente pra melhorar a
+  ideia original):
+  1. **Status** (Aberto/Em andamento/Concluído) — sem isso o quadro nunca fecharia ciclo.
+  2. **"Agrupar por"** (Status/Tipo/Urgência/Pessoa responsável) — é a features central do Monday:
+     os mesmos itens reorganizados por eixos diferentes, sem duplicar dado. Estado persistido em
+     `localStorage` (`coco_chamados_groupby`), assim como quais grupos estão colapsados
+     (`coco_chamados_collapsed_<groupBy>_<key>`).
+  3. Tipo **"Programação"** — é onde mora o backlog técnico (o que falta implementar do briefing,
+     investigações em aberto) — ver chamados semeados abaixo.
+- **Comentários** (`POST/DELETE /api/tickets/:id/comments`) são a parte de "conversar entre si" —
+  um por pessoa, texto livre, sem edição (só exclusão) pra manter simples.
+- **Chamados semeados em produção (22/07/2026)**, todos tipo "Programação", refletindo o backlog
+  real desta sessão: confirmar posts "Patrocinado" não capturados pelo sinal Orgânico×Pago (aguardando
+  link/data do Luan), integração com TikTok (app em revisão), resumo por IA na ficha D+7, Social
+  Listening, relatórios automáticos, e métricas de Ação por conteúdo. As pessoas Luan e Aline Moraes
+  também foram cadastradas — mais gente é adicionada pela própria tela de "Gerenciar pessoas".
+- **Sem `<select>` nativo e sem `confirm()` nativo (corrigido em 22/07/2026, a pedido do Luan).**
+  Primeira versão usava `<select>` (feio, sem combinar com o resto do app) e `window.confirm()` nos
+  botões de excluir — travava a aba inteira até alguém clicar OK/Cancelar (confirmado: travou até
+  screenshot/JS injection durante teste automatizado, só resolveu fechando a aba). Trocado por:
+  - `renderFieldDropdown()`/`.field-dd` (`chamados.html`) — dropdown customizado (mesmo espírito do
+    `.csel` já usado no resto do app, só que em bloco de formulário em vez de pill), com bolinha
+    colorida ou ícone por opção. Reaproveitar esse padrão pra qualquer `<select>` novo neste app.
+  - `showConfirm(mensagem)` — modal próprio (`#confirmModalOverlay`, `z-index:1100`, acima de
+    qualquer outro modal aberto) que devolve uma Promise&lt;boolean&gt;, usado com `await` no lugar de
+    `confirm()`. Testado ao vivo (excluir chamado, excluir pessoa com Cancelar e com Excluir) — a
+    aba nunca mais travou.
+- **Cuidado com encoding ao testar via curl no Git Bash (Windows):** strings com acento passadas
+  inline como `-d '{"...ã..."}'` chegam corrompidas no servidor (confirmado: "não" virou "n�o"
+  no dado salvo) — não é bug do servidor, é o Git Bash/curl.exe mangling UTF-8 na linha de comando.
+  Pra qualquer teste com texto acentuado, usar um script Node com `fetch()` (string JS é UTF-8
+  nativo) em vez de `curl -d` inline.
+
 ### Login único compartilhado + Configurações (`src/auth.js`, `public/login.html`, `public/configuracoes.html`)
 - Implementado em 22/07/2026, junto com a auditoria de segurança (ver seção própria abaixo) — o
   achado #1 daquela auditoria era exatamente a ausência de qualquer login; esta seção é o que a
@@ -350,6 +398,28 @@ nas 5 páginas (`index.html`, `conteudos.html`, `metas.html`, `stories.html`, `c
   consistente entre as 5.
 - `h3.section`, `.empty` (estado vazio) e `.delta-val` (chip de variação ↑/↓) já eram byte-idênticos
   nas 5 páginas antes deste passe — não precisaram de mudança.
+
+### URLs limpas (sem `.html`)
+Implementado em 22/07/2026. `express.static(..., { extensions: ['html'] })` em `server.js` deixa
+`/conteudos` resolver pra `conteudos.html` sem redirect nem rota dedicada — o arquivo continua
+respondendo pelo nome completo também (`/conteudos.html` funciona igual, é só não mais o que a
+gente linka), então nenhum link/favorito antigo quebra. Todo link interno (nav da `sidebar.js`,
+redirect de login/logout) usa a forma limpa; `/` é a raiz ("Visão geral"), sem precisar de
+`/index`. A detecção de item ativo em `sidebar.js` normaliza `.html`/`/index` no `location.pathname`
+antes de comparar, pra continuar funcionando mesmo se alguém chegar por um link no formato antigo.
+
+### Aviso de limitações conhecidas (`index.html`)
+Implementado em 22/07/2026, a pedido do Luan — mesma linguagem visual do "Limite" do Cofrinho
+(`.limit-note`), só que na Visão Geral (primeira tela que qualquer pessoa vê ao entrar) e cobrindo
+o quadro geral, não uma feature só. Fixo, não-colapsável (mesmo motivo do Cofrinho: se pudesse
+esconder, teria que garantir que o botão de reabrir nunca some junto — mais simples não ter esse
+risco). Lista, em linguagem de negócio (não termos técnicos): janela de retenção de conteúdo (35
+dias) e checkpoints D+7/14/30 só prospectivos, dependência de conta de anúncio pro sinal
+Orgânico×Pago, limite de `navigation` agregado + retenção de 48h em Stories, TikTok ainda não
+integrado, resumo por IA/Social Listening/relatórios automáticos ainda não implementados, força do
+gancho/tempo assistido de Reels indisponível na API, e o limite já conhecido do Cofrinho. Precisa
+ser atualizado manualmente conforme essas limitações forem resolvidas (não é gerado a partir de
+nenhum estado do sistema) — se TikTok for integrado, por exemplo, essa linha sai daqui.
 
 ### Frontend (`public/index.html`)
 - Sem framework — HTML + CSS + JS vanilla, Chart.js via CDN, ícones Bootstrap Icons via CDN.

@@ -64,7 +64,9 @@ export function hasValidSession(req) {
 // login, o endpoint que autentica, o status (usado pela tela de login e pela de Configurações
 // antes/depois de logar) e o healthcheck do Railway. Logo/favicon liberados por serem só marca,
 // nada sensível.
-const PUBLIC_PATHS = new Set(['/login.html', '/health', '/api/auth/login', '/api/auth/status', '/Logo2.png', '/favicon.png']);
+// '/login' é o link que a gente usa; '/login.html' fica liberado também porque o arquivo
+// continua respondendo pelo nome completo (extensions:['html'] em server.js não desliga isso).
+const PUBLIC_PATHS = new Set(['/login', '/login.html', '/health', '/api/auth/login', '/api/auth/status', '/Logo2.png', '/favicon.png']);
 
 // Middleware global — roda antes do arquivo estático e de toda rota /api. Passa direto quando
 // o login está desligado (padrão hoje, nada muda pra quem não configurou nada ainda).
@@ -73,5 +75,5 @@ export function authGate(req, res, next) {
   if (!getSettings().loginEnabled) return next();
   if (hasValidSession(req)) return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Não autenticado.' });
-  return res.redirect('/login.html');
+  return res.redirect('/login');
 }

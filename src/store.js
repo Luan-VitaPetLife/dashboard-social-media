@@ -261,3 +261,114 @@ export function updateSettings(patch) {
   mongoSet('settings', cache.settings);
   return cache.settings;
 }
+
+// ── Chamados (quadro estilo Monday) ─────────────────────────────────────────────────────────
+// Um quadro só, geral pra empresa toda — não é por marca/país como snapshots/goals/cofrinho.
+// `people` é um cadastro simples (CRUD), sem senha nem login próprio — só um jeito de marcar
+// quem pediu, quem é responsável, e assinar comentário. Sem cascata ao apagar uma pessoa: um
+// chamado/comentário que referenciava um id apagado simplesmente não resolve mais (o front
+// mostra "pessoa removida" em vez de adivinhar quem era).
+function ensurePeople() {
+  if (!cache.people) cache.people = [];
+  return cache.people;
+}
+
+export function getPeople() {
+  return ensurePeople();
+}
+
+export function addPerson(name) {
+  const people = ensurePeople();
+  const person = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, createdAt: new Date().toISOString() };
+  people.push(person);
+  saveJson();
+  mongoSet('people', cache.people);
+  return person;
+}
+
+export function updatePerson(id, patch) {
+  const person = ensurePeople().find(p => p.id === id);
+  if (!person) return null;
+  if ('name' in patch) person.name = patch.name;
+  saveJson();
+  mongoSet('people', cache.people);
+  return person;
+}
+
+export function deletePerson(id) {
+  cache.people = ensurePeople().filter(p => p.id !== id);
+  saveJson();
+  mongoSet('people', cache.people);
+}
+
+function ensureTickets() {
+  if (!cache.tickets) cache.tickets = [];
+  return cache.tickets;
+}
+
+export function getTickets() {
+  return ensureTickets();
+}
+
+export function addTicket(data) {
+  const tickets = ensureTickets();
+  const now = new Date().toISOString();
+  const ticket = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    titulo: data.titulo,
+    descricao: data.descricao || '',
+    tipo: data.tipo,
+    urgencia: data.urgencia,
+    status: data.status || 'aberto',
+    responsavelId: data.responsavelId || null,
+    criadoPorId: data.criadoPorId || null,
+    createdAt: now,
+    updatedAt: now,
+    comments: [],
+  };
+  tickets.push(ticket);
+  saveJson();
+  mongoSet('tickets', cache.tickets);
+  return ticket;
+}
+
+// Só atualiza as chaves realmente presentes em `patch` (mesmo cuidado do PATCH de contexto de
+// conteúdo — nunca fazer destructuring direto do body, senão campo ausente vira `undefined` e
+// apaga o que já estava salvo).
+export function updateTicket(id, patch) {
+  const ticket = ensureTickets().find(t => t.id === id);
+  if (!ticket) return null;
+  for (const key of ['titulo', 'descricao', 'tipo', 'urgencia', 'status', 'responsavelId', 'criadoPorId']) {
+    if (key in patch) ticket[key] = patch[key];
+  }
+  ticket.updatedAt = new Date().toISOString();
+  saveJson();
+  mongoSet('tickets', cache.tickets);
+  return ticket;
+}
+
+export function deleteTicket(id) {
+  cache.tickets = ensureTickets().filter(t => t.id !== id);
+  saveJson();
+  mongoSet('tickets', cache.tickets);
+}
+
+export function addTicketComment(ticketId, { personId, text }) {
+  const ticket = ensureTickets().find(t => t.id === ticketId);
+  if (!ticket) return null;
+  const comment = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), personId, text, createdAt: new Date().toISOString() };
+  ticket.comments.push(comment);
+  ticket.updatedAt = comment.createdAt;
+  saveJson();
+  mongoSet('tickets', cache.tickets);
+  return comment;
+}
+
+export function deleteTicketComment(ticketId, commentId) {
+  const ticket = ensureTickets().find(t => t.id === ticketId);
+  if (!ticket) return null;
+  ticket.comments = ticket.comments.filter(c => c.id !== commentId);
+  saveJson();
+  mongoSet('tickets', cache.tickets);
+  return ticket;
+}
