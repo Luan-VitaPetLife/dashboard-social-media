@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { initStore, getLastSync, getSnapshots, getStoreBackend } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
@@ -13,7 +15,8 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
-import { setContentContext, addGoal, addCofrinhoEntry, addCofrinhoGoal } from './src/store.js';
+import { setContentContext, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings } from './src/store.js';
+import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -25,10 +28,130 @@ const SYNC_INTERVAL_MINUTES = Number(process.env.SYNC_INTERVAL_MINUTES || 720);
 // normal deixaria muitos passarem batido. Agendador próprio, bem mais frequente, só pra isso.
 const STORY_SYNC_INTERVAL_MINUTES = Number(process.env.STORY_SYNC_INTERVAL_MINUTES || 120);
 
+// Necessário pra req.secure refletir o protocolo original (https) quando o Railway termina TLS
+// no proxy e repassa a requisição por http internamente — sem isso, o cookie de sessão marcado
+// "secure" nunca seria enviado de volta pelo navegador em produção.
+app.set('trust proxy', 1);
+
+// ── Segurança: cabeçalhos (helmet), sem quebrar os assets via CDN já usados nas páginas ──
+// (cdn.jsdelivr.net serve o Chart.js e a fonte/CSS do Bootstrap Icons). CSP em modo
+// allowlist explícita em vez de desligada — 'unsafe-inline' é necessário porque todas as
+// páginas hoje usam <script>/<style> inline (sem nonce/hash); reavaliar se algum dia isso
+// mudar para arquivos .js/.css separados.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'data:'],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+    },
+  },
+  // Sem iframes/recursos cross-origin embutidos nesta app — nenhuma necessidade de COEP.
+  crossOriginEmbedderPolicy: false,
+}));
+
+// ── Segurança: rate limiting — stop-gap enquanto não existe mais que uma senha única de
+// equipe (ver login em src/auth.js). Limite geral generoso (uso normal de uma dashboard
+// interna) + limite bem mais apertado nas rotas que disparam chamada de verdade à Meta Graph
+// API (sync/backfill) — essas são as que custam quota/tempo de verdade.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
+
+const syncLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Muitas solicitações de sincronização em pouco tempo — aguarde um minuto e tente de novo.' },
+});
+
+// ── Segurança: nunca ecoar segredo nenhum (token da Meta, credencial do Mongo) numa resposta
+// JSON — mesmo sem querer, um e.message de erro de rede pode conter a URL completa da chamada
+// (com ?access_token=...) ou, em teoria, parte de uma connection string. Um único ponto (aqui,
+// sobrescrevendo res.json) cobre todas as rotas — não precisa caçar cada `e.message` espalhado
+// por src/*.js.
+const TOKEN_VALUE = process.env.META_ACCESS_TOKEN || '';
+const MONGO_URI_VALUE = process.env.MONGODB_URI || '';
+function redactSecrets(str) {
+  let out = str
+    .replace(/access_token=[^&\s"']+/gi, 'access_token=[REDACTED]')
+    .replace(/(mongodb(?:\+srv)?:\/\/)[^@/\s]+@/gi, '$1[REDACTED]@');
+  if (TOKEN_VALUE) out = out.split(TOKEN_VALUE).join('[REDACTED]');
+  if (MONGO_URI_VALUE) out = out.split(MONGO_URI_VALUE).join('[REDACTED]');
+  return out;
+}
+function redactDeep(value) {
+  if (typeof value === 'string') return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(redactDeep);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) out[k] = redactDeep(value[k]);
+    return out;
+  }
+  return value;
+}
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => originalJson(redactDeep(body));
+  next();
+});
+
 app.use(express.json());
+// Roda antes do estático e de toda rota /api — decide se a requisição pode passar (login
+// desligado, rota pública, ou sessão válida) ou se precisa ir pra tela de login. Ver src/auth.js.
+app.use(authGate);
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// ── Login único compartilhado (liga/desliga em Configurações) ──────────────────────────────
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  if (!process.env.DASHBOARD_PASSWORD) return res.status(500).json({ error: 'DASHBOARD_PASSWORD não configurado no servidor.' });
+  if (!checkPassword(password)) return res.status(401).json({ error: 'Senha incorreta.' });
+  res.cookie(SESSION_COOKIE, createSessionCookieValue(), {
+    httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: SESSION_MAX_AGE_MS, path: '/',
+  });
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(SESSION_COOKIE, { path: '/' });
+  res.json({ ok: true });
+});
+
+app.get('/api/auth/status', (req, res) => {
+  const settings = getSettings();
+  res.json({
+    loginEnabled: settings.loginEnabled,
+    authenticated: !settings.loginEnabled || hasValidSession(req),
+    passwordConfigured: Boolean(process.env.DASHBOARD_PASSWORD),
+  });
+});
+
+app.get('/api/settings', (req, res) => res.json(getSettings()));
+
+app.post('/api/settings', (req, res) => {
+  const { loginEnabled } = req.body;
+  // Trava de segurança: nunca liga o login sem senha configurada — senão ninguém mais consegue
+  // entrar (nem pra desligar de novo) até alguém mexer na variável de ambiente no Railway.
+  if (loginEnabled === true && !process.env.DASHBOARD_PASSWORD) {
+    return res.status(400).json({ error: 'Defina a variável de ambiente DASHBOARD_PASSWORD antes de ativar o login — sem isso, ninguém conseguiria entrar de novo.' });
+  }
+  try {
+    res.json(updateSettings({ loginEnabled: Boolean(loginEnabled) }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Árvore empresa → marca → país → plataformas (sem credenciais) — o front monta os seletores
 // de Marca e País a partir daqui, sem hardcoded "Coco and Luna"/"Brasil"/"Estados Unidos".
@@ -190,7 +313,7 @@ app.post('/api/cofrinho/goals', (req, res) => {
   }
 });
 
-app.post('/api/sync', async (req, res) => {
+app.post('/api/sync', syncLimiter, async (req, res) => {
   try { res.json(await runSync()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -213,7 +336,7 @@ app.get('/api/tiktok/oauth/callback', (req, res) => {
 
 // Diagnóstico: resposta crua dos endpoints de Insights (Instagram + Facebook), sem
 // processar nada. Ver src/meta.js (probeInsights) — roda antes de confiar no backfill.
-app.get('/api/meta/probe-insights', async (req, res) => {
+app.get('/api/meta/probe-insights', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || 'br';
   try { res.json(await probeInsights(brandId, countryId)); }
@@ -222,7 +345,7 @@ app.get('/api/meta/probe-insights', async (req, res) => {
 
 // Diagnóstico: testa candidatos de métrica pra visualizações de vídeo + curtidas/comentários
 // somados no período (Instagram e Facebook), um de cada vez. Ver src/meta.js probeEngagement.
-app.get('/api/meta/probe-engagement', async (req, res) => {
+app.get('/api/meta/probe-engagement', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || 'br';
   try { res.json(await probeEngagement(brandId, countryId)); }
@@ -231,7 +354,7 @@ app.get('/api/meta/probe-engagement', async (req, res) => {
 
 // Preenche dias anteriores ao início do sync via Insights API (nunca sobrescreve snapshot
 // real). Sem ?country, roda todos os países da marca. Ver src/backfill.js.
-app.post('/api/social/backfill', async (req, res) => {
+app.post('/api/social/backfill', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country;
   try {

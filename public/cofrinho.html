@@ -56,7 +56,7 @@
   h3.section:first-child{margin-top:0}
 
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-    padding:20px 22px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
 
   .limit-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
     border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
@@ -65,7 +65,7 @@
 
   .country-block{margin-bottom:32px}
   .country-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-  .country-head img{width:18px;height:13px;object-fit:cover;border-radius:2px}
+  .country-head img{width:16px;height:12px;object-fit:cover;border-radius:2px}
   .country-head h2{font-size:14px;font-weight:700;margin:0}
 
   .cof-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px;margin-bottom:20px}
@@ -94,7 +94,7 @@
   .inline-form.open{display:flex}
   .field{display:flex;flex-direction:column;gap:5px}
   .field label{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
-  .field input{font-size:12px;font-family:inherit;color:var(--text);padding:8px 10px;
+  .field input{font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;
     border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);outline:none;width:150px}
   .field input:focus{border-color:var(--text)}
   .form-err{font-size:10.5px;color:var(--red);width:100%}
@@ -289,7 +289,7 @@ function countryBlockHtml(item) {
       <div data-goal-body>${goalHtml(item, item.goal)}</div>
       <div class="inline-form" id="goal-form-${cid}">
         <div class="field"><label>Métrica</label>
-          <select data-goal-metric style="font-size:12px;font-family:inherit;color:var(--text);padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);width:170px">
+          <select data-goal-metric style="font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);width:170px">
             <option value="vendas">Vendas rastreadas</option>
             <option value="faturamento">Faturamento informado</option>
           </select>

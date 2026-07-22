@@ -5,6 +5,22 @@
 //  escuro, item ativo em pílula navy.
 //  Uso: <script src="sidebar.js"></script> logo após <body>.
 // ─────────────────────────────────────────────
+
+// escapeHtml — helper global (todas as páginas carregam sidebar.js) pra evitar XSS armazenado
+// sempre que texto livre entrado por qualquer pessoa sem login (contexto de conteúdo, registros
+// do Cofrinho, etc. — hoje sem autenticação nenhuma, ver CLAUDE.md) é interpolado em innerHTML.
+// Usar em TODO texto vindo do backend que não seja um valor fixo/controlado (enum, id, número).
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+window.escapeHtml = escapeHtml;
+
 (function () {
   const html = `
 <button id="sidebarOpen" class="sidebar-open-btn" title="Abrir menu"><i class="bi bi-list"></i></button>
@@ -27,6 +43,10 @@
     <a class="nav-item" href="metas.html"><i class="bi bi-bullseye nav-icon"></i> Metas</a>
     <a class="nav-item" href="stories.html"><i class="bi bi-play-circle nav-icon"></i> Stories</a>
     <a class="nav-item" href="cofrinho.html"><i class="bi bi-piggy-bank-fill nav-icon"></i> Cofrinho</a>
+  </div>
+  <div class="nav-group" id="sidebarBottomGroup" style="margin-top:auto">
+    <a class="nav-item" href="configuracoes.html"><i class="bi bi-gear-fill nav-icon"></i> Configurações</a>
+    <a class="nav-item" href="#" id="sidebarLogout" style="display:none"><i class="bi bi-box-arrow-right nav-icon"></i> Sair</a>
   </div>
 </nav>`;
 
@@ -77,6 +97,18 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
     const current = (location.pathname.split('/').pop() || 'index.html');
     document.querySelectorAll('nav.sidebar .nav-item').forEach(a => {
       a.classList.toggle('active', a.getAttribute('href') === current);
+    });
+
+    // "Sair" só aparece quando o login está ligado — com login desligado, não faz sentido
+    // oferecer uma ação de logout (não há sessão de verdade pra encerrar).
+    const logoutLink = document.getElementById('sidebarLogout');
+    fetch('/api/auth/status').then(r => r.json()).then(d => {
+      if (d.loginEnabled) logoutLink.style.display = '';
+    }).catch(() => {});
+    logoutLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await fetch('/api/auth/logout', { method: 'POST' });
+      location.href = '/login.html';
     });
 
     const overlay  = document.getElementById('sidebarOverlay');

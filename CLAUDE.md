@@ -73,7 +73,11 @@ src/cofrinho.js       Cofrinho do Social (vendas rastreadas, 100% entrada manual
                       própria abaixo
 public/cofrinho.html  Tela do Cofrinho do Social
 public/sidebar.js     Sidebar compartilhada (mesmo padrão IIFE do dashboard principal); marca o item
-                      ativo pelo nome do arquivo atual (`location.pathname`)
+                      ativo pelo nome do arquivo atual (`location.pathname`); expõe `window.escapeHtml`
+                      global usado por qualquer página que injete texto livre via innerHTML
+src/auth.js           Login único compartilhado (liga/desliga em Configurações) — ver seção própria
+public/login.html     Tela de login (só aparece quando o login está ligado)
+public/configuracoes.html Tela de Configurações (hoje só o toggle de login) — ver seção própria
 ```
 
 Fluxo: `sync.js` busca dados da Meta (via `registry.listAccounts()`) → grava snapshot diário em
@@ -236,6 +240,43 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
   sozinho toda a influência das redes sociais sobre as compras"*) fica fixo no topo da tela — não
   remover, é uma ressalva deliberada do briefing, não um aviso genérico de UI.
 
+### Login único compartilhado + Configurações (`src/auth.js`, `public/login.html`, `public/configuracoes.html`)
+- Implementado em 22/07/2026, junto com a auditoria de segurança (ver seção própria abaixo) — o
+  achado #1 daquela auditoria era exatamente a ausência de qualquer login; esta seção é o que a
+  resolve, de propósito como uma frente separada (o próprio Luan pediu login liga/desliga,
+  senha única de equipe, não conta por pessoa — mais simples e alinhado ao resto do projeto,
+  que é config-driven e não tem tabela de usuário nenhuma).
+- **Uma senha só pra equipe toda**, em `DASHBOARD_PASSWORD` (variável de ambiente — nunca no
+  banco). Comparada em tempo constante (`crypto.timingSafeEqual`) em `checkPassword()`.
+- **Liga/desliga pela tela de Configurações** (`settings.loginEnabled` em `store.js`, mesmo padrão
+  de storage de tudo mais — `getSettings()`/`updateSettings()`). Com login desligado (padrão —
+  `DEFAULT_SETTINGS = { loginEnabled: false }`), o dashboard fica com acesso aberto, exatamente
+  como sempre foi até aqui — deploy dessa feature não tranca ninguém de surpresa.
+- **Trava de segurança em `POST /api/settings`:** nunca liga o login sem `DASHBOARD_PASSWORD`
+  configurado — sem isso, ninguém conseguiria entrar de novo (nem pra desligar), e só dá pra
+  corrigir mexendo na variável de ambiente do Railway.
+- **Sessão é um cookie assinado (HMAC-SHA256), sem tabela de sessão** — `createSessionCookieValue()`
+  assina `expires` com `SESSION_SECRET` (ou `DASHBOARD_PASSWORD` como fallback, se o primeiro não
+  existir); `hasValidSession()` verifica assinatura + validade. Escolhido deliberadamente em vez de
+  `express-session`/`connect-mongo`: zero dependência nova, funciona igual com MongoDB ou JSON
+  local, e sobrevive a redeploy do Railway (verificação é só criptográfica, não depende de nenhum
+  estado guardado no servidor).
+- **`authGate` (middleware global em `server.js`, roda logo depois de `express.json()` e antes do
+  estático + de toda rota `/api`)**: deixa passar direto se `loginEnabled` for `false`, ou se a rota
+  estiver na allowlist pública (`/login.html`, `/health`, `/api/auth/login`, `/api/auth/status`,
+  `Logo2.png`, `favicon.png`). Caso contrário, exige cookie de sessão válido — sem ele, `/api/*`
+  devolve 401 JSON e qualquer outra rota redireciona pra `/login.html`.
+- **`app.set('trust proxy', 1)`** é necessário pro cookie `secure` funcionar certo atrás do proxy do
+  Railway (que termina TLS e repassa por HTTP internamente) — sem isso, `req.secure` nunca bateria
+  como `true` em produção e o navegador não devolveria o cookie marcado `secure` numa próxima
+  requisição.
+- "Sair" só aparece na sidebar quando `loginEnabled` é `true` (checado via `GET /api/auth/status`
+  no mount de `sidebar.js`) — com login desligado, não existe sessão de verdade pra encerrar, então
+  a ação nem é oferecida.
+- **Cuidado ao testar localmente:** mesmo aviso de sempre — usar `MONGODB_URI=` (vazio) na hora de
+  testar liga/desliga do login, pra cair no fallback de `data/db.json` e nunca escrever
+  `settings.loginEnabled: true` de teste no Mongo de produção.
+
 ### Store (`store.js`)
 - `MONGODB_URI` presente → Mongo (collection `kv`, chaves `snapshots`/`lastSync`). Ausente → `data/db.json`.
 - `initStore()` é async e precisa de `await` antes de `app.listen()`.
@@ -285,6 +326,31 @@ Sem snapshot no período anterior (conta nova, ainda sem 2 janelas de histórico
 ("—" na tela) em vez de fabricar um número — mesmo princípio que o briefing da Aline pede para todo o
 resto do produto (nunca completar métrica ausente por integração/print).
 
+### Consistência visual entre páginas (22/07/2026)
+Cada página em `public/*.html` tem seu próprio `<style>` (não existe CSS compartilhado entre elas — ver
+Arquitetura acima), então drift visual entre sessões de trabalho é esperado. Passe de consistência feito
+nas 5 páginas (`index.html`, `conteudos.html`, `metas.html`, `stories.html`, `cofrinho.html`), sem tocar
+`sidebar.js` nem lógica de JS/API:
+- Confirmado que os tokens de cor principais (`--bg/--surface/--surface2/--border/--border2/--text/--sub/
+  --muted/--green/--red`) já eram idênticos nas 5 páginas — não precisou reconciliar. `--gold:#946200`
+  existia em `metas.html`/`stories.html`/`cofrinho.html` mas faltava em `index.html`/`conteudos.html`
+  (que usavam o hex `#946200` direto); adicionada a variável nas duas e trocado o hex por `var(--gold)`
+  nos lugares que são CSS/HTML (não em config de Chart.js, que precisa de string de cor literal, não
+  var()).
+- `cofrinho.html` tinha `.card{padding:20px 22px}` e `.field input{padding:8px 10px}` — únicos da casa
+  (as outras 4 páginas usam `18px 20px` e `7px 10px` pro mesmo tipo de elemento); igualado.
+- `stories.html` tinha o badge "Expirado" com `padding:3px 9px`; o badge "Impulsionado" de
+  `conteudos.html` (mesma linguagem visual de tag de status) usa `3px 8px` — igualado pro segundo.
+- Ícone de bandeira em contexto de "cabeçalho de bloco por país" (maior que o ícone inline padrão de
+  13×9 usado em pills/dropdowns) tinha 3 tamanhos diferentes: `orgpago-cname img` (15×10) e
+  `hist-card h2 img` (16×12) em `index.html`, e `country-head img` (18×13) em `cofrinho.html`. Unificado
+  pra 16×12 nos três lugares.
+- Confirmado que não existe dark mode em nenhuma página (`prefers-color-scheme`/`data-theme` não
+  aparecem em nenhum `public/*.html`) — não foi adicionado, só verificado que o design light-only é
+  consistente entre as 5.
+- `h3.section`, `.empty` (estado vazio) e `.delta-val` (chip de variação ↑/↓) já eram byte-idênticos
+  nas 5 páginas antes deste passe — não precisaram de mudança.
+
 ### Frontend (`public/index.html`)
 - Sem framework — HTML + CSS + JS vanilla, Chart.js via CDN, ícones Bootstrap Icons via CDN.
 - Dropdowns customizados (`.csel`), period picker com presets + intervalo customizado — mesmo padrão
@@ -301,3 +367,59 @@ resto do produto (nunca completar métrica ausente por integração/print).
 - Card "Comparação de período": três visualizações (Lista/Tabela/Gráfico) sobre os mesmos 6 KPIs
   combinados já calculados no backend — não dispara chamada nova ao trocar de view. Os 6 KPIs continuam
   agregando o **escopo de país selecionado** (todos os países da marca, ou só um), calculado no backend.
+
+## Auditoria de segurança (22/07/2026)
+
+Auditoria pontual (fora do trabalho de autenticação, que é uma frente separada — ver abaixo). Achados
+por severidade, o que foi corrigido e o que ficou só documentado.
+
+- **Sem autenticação nenhuma (crítico, FORA DESTE ESCOPO):** toda rota, inclusive as de escrita
+  (`PATCH /api/content/:mediaId/context`, `POST /api/goals`, `POST /api/cofrinho/entries`, `POST
+  /api/cofrinho/goals`) e `POST /api/sync` (dispara chamada de verdade à Meta), é pública. Isso está
+  sendo tratado por uma frente separada (login togglável) — não mexido aqui de propósito.
+- **XSS armazenado (corrigido):** várias páginas montavam HTML via template literal + `innerHTML` a
+  partir de texto livre que qualquer um pode gravar sem login hoje — `public/conteudos.html` (campos de
+  contexto de `PATCH /api/content/:mediaId/context`: tema/objetivo/pilar/produto/gancho/cta/observação,
+  função `contextFieldsHtml`; a legenda do post em `cardHtml`) e `public/cofrinho.html` (`period`/`cupom`/
+  `observacao` de `POST /api/cofrinho/entries`, função `entriesTableHtml`) — nenhum escapava `<`/`>`/etc.
+  Adicionado `escapeHtml()` global em `public/sidebar.js` (carregado por todas as 5 páginas) e aplicado
+  em todo ponto que interpola texto vindo do backend nessas duas páginas. `public/metas.html` e
+  `public/stories.html` não têm ponto equivalente (só título/meta/número, sem campo de texto livre
+  renderizado) — nada a corrigir ali. `public/index.html` também não tem — todo dado exibido vem de
+  agregados calculados no servidor ou do registry, nunca de texto livre gravado por usuário.
+- **Vazamento de segredo em mensagem de erro (corrigido):** várias rotas fazem
+  `res.status(500).json({ error: e.message })`; em teoria um erro de rede na chamada à Graph API
+  (`meta.js`, `graphGetAs`) pode incluir a URL completa da requisição — com `?access_token=...` — na
+  mensagem, e isso voltaria pra quem chamou a API, hoje sem autenticação nenhuma. Corrigido com um único
+  middleware em `server.js` que sobrescreve `res.json` e redige (`redactSecrets`/`redactDeep`) qualquer
+  string de qualquer resposta JSON que contenha `access_token=...`, uma URL de Mongo com credencial
+  embutida, ou o valor literal de `META_ACCESS_TOKEN`/`MONGODB_URI` — cobre todas as rotas de uma vez,
+  sem precisar caçar cada `e.message` espalhado por `src/*.js` (inclusive os que viram parte do array
+  `errors` de `POST /api/sync`/`POST /api/social/backfill`).
+- **Sem rate limiting (corrigido, stop-gap):** com zero autenticação, toda a API — inclusive `POST
+  /api/sync` (chamada real à Meta) e as rotas de escrita — está exposta a abuso/DoS acidental ou
+  deliberado. Adicionado `express-rate-limit`: limite geral de 300 req/15min em `/api/*`, e um limite
+  bem mais apertado (3 req/min, `syncLimiter` em `server.js`) em `POST /api/sync`, `POST
+  /api/social/backfill`, `GET /api/meta/probe-insights` e `GET /api/meta/probe-engagement` — as únicas
+  rotas que de fato disparam chamada à Meta Graph API. Isso é só um stop-gap; não substitui autenticação.
+- **Cabeçalhos de segurança (corrigido):** adicionado `helmet` com CSP em allowlist explícita
+  (`default-src 'self'`), liberando só `https://cdn.jsdelivr.net` em `script-src`/`style-src`/`font-src`
+  (Chart.js + Bootstrap Icons, os únicos recursos externos usados) e `'unsafe-inline'` em
+  `script-src`/`style-src` (todas as páginas hoje usam `<script>`/`<style>` inline, sem nonce/hash — se
+  algum dia isso migrar pra arquivos separados, dá pra apertar o CSP e tirar o `unsafe-inline`).
+  Verificado rodando o servidor localmente (`data/db.json`, sem `MONGODB_URI`) e confirmando as 5
+  páginas carregando (200) com o CSP ativo, sem erro de recurso bloqueado.
+- **`npm audit` (verificado, nada a corrigir):** 0 vulnerabilidades nas 3 dependências existentes
+  (express/dotenv/mongodb) — rodado tanto antes quanto depois de adicionar `helmet` e
+  `express-rate-limit` (0 vulnerabilidades também com as duas novas).
+- **NoSQL injection (verificado, não se aplica):** toda leitura/escrita em `store.js` usa `_id` fixo e
+  literal na collection `kv` (`'snapshots'`, `'content'`, `'goals'`, `'stories'`, `'cofrinho'`,
+  `'lastSync'`) — nunca uma chave derivada de `req.body`/`req.query`. `brandId`/`countryId`/`mediaId`/etc.
+  vindos de request só indexam dentro de um objeto JS já carregado em memória (`cache.content[brandId]
+  [countryId][mediaId]`), nunca viram parte de uma query Mongo — não há superfície de NoSQL injection
+  neste projeto hoje.
+- **Segredos no git (verificado, ok):** `.env` está no `.gitignore` desde sempre; `git log --all
+  --full-history -- .env` não retorna nenhum commit — nunca foi versionado.
+- **CORS (verificado, não se aplica):** nenhum middleware de CORS configurado, e não precisa — é uma
+  app same-origin (front estático em `public/` servido pelo mesmo Express que expõe `/api/*`), sem
+  motivo pra liberar origem cruzada nenhuma.

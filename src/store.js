@@ -245,3 +245,19 @@ export function setLastSync(iso) {
 export function getLastSync() {
   return cache.lastSync || null;
 }
+
+// ── Configurações gerais (hoje só o toggle de login) ────────────────────────────────────────
+// Fica de fora do padrão empresa→marca→país porque é uma configuração do app inteiro, não por
+// conta/mercado. Guardado com o mesmo mecanismo de cache/saveJson/mongoSet de tudo mais aqui.
+const DEFAULT_SETTINGS = { loginEnabled: false };
+
+export function getSettings() {
+  return { ...DEFAULT_SETTINGS, ...(cache.settings || {}) };
+}
+
+export function updateSettings(patch) {
+  cache.settings = { ...getSettings(), ...patch };
+  saveJson();
+  mongoSet('settings', cache.settings);
+  return cache.settings;
+}
