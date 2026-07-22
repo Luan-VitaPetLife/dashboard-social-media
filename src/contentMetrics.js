@@ -4,6 +4,7 @@
 import { getContentList } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries, getAdAccountId } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
+import { RETENTION_DAYS } from './contentSync.js';
 
 const METRIC_KEYS = ['reach', 'likes', 'comments', 'saved', 'shares', 'totalInteractions', 'views'];
 
@@ -48,7 +49,51 @@ const FORMAT_LABELS = {
   'VIDEO': 'Vídeo',
 };
 
-export async function computeContentDashboard({ brandId, country }) {
+// Agregado "Orgânico × Pago" em nível de perfil/período (briefing: "sinalizar se o perfil ou
+// conteúdo teve resultado predominantemente orgânico ou maior dependência de distribuição
+// paga"). Pondera por alcance (reach) — um único post impulsionado pode alcançar muito mais
+// gente que vários orgânicos, então contar posts sub-representaria a dependência de tráfego
+// pago. Só entram itens com `latest.reach` conhecido; nunca estima o que falta.
+function buildOrganicPaidSummary(items, scopedCountries, brandId, { since, until }) {
+  const inPeriod = items.filter(i => {
+    if (!i.meta?.publishedAt) return false;
+    const d = i.meta.publishedAt.slice(0, 10);
+    return (!since || d >= since) && (!until || d <= until);
+  });
+
+  const countries = scopedCountries.map(countryMeta => {
+    const hasAdAccount = Boolean(getAdAccountId(brandId, countryMeta.id));
+    const bucket = { organicReach: 0, boostedReach: 0, organicCount: 0, boostedCount: 0, unverifiedCount: 0 };
+    for (const item of inPeriod) {
+      if (item.countryId !== countryMeta.id) continue;
+      const reach = item.latest?.reach;
+      if (item.isBoosted === null || reach == null) { bucket.unverifiedCount++; continue; }
+      if (item.isBoosted) { bucket.boostedReach += reach; bucket.boostedCount++; }
+      else { bucket.organicReach += reach; bucket.organicCount++; }
+    }
+    const totalReach = bucket.organicReach + bucket.boostedReach;
+    return {
+      countryId: countryMeta.id,
+      countryName: countryMeta.name,
+      countryFlag: countryMeta.flag,
+      hasAdAccount,
+      ...bucket,
+      totalReach,
+      organicPct: totalReach > 0 ? (bucket.organicReach / totalReach) * 100 : null,
+      boostedPct: totalReach > 0 ? (bucket.boostedReach / totalReach) * 100 : null,
+    };
+  });
+
+  return {
+    countries,
+    // Conteúdo só é rastreado a partir da fundação da ficha (RETENTION_DAYS de janela) — se o
+    // período pedido começa antes disso, uma parte real do período fica sem cobertura (não é
+    // "zero orgânico", é "sem dado ainda para aquele trecho").
+    partialCoverage: Boolean(since) && (Date.now() - Date.parse(since)) / 86400000 > RETENTION_DAYS,
+  };
+}
+
+export async function computeContentDashboard({ brandId, country, since, until }) {
   brandId = brandId || getDefaultBrandId();
   const brand = getBrand(brandId);
   const allCountries = getCountries(brandId);
@@ -127,5 +172,6 @@ export async function computeContentDashboard({ brandId, country }) {
     brand: { id: brandId, name: brand?.name || null },
     scope: { country: country && country !== 'all' ? country : 'all' },
     items,
+    organicPaid: buildOrganicPaidSummary(items, scopedCountries, brandId, { since, until }),
   };
 }

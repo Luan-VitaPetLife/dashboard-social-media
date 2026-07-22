@@ -76,8 +76,9 @@ app.get('/api/dashboard', async (req, res) => {
 app.get('/api/content', async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const country = req.query.country || 'all';
+  const { since, until } = req.query;
   try {
-    res.json(await computeContentDashboard({ brandId, country }));
+    res.json(await computeContentDashboard({ brandId, country, since, until }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -192,6 +193,22 @@ app.post('/api/cofrinho/goals', (req, res) => {
 app.post('/api/sync', async (req, res) => {
   try { res.json(await runSync()); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Placeholder do callback de OAuth da TikTok (integração ainda não construída — o app da TikTok
+// for Business Developers precisa de uma URL de redirect válida já no cadastro, antes de termos
+// client_key/client_secret pra fazer a troca do code por token de verdade). Só mostra o code
+// recebido pra confirmar que o redirect funciona; a troca por access_token/refresh_token entra
+// aqui quando o restante da integração TikTok (registry + sync) for implementado.
+app.get('/api/tiktok/oauth/callback', (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  console.log('TikTok OAuth callback recebido:', { code, state, error, error_description });
+  res.type('html').send(`<!doctype html><html><body style="font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto">
+    <h2>TikTok — autorização recebida</h2>
+    ${error ? `<p style="color:#c0392b">Erro: ${error} — ${error_description || ''}</p>` :
+      `<p>Código de autorização recebido. A integração ainda está em construção — encaminhe este valor pra equipe técnica concluir a troca por token de acesso:</p>
+       <pre style="background:#f4f4f4;padding:12px;border-radius:8px;word-break:break-all">${code || '(nenhum código recebido)'}</pre>`}
+  </body></html>`);
 });
 
 // Diagnóstico: resposta crua dos endpoints de Insights (Instagram + Facebook), sem

@@ -155,6 +155,21 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
   essa mediana orgânica (não excluído da tela, só do denominador da mediana).
 - `isBoosted` fica `null` (não `false`) quando o país não tem `adAccountId` configurado — nunca
   assume "orgânico" por padrão só porque não checou.
+- **Agregado em nível de perfil/período** (implementado 22/07/2026, card "Orgânico × Pago" em
+  `index.html`, logo abaixo de "Tendência & comparação"): o briefing pede o sinal tanto por
+  conteúdo quanto por **perfil** ("sinalizar se o perfil ou conteúdo teve resultado
+  predominantemente orgânico ou maior dependência de distribuição paga") — o card de conteúdo
+  (Resumo em `conteudos.html`) já cobria o primeiro, este cobre o segundo. `buildOrganicPaidSummary()`
+  em `contentMetrics.js` pondera por **alcance** (`reach`), não por contagem de post — um único
+  impulsionado pode alcançar muito mais gente que vários orgânicos, então contar posts
+  sub-representaria a dependência de tráfego pago. Só entram itens com `reach` conhecido; itens
+  com `isBoosted: null` (sem conta de anúncio) ou sem `reach` ainda ficam em `unverifiedCount`,
+  fora do denominador — nunca "viram" orgânico por omissão. `GET /api/content` aceita `since`/`until`
+  opcionais (só afetam esse agregado; a lista de fichas em si continua mostrando todo o conteúdo
+  retido, sem filtro de período, como sempre foi). `partialCoverage: true` quando o período pedido
+  começa antes da janela de retenção de conteúdo (`RETENTION_DAYS`, hoje 35 dias, exportado de
+  `contentSync.js`) — o front mostra um aviso de que parte do período pode não estar refletida,
+  em vez de fingir que o sinal cobre um intervalo maior do que o dado realmente permite.
 - Stories 24h (versão limitada) foi implementado depois — ver seção própria abaixo.
 
 ### Stories 24h — versão limitada (`src/storySync.js`, `src/storyMetrics.js`, `public/stories.html`)

@@ -157,6 +157,18 @@
   .chart-wrap{height:280px;margin-top:6px}
   .chart-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 
+  /* ── Orgânico × Pago (perfil/período) ── */
+  .orgpago-note{font-size:11px;color:var(--muted);margin:2px 0 16px}
+  .orgpago-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .orgpago-item{display:flex;gap:16px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .orgpago-donut-wrap{width:76px;height:76px;flex-shrink:0;position:relative}
+  .orgpago-cname{font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .orgpago-cname img{width:15px;height:10px;object-fit:cover;border-radius:2px}
+  .orgpago-legend{font-size:11.5px;color:var(--sub);display:flex;flex-direction:column;gap:4px}
+  .orgpago-legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .orgpago-unavail{color:var(--muted);font-size:11.5px}
+  .orgpago-partial{font-size:11px;color:var(--muted);margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+
   /* ── Card de comparação de período ── */
   .cmp-header-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .cmp-view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px}
@@ -372,6 +384,14 @@
         </div>
         <div id="cmpBody"><div class="empty">sem dado ainda</div></div>
       </div>
+    </div>
+
+    <h3 class="section">Orgânico × Pago</h3>
+    <div class="card">
+      <div class="chart-card-head"><h2>Dependência de distribuição paga (Instagram)</h2></div>
+      <div class="orgpago-note">Ponderado por alcance dos conteúdos rastreados no período selecionado — não analisa investimento, só sinaliza a origem da distribuição.</div>
+      <div class="orgpago-grid" id="orgPagoGrid"><div class="empty">carregando…</div></div>
+      <div class="orgpago-partial" id="orgPagoPartialNote" style="display:none"></div>
     </div>
 
     <h3 class="section">Histórico (dentro do período selecionado)</h3>
@@ -931,6 +951,59 @@ function renderHistoryTables(d) {
   countries.forEach(c => renderHistoryTable('hist-' + c.id, c.instagram?.series, c.facebook?.series));
 }
 
+function renderOrganicPaid(contentData) {
+  const grid = document.getElementById('orgPagoGrid');
+  const partialNote = document.getElementById('orgPagoPartialNote');
+  const countries = contentData?.organicPaid?.countries || [];
+  if (!countries.length) {
+    grid.innerHTML = '<div class="empty">sem dado ainda</div>';
+    partialNote.style.display = 'none';
+    return;
+  }
+
+  grid.innerHTML = countries.map(c => {
+    const flag = c.countryFlag ? `<img src="${c.countryFlag}" alt="">` : '';
+    if (!c.hasAdAccount) {
+      return `<div class="orgpago-item"><div style="width:100%">
+        <div class="orgpago-cname">${flag} ${c.countryName}</div>
+        <div class="orgpago-unavail">Conta de anúncio não configurada para este país — sinal indisponível.</div>
+      </div></div>`;
+    }
+    if (c.totalReach <= 0) {
+      return `<div class="orgpago-item"><div style="width:100%">
+        <div class="orgpago-cname">${flag} ${c.countryName}</div>
+        <div class="orgpago-unavail">${c.unverifiedCount ? c.unverifiedCount + ' conteúdo(s) rastreado(s), ainda sem alcance confirmado.' : 'Sem conteúdo rastreado neste período.'}</div>
+      </div></div>`;
+    }
+    return `<div class="orgpago-item">
+      <div class="orgpago-donut-wrap"><canvas id="orgPagoChart-${c.countryId}"></canvas></div>
+      <div style="flex:1">
+        <div class="orgpago-cname">${flag} ${c.countryName}</div>
+        <div class="orgpago-legend">
+          <div><span class="dot" style="background:#2e7d5b"></span>Orgânico — ${c.organicPct.toFixed(0)}% (${c.organicCount} post${c.organicCount === 1 ? '' : 's'})</div>
+          <div><span class="dot" style="background:#946200"></span>Impulsionado — ${c.boostedPct.toFixed(0)}% (${c.boostedCount} post${c.boostedCount === 1 ? '' : 's'})</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  countries.forEach(c => {
+    if (!c.hasAdAccount || c.totalReach <= 0) return;
+    setChart('orgPagoChart-' + c.countryId, {
+      type: 'doughnut',
+      data: { labels: ['Orgânico', 'Impulsionado'], datasets: [{ data: [c.organicReach, c.boostedReach], backgroundColor: ['#2e7d5b', '#946200'], borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false } } },
+    });
+  });
+
+  if (contentData.organicPaid.partialCoverage) {
+    partialNote.style.display = 'block';
+    partialNote.textContent = 'O período selecionado começa antes da janela de retenção do conteúdo rastreado — parte dele pode não estar refletida neste sinal.';
+  } else {
+    partialNote.style.display = 'none';
+  }
+}
+
 function render(d) {
   lastData = d;
   document.getElementById('lastSync').textContent = 'última sincronização: ' + fmtDateTime(d.lastSync);
@@ -956,6 +1029,17 @@ async function load() {
   const res = await fetch('/api/dashboard?' + p);
   const data = await res.json();
   render(data);
+
+  // Orgânico×Pago é calculado à parte (ficha de conteúdo, não o snapshot de perfil) — busca
+  // paralela, sem travar o resto do dashboard se essa chamada falhar.
+  try {
+    const contentParams = { since: sinceDate, until: untilDate, country: countryScope };
+    if (brandId) contentParams.brand = brandId;
+    const contentRes = await fetch('/api/content?' + new URLSearchParams(contentParams));
+    renderOrganicPaid(await contentRes.json());
+  } catch {
+    renderOrganicPaid(null);
+  }
 }
 
 document.getElementById('syncBtn').addEventListener('click', async (e) => {

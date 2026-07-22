@@ -8,7 +8,7 @@ import { listAccounts } from './registry.js';
 // Janela de retenção: só busca/atualiza conteúdo publicado nos últimos N dias. Cobre D+7 e D+14
 // com folga e D+30 exatamente — Reels no TikTok teriam janela maior, mas TikTok ainda não está
 // integrado (ver CLAUDE.md).
-const RETENTION_DAYS = 35;
+export const RETENTION_DAYS = 35;
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
