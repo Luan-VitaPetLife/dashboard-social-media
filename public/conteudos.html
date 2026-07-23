@@ -87,6 +87,57 @@
   .cnt-caption{font-size:12.5px;color:var(--sub);margin:0 0 14px;max-width:760px;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
+  /* ── Miniatura do post (imagem real, clicável) — bloco adicional ao card, mesma ideia do
+     preview de post do behold.so, sem depender de nenhum serviço de terceiro. `float` (não
+     flex) de propósito: o card costuma ser bem mais alto que a miniatura (métricas, resumo por
+     IA, checkpoints...), e com flex a coluna do texto ficava presa na largura estreita do lado
+     da miniatura por toda a altura do card, sobrando um vão vazio enorme embaixo dela. Com
+     float, o texto contorna a miniatura só enquanto ela existe e volta a ocupar a largura cheia
+     do card assim que passa da altura dela — igual a qualquer imagem flutuante de texto. ── */
+  .cnt-card-body{overflow:hidden}
+  .cnt-thumb{float:left;margin:0 16px 10px 0;width:96px;height:96px;border-radius:12px;object-fit:cover;cursor:pointer;
+    background:var(--surface2);border:1px solid var(--border);transition:opacity .15s,transform .15s}
+  .cnt-thumb:hover{opacity:.88;transform:scale(1.02)}
+  .cnt-thumb-empty{float:left;margin:0 16px 10px 0;width:96px;height:96px;border-radius:12px;background:var(--surface2);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:24px}
+  @media(max-width:560px){.cnt-thumb,.cnt-thumb-empty{width:72px;height:72px;border-radius:10px}}
+
+  /* ── Lightbox: clique na miniatura "abre o post" — mídia à esquerda (sem cortar, igual ao
+     Instagram de verdade), legenda + comentários reais à direita. ── */
+  .lightbox-overlay{position:fixed;inset:0;background:rgba(15,15,20,.78);z-index:1000;display:none;
+    align-items:center;justify-content:center;padding:30px 20px;overflow-y:auto}
+  .lightbox-overlay.open{display:flex}
+  .lightbox-box{position:relative;background:var(--surface);border-radius:var(--radius);max-width:920px;
+    width:100%;max-height:88vh;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;display:flex}
+  @media(max-width:760px){.lightbox-box{flex-direction:column;max-height:92vh;overflow-y:auto}}
+  .lightbox-media{position:relative;flex:1.15;min-width:0;background:#000;display:flex;align-items:center;justify-content:center}
+  .lightbox-media img,.lightbox-media video{width:100%;height:100%;max-height:88vh;object-fit:contain;display:block}
+  @media(max-width:760px){.lightbox-media img,.lightbox-media video{max-height:56vh}}
+  .lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;
+    border:none;background:rgba(255,255,255,.85);color:#1c2b39;cursor:pointer;display:flex;
+    align-items:center;justify-content:center;font-size:15px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+  .lightbox-nav:hover{background:#fff}
+  .lightbox-nav-prev{left:14px}
+  .lightbox-nav-next{right:14px}
+  .lightbox-dots{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2}
+  .lightbox-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5)}
+  .lightbox-dot.active{background:#fff}
+  .lightbox-close{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:50%;
+    border:none;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:13px;
+    display:flex;align-items:center;justify-content:center;z-index:2}
+  .lightbox-close:hover{background:rgba(0,0,0,.75)}
+  .lightbox-side{flex:1;min-width:300px;max-width:360px;display:flex;flex-direction:column;max-height:88vh}
+  @media(max-width:760px){.lightbox-side{max-width:none;max-height:none}}
+  .lightbox-side-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;
+    align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+  .lightbox-caption{padding:14px 18px;font-size:12.5px;color:var(--sub);line-height:1.6;
+    white-space:pre-line;border-bottom:1px solid var(--border);max-height:160px;overflow-y:auto;flex-shrink:0}
+  .lightbox-comments{flex:1;overflow-y:auto;padding:12px 18px;min-height:80px}
+  .lightbox-comment{margin-bottom:12px;font-size:12px}
+  .lightbox-comment b{color:var(--text)}
+  .lightbox-comment .txt{color:var(--sub);display:block;margin-top:2px;line-height:1.5}
+  .lightbox-comment .meta{color:var(--muted);font-size:10.5px;margin-top:3px;display:flex;gap:8px}
+
   .cnt-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
   .cnt-metric-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
   .cnt-metric-val{font-size:18px;font-weight:600;color:var(--text);margin-bottom:5px}
@@ -210,6 +261,10 @@
   </main>
 
   <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<div class="lightbox-overlay" id="lightboxOverlay">
+  <div class="lightbox-box" id="lightboxBox"></div>
 </div>
 
 <script src="sidebar.js"></script>
@@ -383,39 +438,141 @@ function cardHtml(item) {
   // caption vem da legenda real do post (texto de terceiros) e context/etc. vêm de PATCH
   // /api/content/:id/context sem autenticação nenhuma hoje — nunca interpolar sem escapeHtml.
   const captionPreview = escapeHtml((item.meta.caption || '(sem legenda)').slice(0, 220));
+  // Miniatura: thumbnailUrl só existe pra conteúdo sincronizado depois de 23/07/2026 (campo
+  // novo); posts mais antigos ficam sem imagem até o próximo sync os atualizar — mostra um
+  // placeholder em vez de quebrar o layout ou inventar uma imagem.
+  const thumb = item.meta.thumbnailUrl
+    ? `<img class="cnt-thumb" data-thumb src="${escapeHtml(item.meta.thumbnailUrl)}" alt="" loading="lazy">`
+    : `<div class="cnt-thumb-empty" data-thumb title="sem miniatura"><i class="bi bi-image"></i></div>`;
   return `<div class="card cnt-card" data-media-id="${item.mediaId}" data-country-id="${item.countryId}">
-    <div class="cnt-head">
-      <div class="cnt-head-left">
-        <span class="cnt-format"><i class="bi bi-instagram"></i> ${item.formatLabel}</span>
-        <span class="cnt-meta">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName} · ${item.ageDays} dia(s) · publicado em ${fmtDateBR(item.meta.publishedAt.slice(0,10))}</span>
-        ${item.isBoosted ? `<span class="cnt-boosted"><i class="bi bi-megaphone-fill"></i> Impulsionado</span>` : ''}
+    <div class="cnt-card-body">
+      ${thumb}
+      <div class="cnt-head">
+        <div class="cnt-head-left">
+          <span class="cnt-format"><i class="bi bi-instagram"></i> ${item.formatLabel}</span>
+          <span class="cnt-meta">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName} · ${item.ageDays} dia(s) · publicado em ${fmtDateBR(item.meta.publishedAt.slice(0,10))}</span>
+          ${item.isBoosted ? `<span class="cnt-boosted"><i class="bi bi-megaphone-fill"></i> Impulsionado</span>` : ''}
+        </div>
+        <a class="cnt-link" href="${escapeHtml(item.meta.permalink)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
       </div>
-      <a class="cnt-link" href="${escapeHtml(item.meta.permalink)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
-    </div>
-    <p class="cnt-caption">${captionPreview}</p>
-    ${item.latest ? `<div class="cnt-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}
-    ${item.isBoosted ? `<div class="cnt-median-note">Comparado com a mediana de conteúdo orgânico. Não entra no cálculo dessa mediana, por ter tido distribuição paga.</div>` : ''}
-    <div class="cnt-checkpoints">
-      <span>${checkpointLabel(item, 7, item.checkpoint7)}</span>
-      <span>${checkpointLabel(item, 14, item.checkpoint14)}</span>
-      <span>${checkpointLabel(item, 30, item.checkpoint30)}</span>
-    </div>
-    <div class="cnt-ai" data-ai>
-      <div class="cnt-ai-head">
-        <h4><i class="bi bi-stars"></i> Resumo por IA</h4>
-        <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
+      <p class="cnt-caption">${captionPreview}</p>
+      ${item.latest ? `<div class="cnt-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}
+      ${item.isBoosted ? `<div class="cnt-median-note">Comparado com a mediana de conteúdo orgânico. Não entra no cálculo dessa mediana, por ter tido distribuição paga.</div>` : ''}
+      <div class="cnt-checkpoints">
+        <span>${checkpointLabel(item, 7, item.checkpoint7)}</span>
+        <span>${checkpointLabel(item, 14, item.checkpoint14)}</span>
+        <span>${checkpointLabel(item, 30, item.checkpoint30)}</span>
       </div>
-      <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
+      <div class="cnt-ai" data-ai>
+        <div class="cnt-ai-head">
+          <h4><i class="bi bi-stars"></i> Resumo por IA</h4>
+          <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
+        </div>
+        <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
+      </div>
+      <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
+      <div class="cnt-context">${contextFieldsHtml(item)}</div>
+      <div class="cnt-saved" data-saved>Salvo</div>
     </div>
-    <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
-    <div class="cnt-context">${contextFieldsHtml(item)}</div>
-    <div class="cnt-saved" data-saved>Salvo</div>
   </div>`;
 }
+
+function commentsHtml(comments) {
+  if (!comments.length) return '<div class="empty" style="padding:14px 0">sem comentários ainda</div>';
+  return comments.map(c => `
+    <div class="lightbox-comment">
+      <b>${escapeHtml(c.username || 'usuário')}</b>
+      <span class="txt">${escapeHtml(c.text || '')}</span>
+      <div class="meta">
+        <span>${new Date(c.timestamp).toLocaleDateString('pt-BR')}</span>
+        ${c.like_count ? `<span>${fmt(c.like_count)} curtida(s)</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+let lightboxItem = null;
+let lightboxIndex = 0;
+
+function lightboxSlides(item) {
+  // Carrossel: navega pelos itens reais do álbum (buscados no sync, ver carouselItems em
+  // contentSync.js). Post único: uma "slide" só, a partir do próprio thumbnailUrl/videoUrl.
+  if (item.meta.carouselItems?.length) return item.meta.carouselItems;
+  return [{ url: item.meta.thumbnailUrl, videoUrl: item.meta.videoUrl }];
+}
+
+function renderLightboxMedia() {
+  const slides = lightboxSlides(lightboxItem);
+  const slide = slides[lightboxIndex];
+  const mediaHtml = slide.videoUrl
+    ? `<video src="${escapeHtml(slide.videoUrl)}" poster="${escapeHtml(slide.url || '')}" controls></video>`
+    : (slide.url ? `<img src="${escapeHtml(slide.url)}" alt="">` : '');
+  const nav = slides.length > 1 ? `
+    ${lightboxIndex > 0 ? `<button class="lightbox-nav lightbox-nav-prev" id="lightboxPrev" aria-label="Anterior"><i class="bi bi-chevron-left"></i></button>` : ''}
+    ${lightboxIndex < slides.length - 1 ? `<button class="lightbox-nav lightbox-nav-next" id="lightboxNext" aria-label="Próxima"><i class="bi bi-chevron-right"></i></button>` : ''}
+    <div class="lightbox-dots">${slides.map((_, i) => `<span class="lightbox-dot${i === lightboxIndex ? ' active' : ''}"></span>`).join('')}</div>
+  ` : '';
+  document.getElementById('lightboxMedia').innerHTML = mediaHtml + nav;
+  document.getElementById('lightboxPrev')?.addEventListener('click', () => { lightboxIndex--; renderLightboxMedia(); });
+  document.getElementById('lightboxNext')?.addEventListener('click', () => { lightboxIndex++; renderLightboxMedia(); });
+}
+
+async function openLightbox(item) {
+  lightboxItem = item;
+  lightboxIndex = 0;
+  const box = document.getElementById('lightboxBox');
+  box.innerHTML = `
+    <button class="lightbox-close" id="lightboxCloseBtn" aria-label="Fechar"><i class="bi bi-x-lg"></i></button>
+    <div class="lightbox-media" id="lightboxMedia"></div>
+    <div class="lightbox-side">
+      <div class="lightbox-side-head">
+        <span class="cnt-format"><i class="bi bi-instagram"></i> ${item.formatLabel}</span>
+        <a class="cnt-link" href="${escapeHtml(item.meta.permalink)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Ver no Instagram</a>
+      </div>
+      <p class="lightbox-caption">${escapeHtml(item.meta.caption || '(sem legenda)')}</p>
+      <div class="lightbox-comments" id="lightboxComments">${pageLoaderHtml()}</div>
+    </div>
+  `;
+  renderLightboxMedia();
+  document.getElementById('lightboxOverlay').classList.add('open');
+  document.getElementById('lightboxCloseBtn').addEventListener('click', closeLightbox);
+
+  try {
+    const res = await fetch(`/api/content/${item.mediaId}/comments`);
+    const data = await res.json();
+    const commentsBox = document.getElementById('lightboxComments');
+    if (!commentsBox) return; // lightbox já foi fechado antes da resposta chegar
+    commentsBox.innerHTML = data.error
+      ? `<div class="empty" style="padding:14px 0">não foi possível carregar os comentários agora</div>`
+      : commentsHtml(data.comments);
+  } catch {
+    const commentsBox = document.getElementById('lightboxComments');
+    if (commentsBox) commentsBox.innerHTML = `<div class="empty" style="padding:14px 0">não foi possível carregar os comentários agora</div>`;
+  }
+}
+function closeLightbox() {
+  document.getElementById('lightboxOverlay').classList.remove('open');
+  document.getElementById('lightboxBox').innerHTML = '';
+  lightboxItem = null;
+}
+document.getElementById('lightboxOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'lightboxOverlay') closeLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  if (!lightboxItem) return;
+  if (e.key === 'Escape') { closeLightbox(); return; }
+  const slides = lightboxSlides(lightboxItem);
+  if (e.key === 'ArrowLeft' && lightboxIndex > 0) { lightboxIndex--; renderLightboxMedia(); }
+  if (e.key === 'ArrowRight' && lightboxIndex < slides.length - 1) { lightboxIndex++; renderLightboxMedia(); }
+});
 
 function attachCardHandlers(grid) {
   grid.querySelectorAll('.cnt-card').forEach(card => {
     card.querySelector('[data-toggle]').addEventListener('click', () => card.classList.toggle('open'));
+    card.querySelector('[data-thumb]').addEventListener('click', () => {
+      const item = lastData.items.find(i => i.mediaId === card.dataset.mediaId && i.countryId === card.dataset.countryId);
+      if (item) openLightbox(item);
+    });
     const savedEl = card.querySelector('[data-saved]');
     card.querySelectorAll('[data-field]').forEach(input => {
       input.addEventListener('blur', async () => {

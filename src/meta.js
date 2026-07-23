@@ -81,7 +81,7 @@ const CONTENT_METRICS = ['reach', 'likes', 'comments', 'saved', 'shares', 'total
 export async function fetchInstagramMediaList(id, sinceUnix) {
   if (!TOKEN || !id) return [];
   const items = [];
-  let url = `${id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink&limit=25`;
+  let url = `${id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,media_url,thumbnail_url&limit=25`;
   for (let page = 0; page < 20; page++) {
     const json = await graphGet(url);
     const data = json.data || [];
@@ -134,6 +134,39 @@ export async function fetchInstagramMediaInsights(mediaId) {
       totalInteractions: byName.total_interactions ?? null,
       views: byName.views ?? null,
     };
+  }
+}
+
+// Itens individuais de um álbum (CAROUSEL_ALBUM) — a Graph API não devolve isso na listagem de
+// /media, precisa buscar por post. Cada item usa a mesma regra do post principal: thumbnail_url
+// pra VIDEO (media_url ali é o arquivo de vídeo), media_url direto pra IMAGE. Chamado por
+// contentSync.js só pra posts do tipo carrossel, e refeito a cada sync (12h) pelo mesmo motivo
+// do thumbnailUrl/videoUrl (URL assinada, não permanente).
+export async function fetchInstagramCarouselChildren(mediaId) {
+  if (!TOKEN || !mediaId) return [];
+  try {
+    const json = await graphGet(`${mediaId}/children?fields=media_type,media_url,thumbnail_url`);
+    return (json.data || []).map(c => ({
+      mediaType: c.media_type,
+      url: (c.media_type === 'VIDEO' ? c.thumbnail_url : c.media_url) || null,
+      videoUrl: c.media_type === 'VIDEO' ? (c.media_url || null) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Comentários reais de um post — buscado sob demanda quando alguém abre o lightbox na ficha de
+// conteúdo (nunca sincronizado/guardado, comentário muda a qualquer momento, diferente do
+// snapshot diário de métricas). Confirmado ao vivo (23/07/2026) que a Graph API devolve texto,
+// usuário, data e curtidas de verdade via {media-id}/comments.
+export async function fetchInstagramMediaComments(mediaId) {
+  if (!TOKEN || !mediaId) return { comments: [], error: 'Meta não configurado.' };
+  try {
+    const json = await graphGet(`${mediaId}/comments?fields=text,username,timestamp,like_count&limit=50`);
+    return { comments: json.data || [], error: null };
+  } catch (e) {
+    return { comments: [], error: e.message };
   }
 }
 

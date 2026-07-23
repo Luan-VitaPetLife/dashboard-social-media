@@ -1,7 +1,7 @@
 // contentSync.js — coleta diária de conteúdo individual (posts/Reels do Instagram), separado
 // do sync de perfil (sync.js). Roda dentro do mesmo ciclo (chamado por runSync()) — não cria
 // fluxo novo pro usuário, só mais uma etapa do mesmo "Sincronizar agora".
-import { fetchInstagramMediaList, fetchInstagramMediaInsights, isConfigured } from './meta.js';
+import { fetchInstagramMediaList, fetchInstagramMediaInsights, fetchInstagramCarouselChildren, isConfigured } from './meta.js';
 import { upsertContentMeta, addContentSnapshot } from './store.js';
 import { listAccounts } from './registry.js';
 
@@ -33,6 +33,13 @@ export async function runContentSync() {
         const publishedAt = item.timestamp;
         if (Math.floor(Date.parse(publishedAt) / 1000) < sinceUnix) continue; // fora da janela
 
+        // Álbum (CAROUSEL_ALBUM): busca os itens individuais pra navegação no lightbox — a
+        // Meta não devolve isso na listagem, só por post. Só pra esse tipo, pra não multiplicar
+        // chamada em post nenhum que não seja carrossel.
+        const carouselItems = item.media_type === 'CAROUSEL_ALBUM'
+          ? await fetchInstagramCarouselChildren(item.id).catch(() => [])
+          : null;
+
         upsertContentMeta(brandId, countryId, item.id, {
           platform: 'instagram',
           mediaType: item.media_type,
@@ -40,6 +47,19 @@ export async function runContentSync() {
           caption: item.caption || '',
           permalink: item.permalink,
           publishedAt,
+          // Miniatura do post: `thumbnail_url` só existe pra VIDEO/Reels (média_url ali é o
+          // arquivo de vídeo, não dá pra usar em <img>); IMAGE/CAROUSEL_ALBUM usam `media_url`
+          // direto (confirmado ao vivo 23/07/2026 — carousel devolve a capa do álbum). Refeita a
+          // cada sync (12h) porque a Meta não garante que essa URL assinada seja permanente.
+          thumbnailUrl: (item.media_type === 'VIDEO' ? item.thumbnail_url : item.media_url) || null,
+          // Vídeo de verdade (Reels), só quando o tipo é VIDEO — usado pelo lightbox pra tocar o
+          // post em vez de só mostrar a miniatura estática. `null` pra IMAGE/CAROUSEL_ALBUM (a
+          // miniatura já é a própria imagem, não tem vídeo pra tocar).
+          videoUrl: item.media_type === 'VIDEO' ? (item.media_url || null) : null,
+          // Itens do álbum, pra navegação de carrossel no lightbox (ver public/conteudos.html).
+          // `null` (não `[]`) pra quem não é carrossel — distingue "não se aplica" de "álbum sem
+          // itens" (esse segundo caso não deveria acontecer, mas não custa manter a diferença).
+          carouselItems,
         });
 
         try {

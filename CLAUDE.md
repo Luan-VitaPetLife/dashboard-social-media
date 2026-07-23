@@ -121,6 +121,36 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
   **Cuidado ao mexer no CSS de ocultar:** só `#summaryBody`/`#sumViewToggle` devem sumir com
   `body.cnt-summary-hidden` — o próprio botão de mostrar (`.sum-hide-btn`) precisa continuar visível,
   senão não tem como reverter (bug real encontrado e corrigido em 21/07/2026).
+- **Miniatura do post + lightbox (23/07/2026, a pedido do Luan, inspirado no widget de terceiro
+  behold.so — mas sem depender de nenhum serviço externo, tudo via dado real da Meta já
+  sincronizado):** cada card ganhou uma miniatura clicável (`.cnt-thumb`, `float:left` — de
+  propósito **não** é flex, porque com flex a coluna de texto ficava presa na largura estreita do
+  lado da miniatura por toda a altura do card, sobrando vão vazio enorme embaixo dela; com float,
+  o texto contorna só enquanto a miniatura existe e volta a ocupar a largura cheia do card depois
+  — bug real encontrado e corrigido no mesmo dia). Clicar abre um lightbox em duas colunas (mídia
+  à esquerda sem cortar nada — `object-fit:contain`, nunca `cover` — e legenda + comentários reais
+  à direita, igual ao post de verdade do Instagram, não ao carrossel horizontal do behold.so):
+  - **Imagem/vídeo:** `thumbnail_url`/`media_url` (Graph API `/media`) — `thumbnail_url` só existe
+    pra VIDEO (media_url ali é o arquivo de vídeo, não dá pra usar em `<img>`); IMAGE/
+    CAROUSEL_ALBUM usam `media_url` direto (confirmado ao vivo 23/07/2026, carousel devolve a capa
+    do álbum). Pra VIDEO/Reels, o lightbox toca o vídeo de verdade (`<video controls>` com
+    `media_url`), não só mostra a miniatura estática. Guardado como `thumbnailUrl`/`videoUrl` em
+    `contentMeta` (`contentSync.js`), refeito a cada sync (12h) porque a Meta não garante que essa
+    URL assinada seja permanente.
+  - **Carrossel navegável:** `fetchInstagramCarouselChildren()` (`meta.js`) busca os itens do
+    álbum via `/{media-id}/children`, guardado como `carouselItems` (mesma regra de video/image
+    por item, atualizado a cada sync). O lightbox mostra setas ◀▶ (escondidas nas pontas, igual ao
+    Instagram real) + bolinhas de progresso, navegável por clique ou seta do teclado.
+  - **Comentários reais**, buscados ao vivo quando o lightbox abre (`GET
+    /api/content/:mediaId/comments` → `fetchInstagramMediaComments()`, `/{media-id}/comments`) —
+    nunca sincronizados/guardados, porque comentário muda a qualquer momento (diferente do
+    snapshot diário de métricas). Zero comentários reais mostra "sem comentários ainda"; falha de
+    rede/API mostra uma mensagem diferente ("não foi possível carregar agora") — nunca confunde as
+    duas causas.
+  - CSP: precisou liberar `https://*.cdninstagram.com` em `imgSrc` **e** `mediaSrc` (helmet,
+    `server.js`) — confirmado ao vivo que todo `media_url`/`thumbnail_url` das duas contas vem
+    sempre desse host (nunca `fbcdn.net`), então só esse domínio foi liberado, não um wildcard
+    maior.
 - Só **Instagram** (Reels, Carrossel, Estático, Vídeo de feed) — Facebook e TikTok ficam de fora por
   enquanto. `runContentSync()` roda dentro do mesmo `runSync()` (mesmo ciclo de 12h / botão
   "Sincronizar agora" — não existe um sync separado pro usuário acionar).

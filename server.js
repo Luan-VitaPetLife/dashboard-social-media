@@ -13,7 +13,7 @@ import { computeStoriesDashboard } from './src/storyMetrics.js';
 import { runStorySync } from './src/storySync.js';
 import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { computeAudienceDashboard } from './src/audience.js';
-import { probeInsights, probeEngagement, probeDemographics } from './src/meta.js';
+import { probeInsights, probeEngagement, probeDemographics, fetchInstagramMediaComments } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
 import { generateReport, checkScheduledReports, computeNextRun, REPORT_TYPES, INTERVAL_UNITS } from './src/reports.js';
@@ -60,7 +60,8 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'data:'],
-      imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net', 'https://*.cdninstagram.com'],
+      mediaSrc: ["'self'", 'https://*.cdninstagram.com'],
       connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
       workerSrc: ["'self'", 'blob:'],
     },
@@ -337,6 +338,19 @@ app.patch('/api/content/:mediaId/context', (req, res) => {
   try {
     const updated = setContentContext(brandId, countryId, mediaId, context);
     res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Comentários reais de um post, buscados ao vivo quando o lightbox da ficha de conteúdo abre —
+// nunca sincronizados/guardados (comentário muda a qualquer momento). Sem rate limit dedicado:
+// diferente de POST /api/sync, isso é um fetch leve de um post só, disparado por navegação normal
+// da equipe, não uma sincronização em massa.
+app.get('/api/content/:mediaId/comments', async (req, res) => {
+  const { mediaId } = req.params;
+  try {
+    res.json(await fetchInstagramMediaComments(mediaId));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
