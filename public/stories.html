@@ -47,6 +47,7 @@
   .csel.open .csel-pop{display:flex}
   .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
   .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt img.brand-logo-mini,.filter-pill img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
   .csel-opt:hover{background:var(--surface2);color:var(--text)}
   .csel-opt.active{color:var(--text);font-weight:600}
   .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
@@ -124,10 +125,10 @@
     </div>
     <div class="topbar-controls">
       <div class="filter-pill" id="brandPillStatic" style="display:none">
-        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal">—</span>
       </div>
       <div class="filter-pill csel" id="cselBrand" style="display:none">
-        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal">—</span><span class="arr">▾</span>
         <div class="csel-pop"></div>
       </div>
 
@@ -201,21 +202,26 @@ function buildBrandSelector(brands) {
   if (brands.length <= 1) {
     dropdown.style.display = 'none';
     staticPill.style.display = brands.length ? '' : 'none';
-    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    if (brands.length) {
+      document.getElementById('brandStaticVal').textContent = brands[0].name;
+      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
+    }
     return;
   }
   staticPill.style.display = 'none';
   dropdown.style.display = '';
   dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
-    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
   ).join('');
   document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
   setupCsel(dropdown, val => {
     brandId = val;
     localStorage.setItem('coco_story_brand', brandId);
     countryScope = 'all';
     localStorage.removeItem('coco_story_country');
     document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });

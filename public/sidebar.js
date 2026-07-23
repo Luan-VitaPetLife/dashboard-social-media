@@ -21,6 +21,23 @@ function escapeHtml(str) {
 }
 window.escapeHtml = escapeHtml;
 
+// setBrandLogoImg — preenche/esconde um <img class="brand-logo-mini"> com o logo da marca
+// (registry.js expõe `logo` por marca, ver getRegistryTree). Reaproveitado por todas as páginas
+// que têm seletor de Marca, pra não duplicar essa checagem em cada `buildBrandSelector()`. Some
+// (display:none) quando a marca não tem `logo` configurado — nunca quebra o layout.
+function setBrandLogoImg(imgEl, brand) {
+  if (!imgEl) return;
+  if (brand?.logo) {
+    imgEl.src = brand.logo;
+    imgEl.alt = brand.name;
+    imgEl.title = brand.name;
+    imgEl.style.display = '';
+  } else {
+    imgEl.style.display = 'none';
+  }
+}
+window.setBrandLogoImg = setBrandLogoImg;
+
 // initCollapsibleNotice — minimiza/reabre um card de aviso (limit-note, coverage-note, etc.)
 // com animação: encolhe no lugar e vira uma bolinha fixa no canto da tela (fora do fluxo normal,
 // pra dar espaço aos cards subirem). Estado (aberto/fechado) fica só neste navegador — cada aviso

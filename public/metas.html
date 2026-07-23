@@ -47,6 +47,7 @@
   .csel.open .csel-pop{display:flex}
   .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
   .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt img.brand-logo-mini,.filter-pill img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
   .csel-opt:hover{background:var(--surface2);color:var(--text)}
   .csel-opt.active{color:var(--text);font-weight:600}
   .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
@@ -76,6 +77,7 @@
   .goal-title .name{font-size:12.5px;font-weight:700}
   .goal-title .mkt{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
   .goal-title .mkt img{width:13px;height:9px;object-fit:cover;border-radius:2px}
+  .goal-brand-logo{height:20px;width:auto;max-width:80px;object-fit:contain;margin-left:auto;flex-shrink:0;opacity:.9}
 
   .goal-bar-wrap{height:22px;border-radius:20px;background:var(--surface2);overflow:hidden;margin-bottom:14px;position:relative;border:1px solid var(--border)}
   .goal-bar-fill{height:100%;border-radius:20px;transition:width .4s ease;background:linear-gradient(90deg,var(--ig-2),var(--ig-4))}
@@ -124,10 +126,10 @@
     </div>
     <div class="topbar-controls">
       <div class="filter-pill" id="brandPillStatic" style="display:none">
-        <span class="lbl">Marca</span><span class="val" id="brandStaticVal">—</span>
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal">—</span>
       </div>
       <div class="filter-pill csel" id="cselBrand" style="display:none">
-        <span class="lbl">Marca</span><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal">—</span><span class="arr">▾</span>
         <div class="csel-pop"></div>
       </div>
 
@@ -186,21 +188,26 @@ function buildBrandSelector(brands) {
   if (brands.length <= 1) {
     dropdown.style.display = 'none';
     staticPill.style.display = brands.length ? '' : 'none';
-    if (brands.length) document.getElementById('brandStaticVal').textContent = brands[0].name;
+    if (brands.length) {
+      document.getElementById('brandStaticVal').textContent = brands[0].name;
+      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
+    }
     return;
   }
   staticPill.style.display = 'none';
   dropdown.style.display = '';
   dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
-    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.name}</div>`
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
   ).join('');
   document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
   setupCsel(dropdown, val => {
     brandId = val;
     localStorage.setItem('coco_meta_brand', brandId);
     countryScope = 'all';
     localStorage.removeItem('coco_meta_country');
     document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -276,10 +283,12 @@ function cardHtml(item) {
     ${historyHtml(item)}
   `;
 
+  const brandLogo = currentBrand()?.logo;
   return `<div class="card goal-card ${meta.badgeClass}" data-platform="${item.platform}" data-country-id="${item.countryId}">
     <div class="goal-head">
       <div class="badge ${meta.badgeClass}"><i class="bi ${meta.icon}"></i></div>
       <div class="goal-title"><span class="name">${meta.label}</span><span class="mkt">${item.countryFlag ? `<img src="${item.countryFlag}" alt="">` : ''} ${item.countryName}</span></div>
+      ${brandLogo ? `<img class="goal-brand-logo" src="${brandLogo}" alt="${currentBrand()?.name || ''}" title="${currentBrand()?.name || ''}">` : ''}
     </div>
     ${body}
     <div class="goal-form" id="form-${idBase}">

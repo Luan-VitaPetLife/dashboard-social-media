@@ -8,11 +8,15 @@ const COMPANY = { id: 'vita-pet-life', name: 'Vita Pet Life' };
 
 // Só a Coco and Luna tem contas configuradas hoje — a lista suporta N marcas, cada uma com N
 // países, cada país com N contas (uma por plataforma). `flag` aponta pros arquivos que já existem
-// em public/ (mesmos usados pelo dashboard principal para os botões de mercado).
+// em public/ (mesmos usados pelo dashboard principal para os botões de mercado). `logo` é o
+// mesmo princípio pra marca: aponta pro arquivo em public/ usado pra identificar visualmente de
+// qual marca é cada card/seletor — importa mais a partir do dia em que existir uma segunda marca
+// (hoje só reforça visualmente que tudo na tela é da Coco and Luna).
 const BRANDS = [
   {
     id: 'coco-and-luna',
     name: 'Coco and Luna',
+    logo: 'Logo1.svg',
     countries: [
       {
         id: 'br', name: 'Brasil', flag: 'bandeira_brasil.webp',
@@ -101,6 +105,7 @@ export function getRegistryTree() {
     brands: PRUNED_BRANDS.map(b => ({
       id: b.id,
       name: b.name,
+      logo: b.logo || null,
       countries: b.countries.map(c => ({
         id: c.id,
         name: c.name,
