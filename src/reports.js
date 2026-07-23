@@ -12,7 +12,7 @@ import { computeStoriesDashboard } from './storyMetrics.js';
 import { computeGoalsDashboard } from './goals.js';
 import { computeCofrinhoDashboard } from './cofrinho.js';
 import { generateText, isConfigured as aiConfigured } from './ai.js';
-import { setContentAiSummary, reportExists, addReport } from './store.js';
+import { setContentAiSummary, reportExists, addReport, getSchedules, updateSchedule } from './store.js';
 import { fmtNum, fmtPct, fmtDateBR, fmtDateTimeBR } from './reportTemplate.js';
 
 const PLATFORM_LABELS = { instagram: 'Instagram', facebook: 'Facebook' };
@@ -30,6 +30,11 @@ function previousMonthKey() {
   const prevM = m === 0 ? 12 : m;
   const prevY = m === 0 ? y - 1 : y;
   return `${prevY}-${String(prevM).padStart(2, '0')}`;
+}
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 // since = dia 1 do mês; until = último dia do mês, ou hoje se o mês ainda não terminou (relatório
@@ -364,85 +369,125 @@ export async function buildMonthlyGeneralReport({ brandId, monthKey }) {
 }
 
 // ── Dispatcher (rota manual) ────────────────────────────────────────────────────────────────
+// Nome customizado (opcional, "Nome" no formulário manual e no de agendamento) — vira o título
+// do PDF/DOCX no lugar do título padrão gerado pelo tipo, com o título original preservado no
+// subtítulo (nunca se perde a informação de que tipo/escopo aquele relatório é).
+export function applyCustomName(model, name) {
+  if (!name) return model;
+  return { ...model, title: name, subtitle: model.subtitle ? `${model.title} · ${model.subtitle}` : model.title };
+}
+
 export async function generateReport(brandId, type, params = {}) {
   brandId = brandId || getDefaultBrandId();
+  let result;
   switch (type) {
-    case 'd7': return buildD7Report({ brandId, countryId: params.countryId, mediaId: params.mediaId });
-    case 'stories': return buildStoriesReport({ brandId, countryId: params.countryId, storyId: params.storyId });
-    case 'mensal_pais': return buildMonthlyCountryReport({ brandId, countryId: params.countryId, monthKey: params.monthKey || previousMonthKey() });
-    case 'mensal_rede': return buildMonthlyPlatformReport({ brandId, platform: params.platform, monthKey: params.monthKey || previousMonthKey() });
-    case 'mensal_geral': return buildMonthlyGeneralReport({ brandId, monthKey: params.monthKey || previousMonthKey() });
+    case 'd7': result = await buildD7Report({ brandId, countryId: params.countryId, mediaId: params.mediaId }); break;
+    case 'stories': result = await buildStoriesReport({ brandId, countryId: params.countryId, storyId: params.storyId }); break;
+    case 'mensal_pais': result = await buildMonthlyCountryReport({ brandId, countryId: params.countryId, monthKey: params.monthKey || previousMonthKey() }); break;
+    case 'mensal_rede': result = await buildMonthlyPlatformReport({ brandId, platform: params.platform, monthKey: params.monthKey || previousMonthKey() }); break;
+    case 'mensal_geral': result = await buildMonthlyGeneralReport({ brandId, monthKey: params.monthKey || previousMonthKey() }); break;
     default: throw new Error('Tipo de relatório desconhecido.');
   }
+  result.model = applyCustomName(result.model, params.name);
+  return result;
 }
 
 export const REPORT_TYPES = ['d7', 'stories', 'mensal_pais', 'mensal_rede', 'mensal_geral'];
 
-// ── Geração automática (agendador) ──────────────────────────────────────────────────────────
-// Chamado periodicamente por server.js (mesmo ciclo do sync normal). Sem ANTHROPIC_API_KEY não
-// tem o que gerar de texto por IA (todo relatório depende de algum texto sintetizado) — pula
-// inteiro, não gera relatório "capado". D+7 e Stories disparam uma vez por item, assim que ele
-// cruza o checkpoint (7 dias / 24h expirado) — se já existir bastante conteúdo/story acumulado
-// na primeira execução, pode gerar um lote de chamadas de IA de uma vez (backlog esperado, não
-// um bug). Mensal dispara uma vez por mês, sempre para o mês anterior já completo.
-export async function checkAutoReports() {
+// ── Agendamentos (config-driven pelo usuário) ──────────────────────────────────────────────
+// Sem cron nem horário fixo no código — cada agendamento é uma regra criada pela tela de
+// Relatórios (tipo + escopo + "a cada X horas/dias/meses"), guardada em store.js. Um relatório só
+// é gerado sozinho se existir um agendamento ativo pra ele; sem nenhum agendamento configurado,
+// nada roda automaticamente (só o botão manual de "Gerar relatório").
+export const INTERVAL_UNITS = ['hours', 'days', 'months'];
+
+export function computeNextRun(intervalValue, intervalUnit, from = new Date()) {
+  const d = new Date(from);
+  const n = Number(intervalValue);
+  if (intervalUnit === 'hours') d.setHours(d.getHours() + n);
+  else if (intervalUnit === 'days') d.setDate(d.getDate() + n);
+  else if (intervalUnit === 'months') d.setMonth(d.getMonth() + n);
+  return d.toISOString();
+}
+
+// D+7/Stories continuam com dedupe por item (periodKey=mediaId/storyId) — regenerar o D+7 do
+// mesmo post repetidamente não faz sentido, é um checkpoint único; o intervalo do agendamento
+// só controla de quanto em quanto tempo o sistema procura por itens novos que cruzaram o
+// checkpoint. Mensal NÃO usa dedupe — cada disparo do agendamento é um snapshot novo de
+// propósito (é assim que o usuário consegue, por ex., um "mensal geral" toda semana, acumulando
+// histórico em vez de sobrescrever).
+async function runSchedule(brand, schedule) {
+  let generated = 0;
+  const countryIds = schedule.countryId ? [schedule.countryId] : brand.countries.map(c => c.id);
+
+  if (schedule.type === 'd7') {
+    for (const countryId of countryIds) {
+      const content = await computeContentDashboard({ brandId: brand.id, country: countryId });
+      for (const item of content.items) {
+        if (item.ageDays >= 7 && !reportExists(brand.id, 'd7', item.mediaId)) {
+          const { model, periodKey, scopeLabel } = await buildD7Report({ brandId: brand.id, countryId, mediaId: item.mediaId });
+          addReport(brand.id, { type: 'd7', name: schedule.name || null, periodKey, scopeLabel, generatedBy: 'auto', model: applyCustomName(model, schedule.name) });
+          generated++;
+        }
+      }
+    }
+  } else if (schedule.type === 'stories') {
+    for (const countryId of countryIds) {
+      const stories = computeStoriesDashboard({ brandId: brand.id, country: countryId });
+      for (const item of stories.items) {
+        if (item.expired && !reportExists(brand.id, 'stories', item.storyId)) {
+          const { model, periodKey, scopeLabel } = await buildStoriesReport({ brandId: brand.id, countryId, storyId: item.storyId });
+          addReport(brand.id, { type: 'stories', name: schedule.name || null, periodKey, scopeLabel, generatedBy: 'auto', model: applyCustomName(model, schedule.name) });
+          generated++;
+        }
+      }
+    }
+  } else if (schedule.type === 'mensal_pais') {
+    for (const countryId of countryIds) {
+      const { model, periodKey, scopeLabel } = await buildMonthlyCountryReport({ brandId: brand.id, countryId, monthKey: currentMonthKey() });
+      addReport(brand.id, { type: 'mensal_pais', name: schedule.name || null, periodKey, scopeLabel, generatedBy: 'auto', model: applyCustomName(model, schedule.name) });
+      generated++;
+    }
+  } else if (schedule.type === 'mensal_rede') {
+    const platforms = new Set();
+    for (const country of brand.countries) for (const a of country.accounts) platforms.add(a.platform);
+    const scopedPlatforms = schedule.platform ? [schedule.platform] : [...platforms];
+    for (const platform of scopedPlatforms) {
+      const { model, periodKey, scopeLabel } = await buildMonthlyPlatformReport({ brandId: brand.id, platform, monthKey: currentMonthKey() });
+      addReport(brand.id, { type: 'mensal_rede', name: schedule.name || null, periodKey, scopeLabel, generatedBy: 'auto', model: applyCustomName(model, schedule.name) });
+      generated++;
+    }
+  } else if (schedule.type === 'mensal_geral') {
+    const { model, periodKey, scopeLabel } = await buildMonthlyGeneralReport({ brandId: brand.id, monthKey: currentMonthKey() });
+    addReport(brand.id, { type: 'mensal_geral', name: schedule.name || null, periodKey, scopeLabel, generatedBy: 'auto', model: applyCustomName(model, schedule.name) });
+    generated++;
+  }
+
+  return generated;
+}
+
+// Chamado periodicamente por server.js. Sem ANTHROPIC_API_KEY não gera nada (todo relatório
+// depende de algum texto sintetizado por IA) — nem tenta rodar os agendamentos, pra não gerar
+// relatório "capado" sozinho. Cada agendamento vencido (nextRunAt <= agora) dispara uma vez;
+// `nextRunAt` é recalculado a partir de agora + intervalo, então atrasos no agendador (servidor
+// fora do ar, etc.) não acumulam disparos retroativos — só roda o próximo, uma vez.
+export async function checkScheduledReports() {
   if (!aiConfigured()) return { generated: 0, errors: [] };
   const errors = [];
   let generated = 0;
-  const pmKey = previousMonthKey();
 
   for (const brand of getBrands()) {
-    for (const country of brand.countries) {
+    for (const schedule of getSchedules(brand.id)) {
+      if (!schedule.active) continue;
+      if (Date.now() < Date.parse(schedule.nextRunAt)) continue;
       try {
-        const content = await computeContentDashboard({ brandId: brand.id, country: country.id });
-        for (const item of content.items) {
-          if (item.ageDays >= 7 && !reportExists(brand.id, 'd7', item.mediaId)) {
-            const { model, periodKey, scopeLabel } = await buildD7Report({ brandId: brand.id, countryId: country.id, mediaId: item.mediaId });
-            addReport(brand.id, { type: 'd7', periodKey, scopeLabel, generatedBy: 'auto', model });
-            generated++;
-          }
-        }
-      } catch (e) { errors.push(e.message); }
-
-      try {
-        const stories = computeStoriesDashboard({ brandId: brand.id, country: country.id });
-        for (const item of stories.items) {
-          if (item.expired && !reportExists(brand.id, 'stories', item.storyId)) {
-            const { model, periodKey, scopeLabel } = await buildStoriesReport({ brandId: brand.id, countryId: country.id, storyId: item.storyId });
-            addReport(brand.id, { type: 'stories', periodKey, scopeLabel, generatedBy: 'auto', model });
-            generated++;
-          }
-        }
-      } catch (e) { errors.push(e.message); }
-
-      try {
-        if (!reportExists(brand.id, 'mensal_pais', `${country.id}:${pmKey}`)) {
-          const { model, periodKey, scopeLabel } = await buildMonthlyCountryReport({ brandId: brand.id, countryId: country.id, monthKey: pmKey });
-          addReport(brand.id, { type: 'mensal_pais', periodKey, scopeLabel, generatedBy: 'auto', model });
-          generated++;
-        }
-      } catch (e) { errors.push(e.message); }
-    }
-
-    const platforms = new Set();
-    for (const country of brand.countries) for (const a of country.accounts) platforms.add(a.platform);
-    for (const platform of platforms) {
-      try {
-        if (!reportExists(brand.id, 'mensal_rede', `${platform}:${pmKey}`)) {
-          const { model, periodKey, scopeLabel } = await buildMonthlyPlatformReport({ brandId: brand.id, platform, monthKey: pmKey });
-          addReport(brand.id, { type: 'mensal_rede', periodKey, scopeLabel, generatedBy: 'auto', model });
-          generated++;
-        }
-      } catch (e) { errors.push(e.message); }
-    }
-
-    try {
-      if (!reportExists(brand.id, 'mensal_geral', `geral:${pmKey}`)) {
-        const { model, periodKey, scopeLabel } = await buildMonthlyGeneralReport({ brandId: brand.id, monthKey: pmKey });
-        addReport(brand.id, { type: 'mensal_geral', periodKey, scopeLabel, generatedBy: 'auto', model });
-        generated++;
+        generated += await runSchedule(brand, schedule);
+      } catch (e) {
+        errors.push(`Agendamento ${schedule.id} (${schedule.type}): ${e.message}`);
       }
-    } catch (e) { errors.push(e.message); }
+      const nextRunAt = computeNextRun(schedule.intervalValue, schedule.intervalUnit, new Date());
+      updateSchedule(brand.id, schedule.id, { lastRunAt: new Date().toISOString(), nextRunAt });
+    }
   }
 
   return { generated, errors };

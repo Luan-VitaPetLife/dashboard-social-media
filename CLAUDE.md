@@ -81,7 +81,9 @@ src/reportRenderer.js Os dois exportadores de relatório (PDF via pdfkit, DOCX v
                       de um modelo genérico único — ver seção própria abaixo
 src/reports.js        Os 5 tipos de relatório do briefing (D+7, Stories 24h, mensal por país/rede/
                       geral) + geração automática agendada — ver seção própria abaixo
-public/relatorios.html Tela do gerador de relatórios (geração manual + lista de relatórios gerados)
+public/relatorios.html Tela do gerador de relatórios (geração manual, agendamentos configuráveis
+                      pelo usuário, lista de relatórios gerados)
+public/sobre.html     Panorama da dashboard pro usuário final + cuidados no uso de IA
 public/sidebar.js     Sidebar compartilhada (mesmo padrão IIFE do dashboard principal); marca o item
                       ativo pelo nome do arquivo atual (`location.pathname`); expõe `window.escapeHtml`
                       global usado por qualquer página que injete texto livre via innerHTML
@@ -473,9 +475,9 @@ todos" os 5 tipos, "PDF e DOCX já juntos", "Ambas as opções" de geração).
      {label,text} }] }`. Um modelo só pros dois formatos evita que PDF e DOCX divirjam com o tempo.
   3. `reports.js` — os 5 `build*Report()` (um por tipo), cada um montando esse modelo a partir dos
      dashboards que **já existem** (`computeSocialDashboard`, `computeContentDashboard`,
-     `computeStoriesDashboard`, `computeGoalsDashboard`, `computeCofrinhoDashboard`) — nunca
+     `computeStoriesDashboard`, `computeGoalsDashboard`, `computeCofrinhoDashboard`). Nunca
      recalcula métrica por conta própria. `generateReport()` é o dispatcher da rota manual;
-     `checkAutoReports()` é chamado pelo agendador.
+     `checkScheduledReports()` é chamado periodicamente pelo agendador (ver "Agendamentos" abaixo).
   4. `public/relatorios.html` — formulário de geração (campos condicionais por tipo: País+Conteúdo
      pro D+7, País+Story pro Stories, País+Mês pro mensal por país, Canal+Mês pro mensal por rede,
      só Mês pro mensal geral) + lista dos relatórios já gerados com botões de baixar PDF/DOCX
@@ -488,13 +490,32 @@ todos" os 5 tipos, "PDF e DOCX já juntos", "Ambas as opções" de geração).
   mesmo modelo salvo. `reportExists(brandId, type, periodKey)` é o mecanismo de dedupe: `periodKey`
   é `mediaId` (D+7), `storyId` (Stories), ou `"<escopo>:<YYYY-MM>"` (mensais) — nunca deixa a
   geração automática criar o mesmo relatório duas vezes.
-- **Geração automática** (`checkAutoReports()`, chamado por `scheduledReports()` em `server.js`,
-  no mesmo ciclo de 12h do sync normal — sem intervalo próprio): D+7 dispara **uma vez por
-  conteúdo**, assim que `ageDays >= 7`; Stories dispara **uma vez por story**, assim que expira
-  (`ageHours >= 24`, ainda dentro da janela de retenção de 48h); os 3 mensais disparam **uma vez
-  por mês**, sempre pro **mês anterior já completo** (nunca o mês corrente, que ainda não
-  terminou). Sem `ANTHROPIC_API_KEY`, `checkAutoReports()` não gera nada (todo relatório depende de
-  algum texto sintetizado por IA) — evita gerar um relatório "capado" sozinho.
+- **Agendamentos automáticos, 100% configuráveis pelo usuário (redesenhado em 23/07/2026, a
+  pedido do Luan: "não coloque um tempo no sistema, deixe o usuário programar").** Nada roda
+  sozinho por padrão: um relatório só é gerado automaticamente se existir um agendamento ativo
+  criado pela própria tela de Relatórios. Cada agendamento (`store.schedules[brandId]`) tem tipo,
+  escopo (país/canal, com opção "todos") e frequência definida como `intervalValue` + `intervalUnit`
+  (`hours`/`days`/`months`) — sem cron nem horário fixo em código nenhum.
+  - `checkScheduledReports()` (`reports.js`), chamado por `scheduledReports()` em `server.js` a
+    cada `REPORT_SCHEDULE_CHECK_MINUTES` (padrão 30min, intervalo próprio e mais curto que o sync
+    de 12h porque um agendamento pode ser "a cada 1 hora"): para cada agendamento ativo com
+    `nextRunAt` vencido, chama `runSchedule()` e recalcula `nextRunAt = agora + intervalo` (nunca
+    acumula disparos retroativos se o servidor ficou fora do ar).
+  - **D+7/Stories continuam com dedupe por item** (`reportExists`, chave `mediaId`/`storyId`) — o
+    intervalo do agendamento só controla de quanto em quanto tempo o sistema procura por
+    conteúdo/story novo que cruzou o checkpoint (7 dias / expirado), nunca regenera o mesmo item.
+  - **Mensal (país/rede/geral) não usa dedupe** — cada disparo gera um snapshot novo do mês
+    corrente (`currentMonthKey()`, não mais travado no "mês anterior completo" do design antigo),
+    de propósito: é assim que dá pra ter, por exemplo, um "mensal geral" toda semana, acumulando
+    histórico em vez de sobrescrever.
+  - Sem `ANTHROPIC_API_KEY`, `checkScheduledReports()` não roda nenhum agendamento (todo relatório
+    depende de algum texto sintetizado por IA) — evita gerar um relatório "capado" sozinho.
+- **Nome customizado (opcional), tanto no gerador manual quanto no de agendamento** (23/07/2026):
+  campo "Nome" livre em ambos os formulários. Quando preenchido, `applyCustomName()` (`reports.js`)
+  substitui o título do PDF/DOCX pelo nome escolhido, preservando o título padrão (tipo + escopo)
+  como parte do subtítulo, nunca perdendo a informação de que tipo de relatório é aquele. Na lista
+  de relatórios/agendamentos, o nome vira o texto principal, com o tipo padrão aparecendo como
+  detalhe secundário.
 - **Duas causas bem diferentes pro mesmo "sem texto de IA" — não confundir** (`aiFallbackText()`
   em `reports.js`): "ANTHROPIC_API_KEY não configurado" (problema de configuração) vs. "a chamada à
   IA falhou" (chave configurada mas a chamada deu erro de verdade — chave inválida/revogada, rate
@@ -536,7 +557,21 @@ todos" os 5 tipos, "PDF e DOCX já juntos", "Ambas as opções" de geração).
   já visto em produção (ver pendência de rotação de chave); o pipeline inteiro (dados, PDF, DOCX,
   UI) foi validado de ponta a ponta mesmo assim, usando o texto de fallback "a chamada à IA
   falhou" no lugar do texto gerado — só falta uma chave válida pros textos de IA aparecerem de
-  verdade nos relatórios.
+  verdade nos relatórios. **Nota (23/07/2026, mais tarde):** o Luan trocou a chave; a nova
+  funciona (confirmado com chamada real). O redesenho de agendamentos (config-driven, sem
+  cadência fixa) e o campo "Nome" foram implementados depois dessa troca e testados via CRUD por
+  curl (sem gastar crédito de IA à toa — ver `feedback_minimizar_creditos_anthropic_key` na
+  memória do projeto).
+
+### Sobre a dashboard (`public/sobre.html`)
+Página de apresentação/documentação pro usuário final (23/07/2026, a pedido do Luan) — panorama
+de cada funcionalidade (Visão geral, Conteúdos, Metas, Stories, Cofrinho, Chamados, Relatórios,
+Configurações) e uma seção dedicada de **cuidados no uso de IA**: sempre sob demanda por padrão
+(nunca roda sozinha sem agendamento explícito), nunca decide número bruto (só interpreta dado já
+coletado), todo texto rotulado "Gerado por IA em...", pode falhar (chave inválida/rate limit,
+sempre dá pra gerar de novo), tem custo real por chamada (cuidado com agendamentos muito
+frequentes) e nunca compartilha nada fora do que já está na tela. Página estática, sem seletor de
+marca/país (não depende de dado nenhum) — só `sidebar.js` pro menu.
 
 ### Animações de carregamento (`public/sidebar.js`)
 Implementado em 23/07/2026, a pedido do Luan (peças originais de uiverse.io — Nawsome e

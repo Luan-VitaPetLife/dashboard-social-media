@@ -369,7 +369,7 @@ function attachHandlers(root) {
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
     });
 
     const entryForm = block.querySelector(`#entry-form-${countryId}`);
@@ -392,7 +392,7 @@ function attachHandlers(root) {
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
     });
   });
 }

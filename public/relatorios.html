@@ -76,9 +76,10 @@
 
   .gen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
   .gen-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
-  .gen-field input[type=month]{width:100%;height:38px;border:1px solid var(--border2);border-radius:var(--radius-sm);
-    background:var(--surface2);padding:0 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit}
-  .gen-field input[type=month]:focus{border-color:var(--text)}
+  .gen-field input[type=month],.gen-field input[type=text]{width:100%;height:38px;border:1px solid var(--border2);
+    border-radius:var(--radius-sm);background:var(--surface2);padding:0 12px;font-size:13px;color:var(--text);
+    outline:none;font-family:inherit}
+  .gen-field input[type=month]:focus,.gen-field input[type=text]:focus{border-color:var(--text)}
   .gen-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .gen-btn{height:38px;padding:0 20px;border-radius:20px;border:none;background:var(--text);color:#fff;
     font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
@@ -109,6 +110,32 @@
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
 
+  /* ── Agendamentos automáticos — mesmo grid de campos condicionais do gerador manual, mais
+     frequência (número + unidade) ── */
+  .sch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px}
+  .sch-freq-row{display:flex;align-items:center;gap:8px}
+  .sch-freq-row input[type=number]{width:70px;height:38px;border:1px solid var(--border2);border-radius:var(--radius-sm);
+    background:var(--surface2);padding:0 10px;font-size:13px;color:var(--text);outline:none;font-family:inherit}
+  .sch-freq-row input[type=number]:focus{border-color:var(--text)}
+  .sch-freq-row .field-dd{flex:1}
+  .sch-list{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+  .sch-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius-sm);flex-wrap:wrap}
+  .sch-row.inactive{opacity:.55}
+  .sch-row-main{flex:1;min-width:220px}
+  .sch-type{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .sch-scope{font-size:11.5px;color:var(--sub);margin-top:3px}
+  .sch-meta{font-size:10.5px;color:var(--muted);margin-top:6px}
+  .sch-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+
+  /* ── toggle switch (mesmo componente de configuracoes.html) ── */
+  .switch{position:relative;width:42px;height:24px;flex-shrink:0}
+  .switch input{opacity:0;width:0;height:0}
+  .switch-track{position:absolute;inset:0;background:var(--border2);border-radius:20px;cursor:pointer;transition:background .2s}
+  .switch-track::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+  .switch input:checked + .switch-track{background:var(--green)}
+  .switch input:checked + .switch-track::before{transform:translateX(18px)}
+
   /* ── modal de confirmação (substitui window.confirm nativo) ── */
   .modal-overlay{position:fixed;inset:0;background:rgba(28,43,57,.4);z-index:1100;display:none;
     align-items:center;justify-content:center;padding:20px}
@@ -128,7 +155,7 @@
   <header class="topbar">
     <div>
       <h1>Relatórios</h1>
-      <div class="sub">Geração de relatórios em PDF/DOCX — D+7, Stories 24h e mensais</div>
+      <div class="sub">Geração de relatórios em PDF/DOCX: D+7, Stories 24h e mensais</div>
     </div>
     <div class="topbar-controls">
       <div class="filter-pill" id="brandPillStatic" style="display:none">
@@ -146,6 +173,7 @@
     <div class="card" id="genCard">
       <div class="gen-grid">
         <div class="gen-field"><label>Tipo de relatório</label><div class="field-dd" id="ddTipo"></div></div>
+        <div class="gen-field"><label>Nome (opcional)</label><input type="text" id="inpNome" placeholder="Ex: Relatório para a diretoria" maxlength="120"></div>
         <div class="gen-field" id="fieldPais" style="display:none"><label>País</label><div class="field-dd" id="ddPais"></div></div>
         <div class="gen-field" id="fieldConteudo" style="display:none"><label>Conteúdo</label><div class="field-dd" id="ddConteudo"></div></div>
         <div class="gen-field" id="fieldStory" style="display:none"><label>Story</label><div class="field-dd" id="ddStory"></div></div>
@@ -157,6 +185,32 @@
         <span class="gen-msg" id="genMsg"></span>
       </div>
     </div>
+
+    <h3 class="section">Agendamentos automáticos</h3>
+    <div class="card">
+      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 16px">
+        Nada é gerado sozinho por padrão. Só relatórios que você configurar aqui embaixo rodam
+        automaticamente, no intervalo que você escolher. Sem nenhum agendamento ativo, a única
+        forma de gerar um relatório é o botão manual acima.
+      </p>
+      <div class="sch-grid">
+        <div class="gen-field"><label>Tipo de relatório</label><div class="field-dd" id="ddTipoAgenda"></div></div>
+        <div class="gen-field"><label>Nome (opcional)</label><input type="text" id="inpNomeAgenda" placeholder="Ex: Relatório para a diretoria" maxlength="120"></div>
+        <div class="gen-field" id="fieldPaisAgenda" style="display:none"><label>País</label><div class="field-dd" id="ddPaisAgenda"></div></div>
+        <div class="gen-field" id="fieldCanalAgenda" style="display:none"><label>Canal</label><div class="field-dd" id="ddCanalAgenda"></div></div>
+        <div class="gen-field"><label>Repetir a cada</label>
+          <div class="sch-freq-row">
+            <input type="number" id="inpIntervalValue" min="1" value="1">
+            <div class="field-dd" id="ddIntervalUnit"></div>
+          </div>
+        </div>
+      </div>
+      <div class="gen-actions">
+        <button class="gen-btn" id="schBtn"><i class="bi bi-alarm"></i> Criar agendamento</button>
+        <span class="gen-msg" id="schMsg"></span>
+      </div>
+    </div>
+    <div class="sch-list" id="schList" style="margin-top:14px"></div>
 
     <h3 class="section">Relatórios gerados</h3>
     <div class="rep-toolbar">
@@ -310,6 +364,9 @@ function onBrandChanged() {
   genCountryId = null; genMediaId = null; genStoryId = null;
   updateGenFields();
   loadReports();
+  schCountryId = null; schPlatform = null;
+  updateSchFields();
+  loadSchedules();
 }
 
 // ── formulário de geração — campos visíveis dependem do tipo escolhido ──
@@ -362,6 +419,119 @@ function updateGenBtn() {
   document.getElementById('genBtn').disabled = !ok;
 }
 
+// ── Agendamentos automáticos — mesmos tipos do gerador manual, mas escopo aceita "todos" (país/
+// canal em branco = itera tudo em src/reports.js) e não tem picker de item específico (D+7/
+// Stories agendados escaneiam o escopo procurando itens novos, não miram um post/story fixo). ──
+const INTERVAL_UNIT_META = { hours: 'hora(s)', days: 'dia(s)', months: 'mês(es)' };
+const INTERVAL_UNIT_OPTIONS = [{ value: 'hours', label: 'Hora(s)' }, { value: 'days', label: 'Dia(s)' }, { value: 'months', label: 'Mês(es)' }];
+
+let schType = null, schCountryId = null, schPlatform = null, schIntervalUnit = 'days';
+let schedules = [];
+
+function schCountryOptions() {
+  return [{ value: '', label: 'Todos os países' }, ...countryOptions()];
+}
+
+function updateSchFields() {
+  document.getElementById('fieldPaisAgenda').style.display = ['d7', 'stories', 'mensal_pais'].includes(schType) ? '' : 'none';
+  document.getElementById('fieldCanalAgenda').style.display = schType === 'mensal_rede' ? '' : 'none';
+
+  renderFieldDropdown('ddPaisAgenda', schCountryOptions(), schCountryId, (v) => { schCountryId = v; }, 'Todos os países');
+  renderFieldDropdown('ddCanalAgenda', [{ value: '', label: 'Todos os canais' }, { value: 'instagram', label: 'Instagram', icon: 'bi-instagram' }, { value: 'facebook', label: 'Facebook', icon: 'bi-facebook' }], schPlatform, (v) => { schPlatform = v; }, 'Todos os canais');
+}
+
+renderFieldDropdown('ddTipoAgenda', TIPO_OPTIONS, schType, (v) => {
+  schType = v; schCountryId = null; schPlatform = null;
+  updateSchFields();
+}, 'Selecione o tipo');
+
+renderFieldDropdown('ddIntervalUnit', INTERVAL_UNIT_OPTIONS, schIntervalUnit, (v) => { schIntervalUnit = v; }, 'Unidade');
+
+document.getElementById('schBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('schBtn');
+  const msg = document.getElementById('schMsg');
+  if (!schType) { msg.textContent = 'Escolha um tipo de relatório.'; msg.className = 'gen-msg err'; return; }
+  const intervalValue = Number(document.getElementById('inpIntervalValue').value);
+  if (!Number.isFinite(intervalValue) || intervalValue <= 0) { msg.textContent = 'Intervalo precisa ser um número positivo.'; msg.className = 'gen-msg err'; return; }
+  btn.disabled = true;
+  msg.textContent = '';
+  msg.className = 'gen-msg';
+  const name = document.getElementById('inpNomeAgenda').value.trim();
+  try {
+    const res = await fetch('/api/schedules', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, type: schType, name: name || undefined, countryId: schCountryId, platform: schPlatform, intervalValue, intervalUnit: schIntervalUnit }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao criar agendamento.');
+    msg.textContent = 'Agendamento criado!';
+    msg.className = 'gen-msg ok';
+    document.getElementById('inpNomeAgenda').value = '';
+    loadSchedules();
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.className = 'gen-msg err';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadSchedules() {
+  if (!brandId) return;
+  const res = await fetch(`/api/schedules?brand=${brandId}`);
+  schedules = await res.json();
+  renderSchList();
+}
+
+function intervalLabel(s) {
+  return `A cada ${s.intervalValue} ${INTERVAL_UNIT_META[s.intervalUnit] || s.intervalUnit}`;
+}
+
+function schScopeLabel(s) {
+  if (s.type === 'mensal_rede') return s.platform ? (s.platform === 'instagram' ? 'Instagram' : 'Facebook') : 'Todos os canais';
+  if (s.type === 'mensal_geral') return 'Geral';
+  if (!s.countryId) return 'Todos os países';
+  const c = countryOptions().find(c => c.value === s.countryId);
+  return c ? c.label : s.countryId;
+}
+
+function renderSchList() {
+  const list = document.getElementById('schList');
+  if (!schedules.length) { list.innerHTML = '<div class="empty">nenhum agendamento criado ainda</div>'; return; }
+  list.innerHTML = schedules.map(s => `
+    <div class="sch-row ${s.active ? '' : 'inactive'}">
+      <div class="sch-row-main">
+        <div class="sch-type"><i class="bi ${REPORT_TYPE_META[s.type]?.icon || 'bi-alarm'}"></i> ${escapeHtml(s.name || REPORT_TYPE_META[s.type]?.label || s.type)}</div>
+        <div class="sch-scope">${s.name ? escapeHtml(REPORT_TYPE_META[s.type]?.label || s.type) + ' · ' : ''}${escapeHtml(schScopeLabel(s))} · ${escapeHtml(intervalLabel(s))}</div>
+        <div class="sch-meta">${s.lastRunAt ? `Última execução: ${fmtDateTimeBR(s.lastRunAt)} · ` : ''}Próxima: ${fmtDateTimeBR(s.nextRunAt)}</div>
+      </div>
+      <div class="sch-actions">
+        <label class="switch" title="${s.active ? 'Desativar' : 'Ativar'}">
+          <input type="checkbox" data-sch-toggle="${s.id}" ${s.active ? 'checked' : ''}>
+          <span class="switch-track"></span>
+        </label>
+        <button class="rep-btn danger" data-sch-del="${s.id}" title="Excluir"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-sch-toggle]').forEach(input => {
+    input.addEventListener('change', async () => {
+      await fetch(`/api/schedules/${input.dataset.schToggle}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, active: input.checked }),
+      });
+      loadSchedules();
+    });
+  });
+  list.querySelectorAll('[data-sch-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await showConfirm('Excluir este agendamento? Ele para de gerar relatórios automaticamente.'))) return;
+      await fetch(`/api/schedules/${btn.dataset.schDel}?brand=${brandId}`, { method: 'DELETE' });
+      loadSchedules();
+    });
+  });
+}
+
 renderFieldDropdown('ddTipo', TIPO_OPTIONS, genType, (v) => {
   genType = v; genCountryId = null; genMediaId = null; genStoryId = null; genPlatform = null;
   document.getElementById('inpMes').value = '';
@@ -378,15 +548,17 @@ document.getElementById('genBtn').addEventListener('click', async () => {
   msg.className = 'gen-msg';
   const hideOverlay = showAiThinkingOverlay(document.getElementById('genCard'));
   const monthVal = document.getElementById('inpMes').value;
+  const name = document.getElementById('inpNome').value.trim();
   try {
     const res = await fetch('/api/reports/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brandId, type: genType, countryId: genCountryId, mediaId: genMediaId, storyId: genStoryId, platform: genPlatform, monthKey: monthVal || undefined }),
+      body: JSON.stringify({ brandId, type: genType, name: name || undefined, countryId: genCountryId, mediaId: genMediaId, storyId: genStoryId, platform: genPlatform, monthKey: monthVal || undefined }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Erro ao gerar relatório.');
     msg.textContent = 'Relatório gerado com sucesso!';
     msg.className = 'gen-msg ok';
+    document.getElementById('inpNome').value = '';
     loadReports();
   } catch (e) {
     msg.textContent = e.message;
@@ -414,8 +586,8 @@ function renderReportsList() {
   list.innerHTML = filtered.map(r => `
     <div class="rep-row">
       <div class="rep-row-main">
-        <div class="rep-type"><i class="bi ${REPORT_TYPE_META[r.type]?.icon || 'bi-file-earmark'}"></i> ${escapeHtml(REPORT_TYPE_META[r.type]?.label || r.type)}</div>
-        <div class="rep-scope">${escapeHtml(r.scopeLabel || '')}</div>
+        <div class="rep-type"><i class="bi ${REPORT_TYPE_META[r.type]?.icon || 'bi-file-earmark'}"></i> ${escapeHtml(r.name || REPORT_TYPE_META[r.type]?.label || r.type)}</div>
+        <div class="rep-scope">${r.name ? escapeHtml(REPORT_TYPE_META[r.type]?.label || r.type) + ' · ' : ''}${escapeHtml(r.scopeLabel || '')}</div>
         <div class="rep-meta">
           <span>Gerado em ${fmtDateTimeBR(r.generatedAt)}</span>
           <span class="rep-badge ${r.generatedBy === 'auto' ? 'auto' : ''}">${r.generatedBy === 'auto' ? 'Automático' : 'Manual'}</span>
@@ -439,6 +611,7 @@ function renderReportsList() {
 
 updateGenFields();
 document.getElementById('repList').innerHTML = pageLoaderHtml();
+document.getElementById('schList').innerHTML = pageLoaderHtml();
 loadRegistry();
 </script>
 </body>

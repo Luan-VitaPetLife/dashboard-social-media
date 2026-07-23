@@ -15,13 +15,14 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
-import { generateReport, checkAutoReports, REPORT_TYPES } from './src/reports.js';
+import { generateReport, checkScheduledReports, computeNextRun, REPORT_TYPES, INTERVAL_UNITS } from './src/reports.js';
 import { renderReportPdf, renderReportDocx } from './src/reportRenderer.js';
 import {
   setContentContext, setContentAiSummary, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings,
   getPeople, addPerson, updatePerson, deletePerson,
   getTickets, addTicket, updateTicket, deleteTicket, addTicketComment, deleteTicketComment,
   getReports, getReport, addReport, deleteReport,
+  getSchedules, addSchedule, updateSchedule, deleteSchedule,
 } from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
 
@@ -34,6 +35,10 @@ const SYNC_INTERVAL_MINUTES = Number(process.env.SYNC_INTERVAL_MINUTES || 720);
 // Stories vivem só 24h e somem de /{ig-id}/stories assim que expiram — o ciclo de 12h do sync
 // normal deixaria muitos passarem batido. Agendador próprio, bem mais frequente, só pra isso.
 const STORY_SYNC_INTERVAL_MINUTES = Number(process.env.STORY_SYNC_INTERVAL_MINUTES || 120);
+// Verificação dos agendamentos de relatório (ver src/reports.js) — próprio e mais frequente que
+// o sync de 12h porque a pessoa pode configurar um agendamento "a cada 1 hora" pela tela de
+// Relatórios; checar só a cada 12h faria esse agendamento nunca disparar no horário esperado.
+const REPORT_SCHEDULE_CHECK_MINUTES = Number(process.env.REPORT_SCHEDULE_CHECK_MINUTES || 30);
 
 // Necessário pra req.secure refletir o protocolo original (https) quando o Railway termina TLS
 // no proxy e repassa a requisição por http internamente — sem isso, o cookie de sessão marcado
@@ -445,19 +450,20 @@ app.post('/api/cofrinho/goals', (req, res) => {
 // PDF/DOCX de verdade só quando a pessoa clica em baixar.
 app.get('/api/reports', (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
-  res.json(getReports(brandId).map(r => ({ id: r.id, type: r.type, scopeLabel: r.scopeLabel, periodKey: r.periodKey, generatedAt: r.generatedAt, generatedBy: r.generatedBy })));
+  res.json(getReports(brandId).map(r => ({ id: r.id, type: r.type, name: r.name || null, scopeLabel: r.scopeLabel, periodKey: r.periodKey, generatedAt: r.generatedAt, generatedBy: r.generatedBy })));
 });
 
 // Gera um relatório sob demanda — mesmo motivo do syncLimiter em ai-summary: cada geração chama
 // a API da Anthropic de verdade (custa dinheiro), então fica no mesmo limite apertado.
 app.post('/api/reports/generate', syncLimiter, async (req, res) => {
   const brandId = req.body.brandId || getDefaultBrandId();
-  const { type, countryId, mediaId, storyId, platform, monthKey } = req.body;
+  const { type, name, countryId, mediaId, storyId, platform, monthKey } = req.body;
   if (!REPORT_TYPES.includes(type)) return res.status(400).json({ error: 'Tipo de relatório inválido.' });
+  const cleanName = name ? String(name).trim().slice(0, 120) : null;
   try {
-    const { model, periodKey, scopeLabel } = await generateReport(brandId, type, { countryId, mediaId, storyId, platform, monthKey });
-    const record = addReport(brandId, { type, periodKey, scopeLabel, generatedBy: 'manual', model });
-    res.json({ id: record.id, type: record.type, scopeLabel: record.scopeLabel, periodKey: record.periodKey, generatedAt: record.generatedAt, generatedBy: record.generatedBy });
+    const { model, periodKey, scopeLabel } = await generateReport(brandId, type, { countryId, mediaId, storyId, platform, monthKey, name: cleanName });
+    const record = addReport(brandId, { type, name: cleanName, periodKey, scopeLabel, generatedBy: 'manual', model });
+    res.json({ id: record.id, type: record.type, name: record.name, scopeLabel: record.scopeLabel, periodKey: record.periodKey, generatedAt: record.generatedAt, generatedBy: record.generatedBy });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -494,6 +500,57 @@ app.get('/api/reports/:id/docx', async (req, res) => {
 app.delete('/api/reports/:id', (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   deleteReport(brandId, req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Agendamentos de relatório (config-driven pela tela de Relatórios — sem horário fixo no
+// código, ver checkScheduledReports em src/reports.js) ──────────────────────────────────────
+app.get('/api/schedules', (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  res.json(getSchedules(brandId));
+});
+
+app.post('/api/schedules', (req, res) => {
+  const brandId = req.body.brandId || getDefaultBrandId();
+  const { type, name, countryId, platform, intervalValue, intervalUnit } = req.body;
+  if (!REPORT_TYPES.includes(type)) return res.status(400).json({ error: 'Tipo de relatório inválido.' });
+  if (!INTERVAL_UNITS.includes(intervalUnit)) return res.status(400).json({ error: 'Unidade de intervalo inválida.' });
+  const value = Number(intervalValue);
+  if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ error: 'Intervalo precisa ser um número positivo.' });
+  const nextRunAt = computeNextRun(value, intervalUnit, new Date());
+  const schedule = addSchedule(brandId, {
+    type, name: name ? String(name).trim().slice(0, 120) : null, countryId: countryId || null, platform: platform || null,
+    intervalValue: value, intervalUnit, nextRunAt,
+  });
+  res.json(schedule);
+});
+
+app.patch('/api/schedules/:id', (req, res) => {
+  const brandId = req.body.brandId || getDefaultBrandId();
+  const patch = {};
+  if ('name' in req.body) patch.name = req.body.name ? String(req.body.name).trim().slice(0, 120) : null;
+  if ('active' in req.body) patch.active = Boolean(req.body.active);
+  if ('countryId' in req.body) patch.countryId = req.body.countryId || null;
+  if ('platform' in req.body) patch.platform = req.body.platform || null;
+  if ('intervalValue' in req.body || 'intervalUnit' in req.body) {
+    const value = Number(req.body.intervalValue);
+    const unit = req.body.intervalUnit;
+    if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ error: 'Intervalo precisa ser um número positivo.' });
+    if (!INTERVAL_UNITS.includes(unit)) return res.status(400).json({ error: 'Unidade de intervalo inválida.' });
+    patch.intervalValue = value;
+    patch.intervalUnit = unit;
+    // Muda o intervalo → recalcula a partir de agora, pra pessoa ver o efeito imediatamente em vez
+    // de esperar o próximo disparo já agendado com o intervalo antigo.
+    patch.nextRunAt = computeNextRun(value, unit, new Date());
+  }
+  const schedule = updateSchedule(brandId, req.params.id, patch);
+  if (!schedule) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+  res.json(schedule);
+});
+
+app.delete('/api/schedules/:id', (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  deleteSchedule(brandId, req.params.id);
   res.json({ ok: true });
 });
 
@@ -583,21 +640,20 @@ async function scheduledStorySync() {
   }
 }
 
-// Geração automática de relatórios (D+7/Stories por item, mensal por país/rede/geral uma vez
-// por mês) — roda no mesmo ciclo do sync normal (não precisa de intervalo próprio: D+7/Stories
-// só mudam de estado quando o sync/story sync mais recente traz dado novo, e mensal só dispara
-// uma vez por mês mesmo checando a cada 12h). Ver checkAutoReports() em src/reports.js —
-// idempotente (nunca gera o mesmo relatório duas vezes) e não faz nada sem ANTHROPIC_API_KEY.
+// Verifica os agendamentos de relatório criados pela tela de Relatórios (nenhum horário fixo
+// aqui no código — ver checkScheduledReports() em src/reports.js). Intervalo próprio e mais
+// curto que o sync normal (REPORT_SCHEDULE_CHECK_MINUTES, padrão 30min) porque um agendamento
+// pode ser "a cada 1 hora" — checar só a cada 12h faria isso nunca disparar no horário esperado.
 let reportsInFlight = false;
 async function scheduledReports() {
   if (reportsInFlight) return;
   reportsInFlight = true;
   try {
-    const r = await checkAutoReports();
-    if (r.errors.length) console.warn('Geração automática de relatórios com avisos:', r.errors);
-    if (r.generated) console.log(`Relatórios gerados automaticamente: ${r.generated}`);
+    const r = await checkScheduledReports();
+    if (r.errors.length) console.warn('Geração agendada de relatórios com avisos:', r.errors);
+    if (r.generated) console.log(`Relatórios gerados por agendamento: ${r.generated}`);
   } catch (e) {
-    console.error('Geração automática de relatórios falhou:', e.message);
+    console.error('Geração agendada de relatórios falhou:', e.message);
   } finally {
     reportsInFlight = false;
   }
@@ -610,5 +666,5 @@ app.listen(PORT, async () => {
   await scheduledReports();
   setInterval(scheduledSync, SYNC_INTERVAL_MINUTES * 60 * 1000);
   setInterval(scheduledStorySync, STORY_SYNC_INTERVAL_MINUTES * 60 * 1000);
-  setInterval(scheduledReports, SYNC_INTERVAL_MINUTES * 60 * 1000);
+  setInterval(scheduledReports, REPORT_SCHEDULE_CHECK_MINUTES * 60 * 1000);
 });

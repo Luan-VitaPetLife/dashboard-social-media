@@ -330,7 +330,7 @@ const CONTEXT_FIELDS = [
 
 function checkpointLabel(item, days, checkpoint) {
   if (checkpoint) return `D+${days}: ${fmt(checkpoint.reach)} alcance`;
-  if (item.ageDays < days) return `D+${days}: post tem ${item.ageDays} dia(s) — ainda sem esse checkpoint`;
+  if (item.ageDays < days) return `D+${days}: post tem ${item.ageDays} dia(s), ainda sem esse checkpoint`;
   return `D+${days}: ainda sem leitura registrada nesse checkpoint`;
 }
 
@@ -393,7 +393,7 @@ function cardHtml(item) {
     </div>
     <p class="cnt-caption">${captionPreview}</p>
     ${item.latest ? `<div class="cnt-metrics">${metricsHtml(item)}</div>` : '<div class="empty">sem leitura ainda</div>'}
-    ${item.isBoosted ? `<div class="cnt-median-note">Comparado com a mediana de conteúdo orgânico — não entra no cálculo dessa mediana, por ter tido distribuição paga.</div>` : ''}
+    ${item.isBoosted ? `<div class="cnt-median-note">Comparado com a mediana de conteúdo orgânico. Não entra no cálculo dessa mediana, por ter tido distribuição paga.</div>` : ''}
     <div class="cnt-checkpoints">
       <span>${checkpointLabel(item, 7, item.checkpoint7)}</span>
       <span>${checkpointLabel(item, 14, item.checkpoint14)}</span>
@@ -404,7 +404,7 @@ function cardHtml(item) {
         <h4><i class="bi bi-stars"></i> Resumo por IA</h4>
         <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
       </div>
-      <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo — clique em "Gerar resumo"</div>'}</div>
+      <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
     </div>
     <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
     <div class="cnt-context">${contextFieldsHtml(item)}</div>
@@ -557,7 +557,7 @@ function renderSummaryChart(s) {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' },
   });
   document.getElementById('orgPagoLegend').innerHTML = donutData.map(d =>
-    `<span><span class="dot" style="background:${d.color}"></span>${d.label} — ${d.value} (${s.total ? ((d.value/s.total)*100).toLocaleString('pt-BR',{maximumFractionDigits:1}) : 0}%)</span>`
+    `<span><span class="dot" style="background:${d.color}"></span>${d.label}: ${d.value} (${s.total ? ((d.value/s.total)*100).toLocaleString('pt-BR',{maximumFractionDigits:1}) : 0}%)</span>`
   ).join('');
 
   setSummaryChart('formatChart', {
@@ -620,7 +620,7 @@ function render(d) {
   const grid = document.getElementById('cntGrid');
   document.getElementById('footerNote').textContent = d.items.length
     ? `${d.items.length} conteúdo(s) rastreado(s)`
-    : 'nenhum conteúdo rastreado ainda — rode uma sincronização';
+    : 'nenhum conteúdo rastreado ainda, rode uma sincronização';
   grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda</div>';
   attachCardHandlers(grid);
   if (!sumHidden) renderSummary(d);

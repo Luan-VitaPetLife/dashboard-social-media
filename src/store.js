@@ -424,3 +424,53 @@ export function deleteReport(brandId, id) {
   saveJson();
   mongoSet('reports', cache.reports);
 }
+
+// ── Agendamentos de relatório (config-driven pelo usuário — nenhum horário fixo no código) ──
+// schedules[brandId] = [ {id, type, countryId, platform, intervalValue, intervalUnit, active,
+// lastRunAt, nextRunAt, createdAt, updatedAt}, ... ]. `nextRunAt` é recalculado a cada disparo
+// (ver checkScheduledReports em src/reports.js) — nunca existe um cron/horário fixo no código,
+// só o que cada agendamento define pela tela de Relatórios.
+export function getSchedules(brandId) {
+  return (cache.schedules || {})[brandId] || [];
+}
+
+export function getSchedule(brandId, id) {
+  return getSchedules(brandId).find(s => s.id === id) || null;
+}
+
+export function addSchedule(brandId, schedule) {
+  if (!cache.schedules) cache.schedules = {};
+  if (!cache.schedules[brandId]) cache.schedules[brandId] = [];
+  const now = new Date().toISOString();
+  const record = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    active: true,
+    lastRunAt: null,
+    createdAt: now,
+    updatedAt: now,
+    ...schedule,
+  };
+  cache.schedules[brandId].push(record);
+  saveJson();
+  mongoSet('schedules', cache.schedules);
+  return record;
+}
+
+export function updateSchedule(brandId, id, patch) {
+  const schedule = getSchedules(brandId).find(s => s.id === id);
+  if (!schedule) return null;
+  for (const key of ['type', 'name', 'countryId', 'platform', 'intervalValue', 'intervalUnit', 'active', 'lastRunAt', 'nextRunAt']) {
+    if (key in patch) schedule[key] = patch[key];
+  }
+  schedule.updatedAt = new Date().toISOString();
+  saveJson();
+  mongoSet('schedules', cache.schedules);
+  return schedule;
+}
+
+export function deleteSchedule(brandId, id) {
+  if (!cache.schedules?.[brandId]) return;
+  cache.schedules[brandId] = cache.schedules[brandId].filter(s => s.id !== id);
+  saveJson();
+  mongoSet('schedules', cache.schedules);
+}

@@ -327,11 +327,11 @@
       <button class="notice-collapse-btn" id="limitNoteCollapseBtn" title="Minimizar aviso" aria-label="Minimizar aviso"><i class="bi bi-x-lg"></i></button>
       <i class="bi bi-info-circle-fill"></i>
       <div class="limit-note-body">
-        <p><b>Avisos e limitações conhecidas</b> — quando um dado não está disponível, mostramos "—" ou
+        <p><b>Avisos e limitações conhecidas:</b> quando um dado não está disponível, mostramos "—" ou
         "sem dado ainda" em vez de estimar ou completar um número. As limitações abaixo são reais (da
         própria API ou do que ainda não foi construído), não falhas do sistema:</p>
         <ul class="limit-note-grid">
-          <li><b>Conteúdo (Instagram):</b> só rastreamos posts/Reels dos últimos 35 dias — publicações
+          <li><b>Conteúdo (Instagram):</b> só rastreamos posts/Reels dos últimos 35 dias. Publicações
           mais antigas não aparecem na ficha, e os checkpoints D+7/D+14/D+30 só existem pra posts
           publicados a partir de quando a coleta começou.</li>
           <li><b>Orgânico × Pago:</b> o sinal depende da conta de anúncio da Meta estar configurada por
@@ -339,16 +339,16 @@
           <li><b>Stories 24h:</b> a API do Instagram só entrega avanços+voltas+saídas somados, não por
           tela individual; um story publicado e expirado entre duas sincronizações pode não ser
           capturado.</li>
-          <li><b>TikTok:</b> ainda não integrado — app cadastrado na TikTok for Business, aguardando
+          <li><b>TikTok:</b> ainda não integrado, app cadastrado na TikTok for Business, aguardando
           aprovação.</li>
-          <li><b>Resumo por IA:</b> disponível na ficha de conteúdo (Instagram), mas só sob demanda —
-          a equipe clica pra gerar por post, nunca é gerado sozinho. Ainda não existe pra Stories nem
+          <li><b>Resumo por IA:</b> disponível na ficha de conteúdo (Instagram), mas só sob demanda
+          (a equipe clica pra gerar por post, nunca é gerado sozinho). Ainda não existe pra Stories nem
           em nível de perfil.</li>
           <li><b>Social Listening e relatórios automáticos:</b> ainda não implementados.</li>
           <li><b>Vídeo (Reels):</b> tempo assistido, retenção e força do gancho não são fornecidos pela
           API atual do Instagram.</li>
           <li><b>Cofrinho do Social:</b> mostra só vendas rastreadas por cupom/link informadas
-          manualmente — não representa sozinho toda a influência das redes sobre as compras.</li>
+          manualmente, não representa sozinho toda a influência das redes sobre as compras.</li>
         </ul>
       </div>
     </div>
@@ -401,17 +401,17 @@
         <div class="chart-card-head">
           <h2 id="trendTitle">Comparação por país</h2>
           <div class="filter-pill csel" id="cselMetric">
-            <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram — Seguidores</span><span class="arr">▾</span>
+            <span class="lbl">Métrica</span><span class="val" id="metricVal">Instagram · Seguidores</span><span class="arr">▾</span>
             <div class="csel-pop">
-              <div class="csel-opt active" data-value="igFollowers">Instagram — Seguidores</div>
-              <div class="csel-opt" data-value="fbLikes">Facebook — Curtidas</div>
-              <div class="csel-opt" data-value="fbFollowers">Facebook — Seguidores</div>
+              <div class="csel-opt active" data-value="igFollowers">Instagram · Seguidores</div>
+              <div class="csel-opt" data-value="fbLikes">Facebook · Curtidas</div>
+              <div class="csel-opt" data-value="fbFollowers">Facebook · Seguidores</div>
             </div>
           </div>
         </div>
         <div class="legend-row" id="trendLegend"></div>
         <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
-        <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período — o gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
+        <div class="chart-note" id="chartNote" style="display:none">Ainda com pouco histórico nesse período. O gráfico fica mais claro conforme os dias passam e mais sincronizações acontecem.</div>
       </div>
 
       <div class="card">
@@ -454,7 +454,7 @@
     <h3 class="section">Orgânico × Pago</h3>
     <div class="card">
       <div class="chart-card-head"><h2>Dependência de distribuição paga (Instagram)</h2></div>
-      <div class="orgpago-note">Ponderado por alcance dos conteúdos rastreados no período selecionado — não analisa investimento, só sinaliza a origem da distribuição.</div>
+      <div class="orgpago-note">Ponderado por alcance dos conteúdos rastreados no período selecionado. Não analisa investimento, só sinaliza a origem da distribuição.</div>
       <div class="orgpago-grid" id="orgPagoGrid"><div class="empty">carregando…</div></div>
       <div class="orgpago-partial" id="orgPagoPartialNote" style="display:none"></div>
     </div>
@@ -517,9 +517,9 @@ function countryColor(countryId, idx) {
 }
 function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
 const METRIC_SOURCES = {
-  igFollowers: { label: 'Instagram — Seguidores', key: 'followers', platform: 'instagram' },
-  fbLikes:     { label: 'Facebook — Curtidas', key: 'likes', platform: 'facebook' },
-  fbFollowers: { label: 'Facebook — Seguidores', key: 'followers', platform: 'facebook' },
+  igFollowers: { label: 'Instagram · Seguidores', key: 'followers', platform: 'instagram' },
+  fbLikes:     { label: 'Facebook · Curtidas', key: 'likes', platform: 'facebook' },
+  fbFollowers: { label: 'Facebook · Seguidores', key: 'followers', platform: 'facebook' },
 };
 let metric = localStorage.getItem('coco_sm_metric') || 'igFollowers';
 if (!METRIC_SOURCES[metric]) metric = 'igFollowers';
@@ -802,7 +802,7 @@ function drawTrendChart(d) {
   ).join('');
   document.getElementById('trendTitle').textContent = seriesByCountry.length > 1
     ? 'Comparação ' + seriesByCountry.map(s => s.name).join(' × ')
-    : seriesByCountry.length === 1 ? 'Tendência — ' + seriesByCountry[0].name
+    : seriesByCountry.length === 1 ? 'Tendência · ' + seriesByCountry[0].name
     : 'Comparação por país';
 
   // Com menos de 2 pontos numa das linhas, o Chart.js não tem o que traçar (só um ponto
@@ -1040,7 +1040,7 @@ function renderOrganicPaid(contentData) {
     if (!c.hasAdAccount) {
       return `<div class="orgpago-item"><div style="width:100%">
         <div class="orgpago-cname">${flag} ${c.countryName}</div>
-        <div class="orgpago-unavail">Conta de anúncio não configurada para este país — sinal indisponível.</div>
+        <div class="orgpago-unavail">Conta de anúncio não configurada para este país, sinal indisponível.</div>
       </div></div>`;
     }
     if (c.totalReach <= 0) {
@@ -1054,8 +1054,8 @@ function renderOrganicPaid(contentData) {
       <div style="flex:1">
         <div class="orgpago-cname">${flag} ${c.countryName}</div>
         <div class="orgpago-legend">
-          <div><span class="dot" style="background:var(--green)"></span>Orgânico — ${c.organicPct.toFixed(0)}% (${c.organicCount} post${c.organicCount === 1 ? '' : 's'})</div>
-          <div><span class="dot" style="background:var(--gold)"></span>Impulsionado — ${c.boostedPct.toFixed(0)}% (${c.boostedCount} post${c.boostedCount === 1 ? '' : 's'})</div>
+          <div><span class="dot" style="background:var(--green)"></span>Orgânico: ${c.organicPct.toFixed(0)}% (${c.organicCount} post${c.organicCount === 1 ? '' : 's'})</div>
+          <div><span class="dot" style="background:var(--gold)"></span>Impulsionado: ${c.boostedPct.toFixed(0)}% (${c.boostedCount} post${c.boostedCount === 1 ? '' : 's'})</div>
         </div>
       </div>
     </div>`;
@@ -1072,7 +1072,7 @@ function renderOrganicPaid(contentData) {
 
   if (contentData.organicPaid.partialCoverage) {
     partialNote.style.display = 'block';
-    partialNote.textContent = 'O período selecionado começa antes da janela de retenção do conteúdo rastreado — parte dele pode não estar refletida neste sinal.';
+    partialNote.textContent = 'O período selecionado começa antes da janela de retenção do conteúdo rastreado. Parte dele pode não estar refletida neste sinal.';
   } else {
     partialNote.style.display = 'none';
   }

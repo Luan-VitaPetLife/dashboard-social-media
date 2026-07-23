@@ -189,6 +189,7 @@ window.initCollapsibleNotice = initCollapsibleNotice;
     <a class="nav-item" href="/relatorios"><i class="bi bi-file-earmark-bar-graph-fill nav-icon"></i> Relatórios</a>
   </div>
   <div class="nav-group" id="sidebarBottomGroup" style="margin-top:auto">
+    <a class="nav-item" href="/sobre"><i class="bi bi-info-circle-fill nav-icon"></i> Sobre</a>
     <a class="nav-item" href="/configuracoes"><i class="bi bi-gear-fill nav-icon"></i> Configurações</a>
     <a class="nav-item" href="#" id="sidebarLogout" style="display:none"><i class="bi bi-box-arrow-right nav-icon"></i> Sair</a>
   </div>
