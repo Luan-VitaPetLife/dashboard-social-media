@@ -97,14 +97,34 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
 
-  /* ── Avisos e limitações conhecidas (mesma linguagem visual do "Limite" do Cofrinho) ── */
-  .limit-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
-    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
+  /* ── Avisos e limitações conhecidas (mesma linguagem visual do "Limite" do Cofrinho) ──
+     Pode ser minimizado (botão "x" no canto) — encolhe com animação e vira uma bolinha fixa
+     no canto da tela, saindo do fluxo normal pra dar espaço aos cards subirem no lugar dele. */
+  .limit-note{position:relative;display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px;
+    transform-origin:top right;opacity:1;transform:scale(1);max-height:640px;overflow:hidden;
+    transition:opacity .22s ease,transform .22s ease,max-height .32s ease,margin-bottom .32s ease,padding .32s ease}
+  .limit-note.is-collapsing{opacity:0;transform:scale(.92);max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0}
   .limit-note i{color:var(--gold);font-size:16px;margin-top:2px;flex-shrink:0}
   .limit-note-body p{margin:0 0 10px;font-size:12.5px;color:var(--sub);line-height:1.6}
   .limit-note-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px 24px;margin:0;padding:0;list-style:none}
   .limit-note-grid li{font-size:12px;color:var(--sub);line-height:1.6}
   .limit-note-grid li b{color:var(--text)}
+  /* ── Botão de minimizar/reabrir aviso — genérico, reaproveitado em qualquer aviso da casa
+     (limit-note aqui e no Cofrinho, coverage-note em Stories) via initCollapsibleNotice() em
+     sidebar.js, pra não duplicar a lógica de animação/persistência em cada página. ── */
+  .notice-collapse-btn{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;
+    border:none;background:rgba(148,98,0,.12);color:var(--gold);cursor:pointer;font-size:9px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .notice-collapse-btn:hover{background:rgba(148,98,0,.22)}
+  .notice-fab{display:none;position:fixed;bottom:26px;right:26px;width:46px;height:46px;border-radius:50%;
+    border:none;background:var(--gold);color:#fff;font-size:18px;cursor:pointer;align-items:center;
+    justify-content:center;box-shadow:0 4px 16px rgba(148,98,0,.4);z-index:250;
+    transform:scale(0);opacity:0;transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+  .notice-fab.show{display:flex}
+  .notice-fab.show.in{transform:scale(1);opacity:1}
+  .notice-fab:hover{box-shadow:0 6px 20px rgba(148,98,0,.5)}
+  @media(max-width:768px){.notice-fab{right:18px;bottom:18px}}
 
   /* ── KPI strip (totais BR+US combinados) — 6 tiles, 3x2 no desktop ── */
   .kpi-strip-card{padding:0;overflow:hidden}
@@ -298,7 +318,8 @@
   </header>
 
   <main class="content">
-    <div class="limit-note">
+    <div class="limit-note" id="limitNote">
+      <button class="notice-collapse-btn" id="limitNoteCollapseBtn" title="Minimizar aviso" aria-label="Minimizar aviso"><i class="bi bi-x-lg"></i></button>
       <i class="bi bi-info-circle-fill"></i>
       <div class="limit-note-body">
         <p><b>Avisos e limitações conhecidas</b> — quando um dado não está disponível, mostramos "—" ou
@@ -315,8 +336,10 @@
           capturado.</li>
           <li><b>TikTok:</b> ainda não integrado — app cadastrado na TikTok for Business, aguardando
           aprovação.</li>
-          <li><b>Resumo por IA, Social Listening e relatórios automáticos:</b> ainda não implementados —
-          a ficha de conteúdo mostra só números por enquanto, sem texto gerado.</li>
+          <li><b>Resumo por IA:</b> disponível na ficha de conteúdo (Instagram), mas só sob demanda —
+          a equipe clica pra gerar por post, nunca é gerado sozinho. Ainda não existe pra Stories nem
+          em nível de perfil.</li>
+          <li><b>Social Listening e relatórios automáticos:</b> ainda não implementados.</li>
           <li><b>Vídeo (Reels):</b> tempo assistido, retenção e força do gancho não são fornecidos pela
           API atual do Instagram.</li>
           <li><b>Cofrinho do Social:</b> mostra só vendas rastreadas por cupom/link informadas
@@ -324,6 +347,7 @@
         </ul>
       </div>
     </div>
+    <button class="notice-fab" id="limitNoteFab" title="Avisos e limitações conhecidas" aria-label="Mostrar avisos e limitações conhecidas"><i class="bi bi-info-circle-fill"></i></button>
 
     <h3 class="section">Agora · Brasil + Estados Unidos</h3>
     <div class="card kpi-strip-card">
@@ -450,6 +474,8 @@ const todayISO = isoLocal(new Date());
 
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_sm_limitnote_collapsed' });
 
 function deltaHtml(p, suffix = 'vs. período anterior') {
   if (p == null) return `<span class="delta-val flat">—</span> ${suffix}`;

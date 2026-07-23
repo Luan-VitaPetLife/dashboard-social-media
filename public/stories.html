@@ -64,10 +64,27 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
 
-  .coverage-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
-    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
+  .coverage-note{position:relative;display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px;
+    transform-origin:top right;opacity:1;transform:scale(1);max-height:200px;overflow:hidden;
+    transition:opacity .22s ease,transform .22s ease,max-height .32s ease,margin-bottom .32s ease,padding .32s ease}
+  .coverage-note.is-collapsing{opacity:0;transform:scale(.92);max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0}
   .coverage-note i{color:var(--gold);font-size:16px;margin-top:1px}
   .coverage-note p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.6}
+
+  /* ── Minimizar/reabrir aviso — mesmo componente genérico de index.html (initCollapsibleNotice em sidebar.js) ── */
+  .notice-collapse-btn{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;
+    border:none;background:rgba(148,98,0,.12);color:var(--gold);cursor:pointer;font-size:9px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .notice-collapse-btn:hover{background:rgba(148,98,0,.22)}
+  .notice-fab{display:none;position:fixed;bottom:26px;right:26px;width:46px;height:46px;border-radius:50%;
+    border:none;background:var(--gold);color:#fff;font-size:18px;cursor:pointer;align-items:center;
+    justify-content:center;box-shadow:0 4px 16px rgba(148,98,0,.4);z-index:250;
+    transform:scale(0);opacity:0;transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+  .notice-fab.show{display:flex}
+  .notice-fab.show.in{transform:scale(1);opacity:1}
+  .notice-fab:hover{box-shadow:0 6px 20px rgba(148,98,0,.5)}
+  @media(max-width:768px){.notice-fab{right:18px;bottom:18px}}
 
   .delta-val{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
   .delta-val.up{background:rgba(46,125,91,.1);color:var(--green)}
@@ -124,13 +141,15 @@
   </header>
 
   <main class="content">
-    <div class="coverage-note">
+    <div class="coverage-note" id="limitNote">
+      <button class="notice-collapse-btn" id="limitNoteCollapseBtn" title="Minimizar aviso" aria-label="Minimizar aviso"><i class="bi bi-x-lg"></i></button>
       <i class="bi bi-info-circle-fill"></i>
       <p><b>Cobertura parcial, por limite real da API do Instagram:</b> stories somem da API assim que expiram
       (24h após publicar) e a Graph API não expõe mais avanços/voltas/saídas separados, só um total agregado
       de navegação. Este painel captura uma leitura a cada ~2h enquanto o story está ativo — um story
       publicado e expirado entre duas capturas pode não ser registrado por completo.</p>
     </div>
+    <button class="notice-fab" id="limitNoteFab" title="Ver cobertura parcial de Stories" aria-label="Mostrar aviso de cobertura parcial"><i class="bi bi-info-circle-fill"></i></button>
 
     <h3 class="section">Stories rastreados (últimas 48h)</h3>
     <div class="story-grid" id="storyGrid">
@@ -150,6 +169,8 @@ function deltaHtml(p) {
   const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
   return `<span class="delta-val ${cls}">${up ? '▲' : '▼'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span>`;
 }
+
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_story_limitnote_collapsed' });
 
 let registryTree = null;
 let brandId = localStorage.getItem('coco_story_brand') || null;

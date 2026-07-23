@@ -21,6 +21,49 @@ function escapeHtml(str) {
 }
 window.escapeHtml = escapeHtml;
 
+// initCollapsibleNotice — minimiza/reabre um card de aviso (limit-note, coverage-note, etc.)
+// com animação: encolhe no lugar e vira uma bolinha fixa no canto da tela (fora do fluxo normal,
+// pra dar espaço aos cards subirem). Estado (aberto/fechado) fica só neste navegador — cada aviso
+// usa sua própria storageKey pra não vazar estado entre páginas/avisos diferentes. Reaproveitado
+// por index.html, cofrinho.html e stories.html em vez de duplicar a lógica em cada uma.
+function initCollapsibleNotice({ noteId, collapseBtnId, fabId, storageKey }) {
+  const note = document.getElementById(noteId);
+  const collapseBtn = document.getElementById(collapseBtnId);
+  const fab = document.getElementById(fabId);
+  if (!note || !collapseBtn || !fab) return;
+
+  function collapse(animate) {
+    localStorage.setItem(storageKey, '1');
+    if (!animate) {
+      note.style.display = 'none';
+      fab.classList.add('show', 'in');
+      return;
+    }
+    note.classList.add('is-collapsing');
+    note.addEventListener('transitionend', function onEnd(e) {
+      if (e.target !== note) return;
+      note.removeEventListener('transitionend', onEnd);
+      note.style.display = 'none';
+      fab.classList.add('show');
+      requestAnimationFrame(() => requestAnimationFrame(() => fab.classList.add('in')));
+    });
+  }
+
+  function expand() {
+    localStorage.removeItem(storageKey);
+    fab.classList.remove('in');
+    setTimeout(() => fab.classList.remove('show'), 200);
+    note.style.display = '';
+    void note.offsetWidth; // força reflow pra a transição de volta rodar
+    note.classList.remove('is-collapsing');
+  }
+
+  collapseBtn.addEventListener('click', () => collapse(true));
+  fab.addEventListener('click', expand);
+  if (localStorage.getItem(storageKey) === '1') collapse(false);
+}
+window.initCollapsibleNotice = initCollapsibleNotice;
+
 (function () {
   const html = `
 <button id="sidebarOpen" class="sidebar-open-btn" title="Abrir menu"><i class="bi bi-list"></i></button>

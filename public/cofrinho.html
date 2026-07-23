@@ -58,10 +58,27 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
 
-  .limit-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
-    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px}
+  .limit-note{position:relative;display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:28px;
+    transform-origin:top right;opacity:1;transform:scale(1);max-height:200px;overflow:hidden;
+    transition:opacity .22s ease,transform .22s ease,max-height .32s ease,margin-bottom .32s ease,padding .32s ease}
+  .limit-note.is-collapsing{opacity:0;transform:scale(.92);max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0}
   .limit-note i{color:var(--gold);font-size:16px;margin-top:1px}
   .limit-note p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.6}
+
+  /* ── Minimizar/reabrir aviso — mesmo componente genérico de index.html (initCollapsibleNotice em sidebar.js) ── */
+  .notice-collapse-btn{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;
+    border:none;background:rgba(148,98,0,.12);color:var(--gold);cursor:pointer;font-size:9px;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .notice-collapse-btn:hover{background:rgba(148,98,0,.22)}
+  .notice-fab{display:none;position:fixed;bottom:26px;right:26px;width:46px;height:46px;border-radius:50%;
+    border:none;background:var(--gold);color:#fff;font-size:18px;cursor:pointer;align-items:center;
+    justify-content:center;box-shadow:0 4px 16px rgba(148,98,0,.4);z-index:250;
+    transform:scale(0);opacity:0;transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+  .notice-fab.show{display:flex}
+  .notice-fab.show.in{transform:scale(1);opacity:1}
+  .notice-fab:hover{box-shadow:0 6px 20px rgba(148,98,0,.5)}
+  @media(max-width:768px){.notice-fab{right:18px;bottom:18px}}
 
   .country-block{margin-bottom:32px}
   .country-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
@@ -133,13 +150,15 @@
   </header>
 
   <main class="content">
-    <div class="limit-note">
+    <div class="limit-note" id="limitNote">
+      <button class="notice-collapse-btn" id="limitNoteCollapseBtn" title="Minimizar aviso" aria-label="Minimizar aviso"><i class="bi bi-x-lg"></i></button>
       <i class="bi bi-info-circle-fill"></i>
       <p><b>Limite:</b> o cofrinho mostra apenas vendas rastreadas por cupom ou link específico do Social,
       informadas manualmente pelo setor responsável (print, planilha, relatório ou confirmação). Ele não
       representa sozinho toda a influência das redes sociais sobre as compras, e não analisa investimento
       nem desempenho de tráfego pago.</p>
     </div>
+    <button class="notice-fab" id="limitNoteFab" title="Ver limite do Cofrinho" aria-label="Mostrar aviso de limite do Cofrinho"><i class="bi bi-info-circle-fill"></i></button>
 
     <div id="cofrinhoRoot"><div class="empty">carregando…</div></div>
   </main>
@@ -153,6 +172,8 @@ function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); 
 function fmtMoney(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function fmtDateBR(iso) { if (!iso) return '—'; const [y,m,d] = iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
 function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_cof_limitnote_collapsed' });
 
 let registryTree = null;
 let brandId = localStorage.getItem('coco_cof_brand') || null;

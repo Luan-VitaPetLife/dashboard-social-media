@@ -63,7 +63,7 @@
 
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
 
-  /* ── Board: grupos coloridos estilo Monday ── */
+  /* ── Board: grupos coloridos, agrupados por Status/Tipo/Urgência/Pessoa ── */
   .board-group{margin-bottom:22px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
   .board-group-head{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--surface2);
     border-bottom:1px solid var(--border);cursor:pointer}
@@ -168,6 +168,34 @@
   .people-add-row input:focus{border-color:var(--text)}
   .people-del{font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0}
   .people-del:hover{color:var(--red)}
+
+  /* ── Modo de visualização (Lista/Quadro/Cards) — salvo só neste navegador, não é padrão de equipe ── */
+  .view-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px;flex-shrink:0}
+  .view-btn{border:none;background:none;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:600;
+    color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap}
+  .view-btn.active{background:var(--text);color:#fff}
+  .view-btn:hover:not(.active){color:var(--text)}
+
+  /* ── Card de chamado (usado no Quadro e em Cards — mais respiro que a linha da Lista) ── */
+  .ticket-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:14px;cursor:pointer;transition:box-shadow .15s,border-color .15s;display:flex;flex-direction:column;gap:10px}
+  .ticket-card:hover{border-color:var(--text);box-shadow:0 2px 10px rgba(28,43,57,.08)}
+  .tc-head{display:flex;gap:6px;flex-wrap:wrap}
+  .tc-title{font-size:12.5px;font-weight:700;line-height:1.4}
+  .tc-desc{font-size:11.5px;color:var(--sub);line-height:1.5}
+  .tc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:2px}
+  .tc-foot-right{display:flex;align-items:center;gap:10px}
+
+  /* ── Quadro (Kanban): colunas lado a lado, rola na horizontal ── */
+  .kanban-wrap{display:flex;gap:16px;overflow-x:auto;padding-bottom:10px;align-items:flex-start}
+  .kanban-col{flex:0 0 280px;background:var(--surface2);border-radius:var(--radius);padding:12px}
+  .kanban-col-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 2px}
+  .kanban-col-title{font-size:12px;font-weight:700;flex:1}
+  .kanban-col-count{font-size:11px;color:var(--muted);font-weight:600}
+  .kanban-col-cards{display:flex;flex-direction:column;gap:10px}
+
+  /* ── Cards: grade responsiva, sem agrupamento ── */
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
 </style>
 </head>
 <body>
@@ -176,7 +204,7 @@
   <header class="topbar">
     <div>
       <h1>Chamados</h1>
-      <div class="sub">Sugestões, dúvidas e pendências da equipe — quadro estilo Monday</div>
+      <div class="sub">Sugestões, dúvidas e pendências da equipe</div>
     </div>
     <div class="topbar-controls">
       <button class="btn-secondary" id="managePeopleBtn"><i class="bi bi-people-fill"></i> Gerenciar pessoas</button>
@@ -208,6 +236,11 @@
           <span class="lbl">Pessoa</span><span class="val" id="filterPessoaVal">Todas</span><span class="arr">▾</span>
           <div class="csel-pop" id="filterPessoaPop"></div>
         </div>
+      </div>
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn" data-view="lista"><i class="bi bi-list-ul"></i> Lista</button>
+        <button class="view-btn" data-view="quadro"><i class="bi bi-kanban"></i> Quadro</button>
+        <button class="view-btn" data-view="cards"><i class="bi bi-grid-3x3-gap-fill"></i> Cards</button>
       </div>
     </div>
 
@@ -366,6 +399,9 @@ const GROUPBY_LABELS = { status: 'Status', tipo: 'Tipo', urgencia: 'Urgência', 
 let people = [];
 let tickets = [];
 let groupBy = localStorage.getItem('coco_chamados_groupby') || 'status';
+// Modo de visualização — preferência pessoal de tela, por isso localStorage (só neste
+// navegador) e não algo salvo no servidor/compartilhado com o resto da equipe.
+let viewMode = localStorage.getItem('coco_chamados_viewmode') || 'lista';
 let filters = { tipo: null, urgencia: null, pessoa: null };
 let openTicketId = null;
 
@@ -472,6 +508,21 @@ document.getElementById('cselGroupBy').querySelectorAll('.csel-opt').forEach(el 
   });
 });
 
+// "Agrupar por" não se aplica ao modo Cards (grade solta, sem seção/coluna) — some da barra
+// nesse modo em vez de ficar visível sem efeito nenhum.
+function updateGroupByVisibility() {
+  document.getElementById('cselGroupBy').style.display = viewMode === 'cards' ? 'none' : '';
+}
+document.querySelectorAll('.view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    viewMode = btn.dataset.view;
+    localStorage.setItem('coco_chamados_viewmode', viewMode);
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b === btn));
+    updateGroupByVisibility();
+    render();
+  });
+});
+
 // ── board ──
 function groupKeyFor(t) {
   if (groupBy === 'tipo') return t.tipo;
@@ -506,28 +557,50 @@ function ticketRowHtml(t) {
   </div>`;
 }
 
-function render() {
-  const filtered = tickets.filter(t =>
-    (!filters.tipo || t.tipo === filters.tipo) &&
-    (!filters.urgencia || t.urgencia === filters.urgencia) &&
-    (!filters.pessoa || t.responsavelId === filters.pessoa)
-  );
+function truncate(str, n) { return str && str.length > n ? str.slice(0, n).trim() + '…' : (str || ''); }
 
+// Card mais espaçoso que a linha da Lista — usado no Quadro (Kanban) e em Cards.
+function ticketCardHtml(t) {
+  const resp = t.responsavelId ? personName(t.responsavelId) : null;
+  return `<div class="ticket-card" data-id="${t.id}">
+    <div class="tc-head">
+      <span class="badge badge-tipo"><i class="bi ${TIPO_META[t.tipo]?.icon || 'bi-tag'}"></i> ${escapeHtml(TIPO_META[t.tipo]?.label || t.tipo)}</span>
+      <span class="badge" style="background:${URGENCIA_META[t.urgencia]?.color}22;color:${URGENCIA_META[t.urgencia]?.color}">${escapeHtml(URGENCIA_META[t.urgencia]?.label || t.urgencia)}</span>
+    </div>
+    <div class="tc-title">${escapeHtml(t.titulo)}</div>
+    ${t.descricao ? `<div class="tc-desc">${escapeHtml(truncate(t.descricao, 110))}</div>` : ''}
+    <div class="tc-foot">
+      <span class="badge" style="background:${STATUS_META[t.status]?.color}22;color:${STATUS_META[t.status]?.color}">${escapeHtml(STATUS_META[t.status]?.label || t.status)}</span>
+      <span class="tc-foot-right">
+        ${t.comments.length ? `<span class="comment-count"><i class="bi bi-chat-left-text"></i> ${t.comments.length}</span>` : ''}
+        ${resp ? `<span class="avatar" title="${escapeHtml(resp)}">${escapeHtml(initials(resp))}</span>` : `<span class="avatar empty-avatar" title="Sem responsável"><i class="bi bi-dash"></i></span>`}
+      </span>
+    </div>
+  </div>`;
+}
+
+function computeGroups(filtered) {
   const groups = new Map();
   for (const t of filtered) {
     const k = groupKeyFor(t);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(t);
   }
-
   let keys = [...groups.keys()];
   const order = GROUP_ORDER[groupBy];
   if (order) keys.sort((a, b) => order.indexOf(a) - order.indexOf(b));
   else keys.sort((a, b) => groupLabelFor(a).localeCompare(groupLabelFor(b)));
+  return { groups, keys };
+}
 
-  const board = document.getElementById('board');
-  if (!keys.length) { board.innerHTML = '<div class="empty">nenhum chamado encontrado</div>'; return; }
+function wireTicketClicks(board) {
+  board.querySelectorAll('.ticket-row, .ticket-card').forEach(el => {
+    el.addEventListener('click', () => openTicketModal(el.dataset.id));
+  });
+}
 
+function renderListView(board, filtered) {
+  const { groups, keys } = computeGroups(filtered);
   board.innerHTML = keys.map(k => {
     const items = groups.get(k).slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const collapsed = localStorage.getItem('coco_chamados_collapsed_' + groupBy + '_' + k) === '1';
@@ -549,9 +622,47 @@ function render() {
       localStorage.setItem('coco_chamados_collapsed_' + groupBy + '_' + group.dataset.groupKey, group.classList.contains('collapsed') ? '1' : '0');
     });
   });
-  board.querySelectorAll('.ticket-row').forEach(row => {
-    row.addEventListener('click', () => openTicketModal(row.dataset.id));
-  });
+  wireTicketClicks(board);
+}
+
+// Quadro (Kanban) — mesmo agrupamento da Lista, só que em colunas lado a lado em vez de
+// seções empilhadas. É o modo mais "conhecido da internet" pra esse tipo de board.
+function renderKanbanView(board, filtered) {
+  const { groups, keys } = computeGroups(filtered);
+  board.innerHTML = `<div class="kanban-wrap">${keys.map(k => {
+    const items = groups.get(k).slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    return `<div class="kanban-col">
+      <div class="kanban-col-head">
+        <span class="board-group-dot" style="background:${groupColorFor(k)}"></span>
+        <span class="kanban-col-title">${escapeHtml(groupLabelFor(k))}</span>
+        <span class="kanban-col-count">${items.length}</span>
+      </div>
+      <div class="kanban-col-cards">${items.map(ticketCardHtml).join('') || '<div class="empty" style="padding:12px 0">vazio</div>'}</div>
+    </div>`;
+  }).join('')}</div>`;
+  wireTicketClicks(board);
+}
+
+// Cards — grade solta, sem agrupamento (o "Agrupar por" não se aplica aqui, ver toggle de view).
+function renderCardsView(board, filtered) {
+  const items = filtered.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  board.innerHTML = `<div class="cards-grid">${items.map(ticketCardHtml).join('')}</div>`;
+  wireTicketClicks(board);
+}
+
+function render() {
+  const filtered = tickets.filter(t =>
+    (!filters.tipo || t.tipo === filters.tipo) &&
+    (!filters.urgencia || t.urgencia === filters.urgencia) &&
+    (!filters.pessoa || t.responsavelId === filters.pessoa)
+  );
+
+  const board = document.getElementById('board');
+  if (!filtered.length) { board.innerHTML = '<div class="empty">nenhum chamado encontrado</div>'; return; }
+
+  if (viewMode === 'quadro') renderKanbanView(board, filtered);
+  else if (viewMode === 'cards') renderCardsView(board, filtered);
+  else renderListView(board, filtered);
 }
 
 // ── modal: detalhe do chamado ──
@@ -718,6 +829,8 @@ async function load() {
 
 document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];
 document.querySelectorAll('#cselGroupBy .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === groupBy));
+document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewMode));
+updateGroupByVisibility();
 load();
 </script>
 </body>
