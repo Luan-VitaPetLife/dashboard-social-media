@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatórios · Coco and Luna</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+  :root{
+    --bg:#f4f6fb; --surface:#fff; --surface2:#f6f8fc; --border:#e7eaf1; --border2:#d8dee9;
+    --text:#1c2b39; --sub:#4b5c6b; --muted:#8a97a3; --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+    --radius:14px; --radius-sm:9px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:18px;margin:0}
+  .topbar .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .topbar-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+  .filter-pill img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .content{padding:28px 32px;max-width:1180px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  /* ── dropdown customizado de formulário (substitui <select>, mesmo padrão de chamados.html) ── */
+  .field-dd{position:relative}
+  .field-dd-btn{width:100%;font-size:13px;font-family:inherit;color:var(--text);padding:9px 11px;
+    border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface2);
+    cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+  .field-dd-btn:hover{border-color:var(--text)}
+  .field-dd.open .field-dd-btn{border-color:var(--text)}
+  .field-dd-btn .field-dd-val{display:flex;align-items:center;gap:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .field-dd-btn .arr{color:var(--muted);font-size:10px;transition:transform .15s;flex-shrink:0}
+  .field-dd.open .field-dd-btn .arr{transform:rotate(180deg)}
+  .field-dd-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius-sm);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:600;display:none;flex-direction:column;max-height:240px;overflow-y:auto}
+  .field-dd.open .field-dd-pop{display:flex}
+  .field-dd-opt{padding:9px 11px;font-size:12.5px;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:7px}
+  .field-dd-opt:hover{background:var(--surface2);color:var(--text)}
+  .field-dd-opt.active{color:var(--text);font-weight:600;background:var(--surface2)}
+  .dd-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+  .gen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+  .gen-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+  .gen-field input[type=month]{width:100%;height:38px;border:1px solid var(--border2);border-radius:var(--radius-sm);
+    background:var(--surface2);padding:0 12px;font-size:13px;color:var(--text);outline:none;font-family:inherit}
+  .gen-field input[type=month]:focus{border-color:var(--text)}
+  .gen-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .gen-btn{height:38px;padding:0 20px;border-radius:20px;border:none;background:var(--text);color:#fff;
+    font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .gen-btn:disabled{opacity:.45;cursor:default}
+  .gen-msg{font-size:12px}
+  .gen-msg.ok{color:var(--green)}
+  .gen-msg.err{color:var(--red)}
+
+  .rep-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .rep-toolbar .field-dd{max-width:220px;width:100%}
+  .rep-list{display:flex;flex-direction:column;gap:10px}
+  .rep-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius-sm);flex-wrap:wrap}
+  .rep-row-main{flex:1;min-width:220px}
+  .rep-type{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .rep-scope{font-size:11.5px;color:var(--sub);margin-top:3px}
+  .rep-meta{font-size:10.5px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rep-badge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;
+    border-radius:20px;background:var(--surface2);color:var(--muted)}
+  .rep-badge.auto{background:rgba(148,98,0,.12);color:var(--gold)}
+  .rep-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .rep-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);
+    color:var(--sub);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:14px;
+    cursor:pointer}
+  .rep-btn:hover{border-color:var(--text);color:var(--text)}
+  .rep-btn.danger:hover{border-color:var(--red);color:var(--red)}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+
+  /* ── modal de confirmação (substitui window.confirm nativo) ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(28,43,57,.4);z-index:1100;display:none;
+    align-items:center;justify-content:center;padding:20px}
+  .modal-box{background:var(--surface);border-radius:var(--radius);padding:22px;max-width:380px;width:100%}
+  .modal-box h2{font-size:15px;margin:0 0 12px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px}
+  .btn-secondary{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);
+    background:var(--surface2);color:var(--sub);font-size:12.5px;font-weight:600;cursor:pointer}
+  .btn-secondary:hover{border-color:var(--text);color:var(--text)}
+  .btn-primary{height:34px;padding:0 16px;border-radius:20px;border:none;color:#fff;font-size:12.5px;
+    font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Relatórios</h1>
+      <div class="sub">Geração de relatórios em PDF/DOCX — D+7, Stories 24h e mensais</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <h3 class="section">Gerar novo relatório</h3>
+    <div class="card" id="genCard">
+      <div class="gen-grid">
+        <div class="gen-field"><label>Tipo de relatório</label><div class="field-dd" id="ddTipo"></div></div>
+        <div class="gen-field" id="fieldPais" style="display:none"><label>País</label><div class="field-dd" id="ddPais"></div></div>
+        <div class="gen-field" id="fieldConteudo" style="display:none"><label>Conteúdo</label><div class="field-dd" id="ddConteudo"></div></div>
+        <div class="gen-field" id="fieldStory" style="display:none"><label>Story</label><div class="field-dd" id="ddStory"></div></div>
+        <div class="gen-field" id="fieldCanal" style="display:none"><label>Canal</label><div class="field-dd" id="ddCanal"></div></div>
+        <div class="gen-field" id="fieldMes" style="display:none"><label>Mês</label><input type="month" id="inpMes"></div>
+      </div>
+      <div class="gen-actions">
+        <button class="gen-btn" id="genBtn" disabled><i class="bi bi-magic"></i> Gerar relatório</button>
+        <span class="gen-msg" id="genMsg"></span>
+      </div>
+    </div>
+
+    <h3 class="section">Relatórios gerados</h3>
+    <div class="rep-toolbar">
+      <div class="field-dd" id="ddFiltro"></div>
+    </div>
+    <div class="rep-list" id="repList"><div class="empty">carregando…</div></div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<div class="modal-overlay" id="confirmModalOverlay">
+  <div class="modal-box">
+    <h2>Confirmar</h2>
+    <p id="confirmMessage" style="font-size:12.5px;color:var(--sub);line-height:1.6;margin:0 0 20px"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="confirmCancelBtn">Cancelar</button>
+      <button class="btn-primary" id="confirmOkBtn" style="background:var(--red)"><i class="bi bi-trash3"></i> Excluir</button>
+    </div>
+  </div>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+const REPORT_TYPE_META = {
+  d7:           { label: 'D+7 por conteúdo', icon: 'bi-file-earmark-bar-graph' },
+  stories:      { label: 'Stories 24h',       icon: 'bi-clock-history' },
+  mensal_pais:  { label: 'Mensal por país',   icon: 'bi-flag' },
+  mensal_rede:  { label: 'Mensal por rede',   icon: 'bi-share' },
+  mensal_geral: { label: 'Mensal geral',      icon: 'bi-building' },
+};
+const TIPO_OPTIONS = Object.entries(REPORT_TYPE_META).map(([value, m]) => ({ value, label: m.label, icon: m.icon }));
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_rep_brand') || null;
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+
+let genType = null, genCountryId = null, genMediaId = null, genStoryId = null, genPlatform = null;
+let reports = [];
+let filterType = '';
+
+function fmtDateBR(iso) { if (!iso) return '—'; const s = iso.slice(0, 10); const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; }
+function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
+
+// ── dropdowns (csel no topbar + field-dd nos campos do formulário) ──
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.csel').forEach(csel => {
+    if (!csel.contains(e.target)) csel.classList.remove('open');
+    else if (e.target.closest('.filter-pill') && !e.target.closest('.csel-opt')) csel.classList.toggle('open');
+  });
+  document.querySelectorAll('.field-dd').forEach(dd => {
+    if (!dd.contains(e.target)) dd.classList.remove('open');
+  });
+});
+
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    if (e.target.closest('.csel-opt')) {
+      onSelect(e.target.closest('.csel-opt').dataset.value);
+      el.classList.remove('open');
+    }
+  });
+}
+
+function renderFieldDropdown(containerId, options, currentValue, onChange, placeholder) {
+  const el = document.getElementById(containerId);
+  const value = currentValue ?? '';
+  el.dataset.value = value;
+  const markerHtml = (o) => o.img ? `<img src="${o.img}" alt="" style="width:13px;height:9px;object-fit:cover;border-radius:2px">`
+    : (o.color ? `<span class="dd-dot" style="background:${o.color}"></span>` : (o.icon ? `<i class="bi ${o.icon}"></i>` : ''));
+  const current = options.find(o => o.value === value);
+  el.innerHTML = `
+    <button type="button" class="field-dd-btn"><span class="field-dd-val">${current ? markerHtml(current) + escapeHtml(current.label) : `<span style="color:var(--muted)">${escapeHtml(placeholder || 'Selecione')}</span>`}</span><span class="arr">▾</span></button>
+    <div class="field-dd-pop">${options.map(o => `<div class="field-dd-opt${o.value === value ? ' active' : ''}" data-value="${o.value}">${markerHtml(o)}${escapeHtml(o.label)}</div>`).join('')}</div>
+  `;
+  el.querySelector('.field-dd-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.field-dd.open, .csel.open').forEach(o => { if (o !== el) o.classList.remove('open'); });
+    el.classList.toggle('open');
+  });
+  el.querySelectorAll('.field-dd-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      el.classList.remove('open');
+      const v = opt.dataset.value;
+      if (v === el.dataset.value) return;
+      el.dataset.value = v;
+      renderFieldDropdown(containerId, options, v, onChange, placeholder);
+      onChange(v === '' ? null : v);
+    });
+  });
+}
+
+// ── modal de confirmação (nunca window.confirm — trava aba em automação/alguns navegadores) ──
+let confirmResolver = null;
+function showConfirm(message) {
+  document.getElementById('confirmMessage').textContent = message;
+  document.getElementById('confirmModalOverlay').style.display = 'flex';
+  return new Promise(resolve => { confirmResolver = resolve; });
+}
+function resolveConfirm(result) {
+  document.getElementById('confirmModalOverlay').style.display = 'none';
+  if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
+}
+document.getElementById('confirmCancelBtn').addEventListener('click', () => resolveConfirm(false));
+document.getElementById('confirmOkBtn').addEventListener('click', () => resolveConfirm(true));
+document.getElementById('confirmModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'confirmModalOverlay') resolveConfirm(false); });
+
+// ── Seletor de Marca (mesmo padrão das outras páginas, com logo — ver initCollapsibleNotice/setBrandLogoImg em sidebar.js) ──
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) {
+      document.getElementById('brandStaticVal').textContent = brands[0].name;
+      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
+    }
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_rep_brand', brandId);
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
+    onBrandChanged();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  onBrandChanged();
+}
+
+function countryOptions() {
+  return (currentBrand()?.countries || []).map(c => ({ value: c.id, label: c.name, img: c.flag }));
+}
+
+function onBrandChanged() {
+  genCountryId = null; genMediaId = null; genStoryId = null;
+  updateGenFields();
+  loadReports();
+}
+
+// ── formulário de geração — campos visíveis dependem do tipo escolhido ──
+function updateGenFields() {
+  document.getElementById('fieldPais').style.display = ['d7', 'stories', 'mensal_pais'].includes(genType) ? '' : 'none';
+  document.getElementById('fieldConteudo').style.display = genType === 'd7' ? '' : 'none';
+  document.getElementById('fieldStory').style.display = genType === 'stories' ? '' : 'none';
+  document.getElementById('fieldCanal').style.display = genType === 'mensal_rede' ? '' : 'none';
+  document.getElementById('fieldMes').style.display = ['mensal_pais', 'mensal_rede', 'mensal_geral'].includes(genType) ? '' : 'none';
+
+  renderFieldDropdown('ddPais', countryOptions(), genCountryId, async (v) => {
+    genCountryId = v; genMediaId = null; genStoryId = null;
+    if (genType === 'd7') await loadContentOptions();
+    if (genType === 'stories') await loadStoryOptions();
+    updateGenBtn();
+  }, 'Selecione o país');
+
+  renderFieldDropdown('ddCanal', [{ value: 'instagram', label: 'Instagram', icon: 'bi-instagram' }, { value: 'facebook', label: 'Facebook', icon: 'bi-facebook' }], genPlatform, (v) => { genPlatform = v; updateGenBtn(); }, 'Selecione o canal');
+
+  if (genType !== 'd7') renderFieldDropdown('ddConteudo', [], null, () => {}, 'Selecione o país primeiro');
+  if (genType !== 'stories') renderFieldDropdown('ddStory', [], null, () => {}, 'Selecione o país primeiro');
+
+  updateGenBtn();
+}
+
+async function loadContentOptions() {
+  if (!genCountryId) { renderFieldDropdown('ddConteudo', [], null, () => {}, 'Selecione o país primeiro'); return; }
+  const res = await fetch(`/api/content?brand=${brandId}&country=${genCountryId}`);
+  const d = await res.json();
+  const options = d.items.map(i => ({ value: i.mediaId, label: `${i.formatLabel} · ${fmtDateBR(i.meta.publishedAt)} · ${(i.meta.caption || '(sem legenda)').slice(0, 40)}` }));
+  renderFieldDropdown('ddConteudo', options, genMediaId, (v) => { genMediaId = v; updateGenBtn(); }, options.length ? 'Selecione o conteúdo' : 'Nenhum conteúdo rastreado ainda');
+}
+
+async function loadStoryOptions() {
+  if (!genCountryId) { renderFieldDropdown('ddStory', [], null, () => {}, 'Selecione o país primeiro'); return; }
+  const res = await fetch(`/api/stories?brand=${brandId}&country=${genCountryId}`);
+  const d = await res.json();
+  const options = d.items.map(i => ({ value: i.storyId, label: `${fmtDateTimeBR(i.meta.timestamp)} · ${i.expired ? 'expirado' : 'ativo'}` }));
+  renderFieldDropdown('ddStory', options, genStoryId, (v) => { genStoryId = v; updateGenBtn(); }, options.length ? 'Selecione o story' : 'Nenhum story rastreado ainda');
+}
+
+function updateGenBtn() {
+  let ok = Boolean(genType);
+  const mesVal = document.getElementById('inpMes').value;
+  if (genType === 'd7') ok = ok && Boolean(genCountryId) && Boolean(genMediaId);
+  if (genType === 'stories') ok = ok && Boolean(genCountryId) && Boolean(genStoryId);
+  if (genType === 'mensal_pais') ok = ok && Boolean(genCountryId) && Boolean(mesVal);
+  if (genType === 'mensal_rede') ok = ok && Boolean(genPlatform) && Boolean(mesVal);
+  if (genType === 'mensal_geral') ok = ok && Boolean(mesVal);
+  document.getElementById('genBtn').disabled = !ok;
+}
+
+renderFieldDropdown('ddTipo', TIPO_OPTIONS, genType, (v) => {
+  genType = v; genCountryId = null; genMediaId = null; genStoryId = null; genPlatform = null;
+  document.getElementById('inpMes').value = '';
+  updateGenFields();
+}, 'Selecione o tipo');
+
+document.getElementById('inpMes').addEventListener('change', updateGenBtn);
+
+document.getElementById('genBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('genBtn');
+  const msg = document.getElementById('genMsg');
+  btn.disabled = true;
+  msg.textContent = '';
+  msg.className = 'gen-msg';
+  const hideOverlay = showAiThinkingOverlay(document.getElementById('genCard'));
+  const monthVal = document.getElementById('inpMes').value;
+  try {
+    const res = await fetch('/api/reports/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId, type: genType, countryId: genCountryId, mediaId: genMediaId, storyId: genStoryId, platform: genPlatform, monthKey: monthVal || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao gerar relatório.');
+    msg.textContent = 'Relatório gerado com sucesso!';
+    msg.className = 'gen-msg ok';
+    loadReports();
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.className = 'gen-msg err';
+  } finally {
+    hideOverlay();
+    updateGenBtn();
+  }
+});
+
+// ── lista de relatórios já gerados ──
+renderFieldDropdown('ddFiltro', [{ value: '', label: 'Todos os tipos' }, ...TIPO_OPTIONS], '', (v) => { filterType = v || ''; renderReportsList(); }, 'Filtrar por tipo');
+
+async function loadReports() {
+  if (!brandId) return;
+  const res = await fetch(`/api/reports?brand=${brandId}`);
+  reports = await res.json();
+  renderReportsList();
+}
+
+function renderReportsList() {
+  const filtered = filterType ? reports.filter(r => r.type === filterType) : reports;
+  const list = document.getElementById('repList');
+  if (!filtered.length) { list.innerHTML = '<div class="empty">nenhum relatório gerado ainda</div>'; return; }
+  list.innerHTML = filtered.map(r => `
+    <div class="rep-row">
+      <div class="rep-row-main">
+        <div class="rep-type"><i class="bi ${REPORT_TYPE_META[r.type]?.icon || 'bi-file-earmark'}"></i> ${escapeHtml(REPORT_TYPE_META[r.type]?.label || r.type)}</div>
+        <div class="rep-scope">${escapeHtml(r.scopeLabel || '')}</div>
+        <div class="rep-meta">
+          <span>Gerado em ${fmtDateTimeBR(r.generatedAt)}</span>
+          <span class="rep-badge ${r.generatedBy === 'auto' ? 'auto' : ''}">${r.generatedBy === 'auto' ? 'Automático' : 'Manual'}</span>
+        </div>
+      </div>
+      <div class="rep-actions">
+        <a class="rep-btn" href="/api/reports/${r.id}/pdf?brand=${brandId}" title="Baixar PDF"><i class="bi bi-filetype-pdf"></i></a>
+        <a class="rep-btn" href="/api/reports/${r.id}/docx?brand=${brandId}" title="Baixar DOCX"><i class="bi bi-filetype-docx"></i></a>
+        <button class="rep-btn danger" data-del="${r.id}" title="Excluir"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await showConfirm('Excluir este relatório? Essa ação não pode ser desfeita.'))) return;
+      await fetch(`/api/reports/${btn.dataset.del}?brand=${brandId}`, { method: 'DELETE' });
+      loadReports();
+    });
+  });
+}
+
+updateGenFields();
+document.getElementById('repList').innerHTML = pageLoaderHtml();
+loadRegistry();
+</script>
+</body>
+</html>

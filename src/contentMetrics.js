@@ -240,11 +240,15 @@ function buildAiSummaryPrompt(item) {
 export async function generateContentAiSummary(item) {
   if (!aiConfigured()) throw new Error('ANTHROPIC_API_KEY não configurado no servidor.');
   const prompt = buildAiSummaryPrompt(item);
-  // 500 tokens cortava a resposta no meio do JSON em posts com mais dado (checkpoints, contexto
-  // completo) — confirmado ao vivo (22/07/2026) que o texto vinha truncado, nunca inválido de
-  // verdade. 1600 dá folga pro formato de 6 campos de 3-5 frases pedido no system prompt (23/07/2026,
-  // resumo original saía curto demais — 1000 não sobraria depois de deixar os campos mais longos).
-  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 1600 });
+  // Histórico de truncamento nesse campo (nunca JSON de verdade inválido, sempre cortado no meio):
+  // 500 → 1000 (22/07/2026) → 1600 (23/07/2026, quando os campos passaram a pedir 3-5 frases em vez
+  // de 1-2) → **3500** (23/07/2026, mesmo dia: confirmado ao vivo que 1600 ainda cortava no meio do
+  // 4º de 6 campos pra um post com bastante dado real — a resposta cresceu mais do que o esperado
+  // com o novo tamanho de frase pedido). Sempre que esse erro voltar a aparecer, é sinal de que o
+  // texto pedido no system prompt ficou maior de novo — aumentar aqui, não assumir "resposta
+  // inválida" sem checar o raw primeiro (usar um throw temporário com o raw, nunca redescobrir do
+  // zero — ver histórico desta sessão).
+  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 3500 });
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
   let parsed;
   try {

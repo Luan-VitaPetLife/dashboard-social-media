@@ -440,6 +440,7 @@ function attachCardHandlers(grid) {
       const countryId = card.dataset.countryId;
       aiBtn.disabled = true;
       aiBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando…';
+      const hideOverlay = showAiThinkingOverlay(card);
       try {
         const res = await fetch(`/api/content/${mediaId}/ai-summary`, {
           method: 'POST',
@@ -455,6 +456,7 @@ function attachCardHandlers(grid) {
         aiBtn.innerHTML = '<i class="bi bi-magic"></i> Tentar de novo';
       } finally {
         aiBtn.disabled = false;
+        hideOverlay();
       }
     });
   });
@@ -631,6 +633,7 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 
+document.getElementById('cntGrid').innerHTML = pageLoaderHtml();
 loadRegistry().then(load);
 </script>
 </body>

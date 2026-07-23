@@ -384,3 +384,43 @@ export function deleteTicketComment(ticketId, commentId) {
   mongoSet('tickets', cache.tickets);
   return ticket;
 }
+
+// ── Relatórios gerados (D+7, Stories 24h, mensal por país/rede/geral) ──────────────────────
+// reports[brandId] = [ {id, type, scopeLabel, periodKey, generatedAt, generatedBy, model}, ... ],
+// mais recente primeiro. `model` é o objeto genérico consumido por src/reportRenderer.js
+// (title/subtitle/sections) — já vem com qualquer texto de IA "cozido" dentro, então
+// baixar em PDF ou DOCX depois nunca chama a IA de novo, só re-renderiza o mesmo modelo.
+// `periodKey` (ex: mediaId, storyId, ou "2026-07" pro mês) é o que o agendador automático usa
+// pra nunca gerar duas vezes o mesmo relatório (ver checkAutoReports em src/reports.js).
+export function getReports(brandId) {
+  return (cache.reports || {})[brandId] || [];
+}
+
+export function reportExists(brandId, type, periodKey) {
+  return getReports(brandId).some(r => r.type === type && r.periodKey === periodKey);
+}
+
+export function getReport(brandId, id) {
+  return getReports(brandId).find(r => r.id === id) || null;
+}
+
+export function addReport(brandId, report) {
+  if (!cache.reports) cache.reports = {};
+  if (!cache.reports[brandId]) cache.reports[brandId] = [];
+  const record = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    generatedAt: new Date().toISOString(),
+    ...report,
+  };
+  cache.reports[brandId].unshift(record);
+  saveJson();
+  mongoSet('reports', cache.reports);
+  return record;
+}
+
+export function deleteReport(brandId, id) {
+  if (!cache.reports?.[brandId]) return;
+  cache.reports[brandId] = cache.reports[brandId].filter(r => r.id !== id);
+  saveJson();
+  mongoSet('reports', cache.reports);
+}

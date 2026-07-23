@@ -318,6 +318,7 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 
+document.getElementById('storyGrid').innerHTML = pageLoaderHtml();
 loadRegistry().then(load);
 </script>
 </body>

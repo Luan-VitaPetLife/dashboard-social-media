@@ -1126,6 +1126,7 @@ document.getElementById('syncBtn').addEventListener('click', async (e) => {
 updateChannelVisibility();
 syncControls();
 applyRefresh();
+['accGrid', 'orgPagoGrid', 'histGrid'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = pageLoaderHtml(); });
 loadRegistry().then(load);
 </script>
 </body>

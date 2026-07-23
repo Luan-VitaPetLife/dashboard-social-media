@@ -15,10 +15,13 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
+import { generateReport, checkAutoReports, REPORT_TYPES } from './src/reports.js';
+import { renderReportPdf, renderReportDocx } from './src/reportRenderer.js';
 import {
   setContentContext, setContentAiSummary, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings,
   getPeople, addPerson, updatePerson, deletePerson,
   getTickets, addTicket, updateTicket, deleteTicket, addTicketComment, deleteTicketComment,
+  getReports, getReport, addReport, deleteReport,
 } from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
 
@@ -423,6 +426,67 @@ app.post('/api/cofrinho/goals', (req, res) => {
   }
 });
 
+// ── Relatórios (D+7, Stories 24h, mensal por país/rede/geral) ──────────────────────────────
+// Lista só metadados (nunca o `model` inteiro, que pode ter várias tabelas) — o front pede o
+// PDF/DOCX de verdade só quando a pessoa clica em baixar.
+app.get('/api/reports', (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  res.json(getReports(brandId).map(r => ({ id: r.id, type: r.type, scopeLabel: r.scopeLabel, periodKey: r.periodKey, generatedAt: r.generatedAt, generatedBy: r.generatedBy })));
+});
+
+// Gera um relatório sob demanda — mesmo motivo do syncLimiter em ai-summary: cada geração chama
+// a API da Anthropic de verdade (custa dinheiro), então fica no mesmo limite apertado.
+app.post('/api/reports/generate', syncLimiter, async (req, res) => {
+  const brandId = req.body.brandId || getDefaultBrandId();
+  const { type, countryId, mediaId, storyId, platform, monthKey } = req.body;
+  if (!REPORT_TYPES.includes(type)) return res.status(400).json({ error: 'Tipo de relatório inválido.' });
+  try {
+    const { model, periodKey, scopeLabel } = await generateReport(brandId, type, { countryId, mediaId, storyId, platform, monthKey });
+    const record = addReport(brandId, { type, periodKey, scopeLabel, generatedBy: 'manual', model });
+    res.json({ id: record.id, type: record.type, scopeLabel: record.scopeLabel, periodKey: record.periodKey, generatedAt: record.generatedAt, generatedBy: record.generatedBy });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/reports/:id/pdf', async (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  const report = getReport(brandId, req.params.id);
+  if (!report) return res.status(404).json({ error: 'Relatório não encontrado.' });
+  try {
+    const buffer = await renderReportPdf(report.model);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="${slugifyFilename(report.model.title)}.pdf"`);
+    res.send(buffer);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/reports/:id/docx', async (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  const report = getReport(brandId, req.params.id);
+  if (!report) return res.status(404).json({ error: 'Relatório não encontrado.' });
+  try {
+    const buffer = await renderReportDocx(report.model);
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.set('Content-Disposition', `attachment; filename="${slugifyFilename(report.model.title)}.docx"`);
+    res.send(buffer);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/reports/:id', (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  deleteReport(brandId, req.params.id);
+  res.json({ ok: true });
+});
+
+function slugifyFilename(title) {
+  return String(title).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'relatorio';
+}
+
 app.post('/api/sync', syncLimiter, async (req, res) => {
   try { res.json(await runSync()); }
   catch (e) { res.status(500).json({ error: e.message }); }
@@ -505,10 +569,32 @@ async function scheduledStorySync() {
   }
 }
 
+// Geração automática de relatórios (D+7/Stories por item, mensal por país/rede/geral uma vez
+// por mês) — roda no mesmo ciclo do sync normal (não precisa de intervalo próprio: D+7/Stories
+// só mudam de estado quando o sync/story sync mais recente traz dado novo, e mensal só dispara
+// uma vez por mês mesmo checando a cada 12h). Ver checkAutoReports() em src/reports.js —
+// idempotente (nunca gera o mesmo relatório duas vezes) e não faz nada sem ANTHROPIC_API_KEY.
+let reportsInFlight = false;
+async function scheduledReports() {
+  if (reportsInFlight) return;
+  reportsInFlight = true;
+  try {
+    const r = await checkAutoReports();
+    if (r.errors.length) console.warn('Geração automática de relatórios com avisos:', r.errors);
+    if (r.generated) console.log(`Relatórios gerados automaticamente: ${r.generated}`);
+  } catch (e) {
+    console.error('Geração automática de relatórios falhou:', e.message);
+  } finally {
+    reportsInFlight = false;
+  }
+}
+
 await initStore();
 app.listen(PORT, async () => {
   console.log(`dashboard-social-media rodando em http://localhost:${PORT}`);
   await scheduledSync();
+  await scheduledReports();
   setInterval(scheduledSync, SYNC_INTERVAL_MINUTES * 60 * 1000);
   setInterval(scheduledStorySync, STORY_SYNC_INTERVAL_MINUTES * 60 * 1000);
+  setInterval(scheduledReports, SYNC_INTERVAL_MINUTES * 60 * 1000);
 });

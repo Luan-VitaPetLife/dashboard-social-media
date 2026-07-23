@@ -73,6 +73,15 @@ src/cofrinho.js       Cofrinho do Social (vendas rastreadas, 100% entrada manual
                       própria abaixo
 public/cofrinho.html  Tela do Cofrinho do Social
 public/chamados.html  Quadro de Chamados (estilo Monday) — ver seção própria abaixo
+src/ai.js             Integração com a API da Anthropic (Claude Sonnet 5) — wrapper genérico
+                      usado pelo resumo por IA da ficha de conteúdo e pelo gerador de relatórios
+src/reportTemplate.js Paleta e helpers de formatação compartilhados pelos dois exportadores de
+                      relatório (extraído do PDF de briefing da Aline) — ver seção própria abaixo
+src/reportRenderer.js Os dois exportadores de relatório (PDF via pdfkit, DOCX via docx), a partir
+                      de um modelo genérico único — ver seção própria abaixo
+src/reports.js        Os 5 tipos de relatório do briefing (D+7, Stories 24h, mensal por país/rede/
+                      geral) + geração automática agendada — ver seção própria abaixo
+public/relatorios.html Tela do gerador de relatórios (geração manual + lista de relatórios gerados)
 public/sidebar.js     Sidebar compartilhada (mesmo padrão IIFE do dashboard principal); marca o item
                       ativo pelo nome do arquivo atual (`location.pathname`); expõe `window.escapeHtml`
                       global usado por qualquer página que injete texto livre via innerHTML
@@ -447,6 +456,110 @@ nenhum estado do sistema) — se TikTok for integrado, por exemplo, essa linha s
 - Card "Comparação de período": três visualizações (Lista/Tabela/Gráfico) sobre os mesmos 6 KPIs
   combinados já calculados no backend — não dispara chamada nova ao trocar de view. Os 6 KPIs continuam
   agregando o **escopo de país selecionado** (todos os países da marca, ou só um), calculado no backend.
+
+### Gerador de relatórios (`src/reportTemplate.js`, `src/reportRenderer.js`, `src/reports.js`, `public/relatorios.html`)
+Implementado em 23/07/2026 — cobre a seção "Relatórios automáticos" do briefing (D+7, Stories 24h,
+mensal por país, mensal por rede, mensal geral), com download em **PDF e DOCX**, geração **manual**
+(botão "Gerar relatório") e **automática** (agendador), a pedido explícito do Luan ("Trabalhe em
+todos" os 5 tipos, "PDF e DOCX já juntos", "Ambas as opções" de geração).
+- **Camadas, de baixo pra cima:**
+  1. `reportTemplate.js` — paleta extraída visualmente do PDF de briefing da Aline (roxo/índigo
+     escuro nos cabeçalhos de tabela/títulos `#4B2E83`, listra lavanda clara `#E3E8F7` nas linhas
+     ímpares, subtítulo itálico azulado `#3D6DC8`, caixa de destaque tipo "Prioridade/Limite" em
+     lavanda bem clara) + helpers de formatação (`fmtNum`/`fmtPct`/`fmtDateBR`/`fmtDateTimeBR`).
+  2. `reportRenderer.js` — os dois exportadores (`renderReportPdf` via `pdfkit`, `renderReportDocx`
+     via `docx`), consumindo um **modelo genérico único**: `{ title, subtitle, brandName,
+     countryLabel, sections: [{ heading, paragraphs?, table?: {columns,rows}, callout?:
+     {label,text} }] }`. Um modelo só pros dois formatos evita que PDF e DOCX divirjam com o tempo.
+  3. `reports.js` — os 5 `build*Report()` (um por tipo), cada um montando esse modelo a partir dos
+     dashboards que **já existem** (`computeSocialDashboard`, `computeContentDashboard`,
+     `computeStoriesDashboard`, `computeGoalsDashboard`, `computeCofrinhoDashboard`) — nunca
+     recalcula métrica por conta própria. `generateReport()` é o dispatcher da rota manual;
+     `checkAutoReports()` é chamado pelo agendador.
+  4. `public/relatorios.html` — formulário de geração (campos condicionais por tipo: País+Conteúdo
+     pro D+7, País+Story pro Stories, País+Mês pro mensal por país, Canal+Mês pro mensal por rede,
+     só Mês pro mensal geral) + lista dos relatórios já gerados com botões de baixar PDF/DOCX
+     (`<a download>` direto pra rota, sem JS) e excluir. Reaproveita os padrões já estabelecidos:
+     `.field-dd`/`renderFieldDropdown()` (dropdown customizado, mesmo de `chamados.html`) e
+     `showConfirm()` (modal de confirmação, nunca `window.confirm()` nativo).
+- **Store** (`src/store.js`): `reports[brandId] = [{id, type, periodKey, scopeLabel, generatedAt,
+  generatedBy, model}, ...]`, mais recente primeiro. `model` já vem com qualquer texto de IA
+  "cozido" dentro — baixar de novo (PDF ou DOCX) nunca chama a IA outra vez, só re-renderiza o
+  mesmo modelo salvo. `reportExists(brandId, type, periodKey)` é o mecanismo de dedupe: `periodKey`
+  é `mediaId` (D+7), `storyId` (Stories), ou `"<escopo>:<YYYY-MM>"` (mensais) — nunca deixa a
+  geração automática criar o mesmo relatório duas vezes.
+- **Geração automática** (`checkAutoReports()`, chamado por `scheduledReports()` em `server.js`,
+  no mesmo ciclo de 12h do sync normal — sem intervalo próprio): D+7 dispara **uma vez por
+  conteúdo**, assim que `ageDays >= 7`; Stories dispara **uma vez por story**, assim que expira
+  (`ageHours >= 24`, ainda dentro da janela de retenção de 48h); os 3 mensais disparam **uma vez
+  por mês**, sempre pro **mês anterior já completo** (nunca o mês corrente, que ainda não
+  terminou). Sem `ANTHROPIC_API_KEY`, `checkAutoReports()` não gera nada (todo relatório depende de
+  algum texto sintetizado por IA) — evita gerar um relatório "capado" sozinho.
+- **Duas causas bem diferentes pro mesmo "sem texto de IA" — não confundir** (`aiFallbackText()`
+  em `reports.js`): "ANTHROPIC_API_KEY não configurado" (problema de configuração) vs. "a chamada à
+  IA falhou" (chave configurada mas a chamada deu erro de verdade — chave inválida/revogada, rate
+  limit, rede). Bug real encontrado e corrigido nesta sessão: a primeira versão sempre mostrava a
+  mensagem de "não configurado" mesmo quando a chave estava presente e a falha era outra —
+  descoberto testando localmente com a chave (real, mas já retornando 401 "API key is invalid" —
+  ver nota abaixo) configurada. Cada chamada de IA malsucedida agora loga o erro real no servidor
+  (`console.error`) e o relatório final é honesto sobre qual das duas causas foi.
+- **Pegadinhas reais do pdfkit encontradas no teste de fumaça do renderer (23/07/2026, não
+  redescobrir):**
+  - A fonte padrão (Helvetica/WinAnsi) **não tem os caracteres ▲/▼** — renderiza lixo (`%²`).
+    `fmtPct()` usa `+`/`-` em vez de setas Unicode (o front-end continua usando ▲/▼ normalmente,
+    é só a fonte do pdfkit que não suporta).
+  - Desenhar o rodapé com `y` dentro da margem inferior reservada (`page.margins.bottom`) faz o
+    pdfkit **inserir silenciosamente uma página em branco** só pra desenhar esse texto (interpreta
+    como overflow). Correção padrão: zerar `doc.page.margins.bottom` temporariamente antes de
+    desenhar o rodapé, restaurar depois (ver `renderReportPdf`).
+  - Medir a altura de um parágrafo com uma constante fixa (em vez de `doc.heightOfString()`) antes
+    de decidir se cabe na página causa quebra de página incorreta pra parágrafos longos — sempre
+    medir de verdade.
+  - `bufferPages:true` + `doc.bufferedPageRange()` + `doc.switchToPage(i)` no final (depois de todo
+    o conteúdo) é o padrão certo pra numeração "Página N de M" (só dá pra saber o total no fim).
+  - Tabela não repete cabeçalho quando atravessa página — simplificação aceitável dado o tamanho
+    típico das tabelas destes relatórios (poucas linhas cada).
+- **Cofrinho do Social não é filtrável por mês:** os registros são 100% manuais com um campo
+  `period` de texto livre (ex: "Julho/2026"), não uma data estruturada — o relatório mensal geral
+  soma os totais **acumulados desde o início**, com um aviso explícito disso no próprio relatório,
+  em vez de fingir que o total é exclusivo do mês.
+- **Social Listening ainda não implementado** — o relatório mensal geral inclui a seção mesmo
+  assim, com um callout "Ainda não implementado" (mesma regra de sinalizar limitação em vez de
+  omitir a seção inteira, que poderia parecer que ninguém pensou nisso).
+- **Testado ao vivo (23/07/2026):** servidor local com `MONGODB_URI=` (fallback JSON, nunca toca o
+  Mongo de produção) + `META_ACCESS_TOKEN`/`ANTHROPIC_API_KEY` reais do `.env`. Os 5 tipos gerados
+  com sucesso (mensal geral/país/rede via script direto contra dado real da Meta; D+7 manual via
+  navegador, incluindo o formulário completo — Tipo→País→Conteúdo, geração, download de PDF real,
+  exclusão com o modal de confirmação). A geração automática também rodou sozinha no boot do
+  servidor local e gerou os 5 relatórios mensais corretamente. **Nota:** a `ANTHROPIC_API_KEY`
+  local (`.env`) está retornando `401 API key is invalid` no momento deste teste — mesmo sintoma
+  já visto em produção (ver pendência de rotação de chave); o pipeline inteiro (dados, PDF, DOCX,
+  UI) foi validado de ponta a ponta mesmo assim, usando o texto de fallback "a chamada à IA
+  falhou" no lugar do texto gerado — só falta uma chave válida pros textos de IA aparecerem de
+  verdade nos relatórios.
+
+### Animações de carregamento (`public/sidebar.js`)
+Implementado em 23/07/2026, a pedido do Luan (peças originais de uiverse.io — Nawsome e
+andrew-manzyk) — duas animações, ambas expostas globalmente por `sidebar.js` (mesmo padrão de
+`escapeHtml`/`initCollapsibleNotice`) pra não duplicar o SVG/CSS em cada página:
+- **`pageLoaderHtml()`** — anel colorido em bloom (4 círculos animados), substitui o texto
+  "carregando…" nos placeholders `.empty` de carregamento inicial de cada página (`accGrid`,
+  `cntGrid`, `goalGrid`, `storyGrid`, `cofrinhoRoot`, `board`, `repList`). Chamado uma vez, antes
+  do primeiro `fetch`, no início do script de cada página.
+- **`aiLoaderHtml()`** — animação de "joia" brilhando, específica de espera de chamada de IA.
+  **Cuidado:** os `id` internos do SVG (`pegtopone`/`pegtoptwo`/`pegtopthree`) têm que ficar
+  direto na tag `<svg>` (como no snippet original) — colocá-los num `<span>` envolvendo o `<svg>`
+  colapsa a animação a 0×0 (bug real encontrado e corrigido nesta sessão: `height:auto` do
+  `.loader` some porque os filhos `position:absolute` não contribuem pra altura do pai, e o
+  `<span>` sem tamanho próprio some sozinho).
+- **`showAiThinkingOverlay(container)`** — combina `aiLoaderHtml()` com um borrão leve
+  (`backdrop-filter:blur`) por cima do `container` inteiro (o card, não só a área do resumo) +
+  texto que troca a cada 1,4s ("Pensando…", "Lendo os dados…", "Analisando…", "Escrevendo…",
+  "Quase pronto…") — reforça que é uma espera de verdade, não a tela travada. Devolve uma função
+  `hide()` que **sempre** precisa ser chamada no `finally` do try/catch da chamada (sucesso ou
+  erro), senão o borrão fica preso na tela. Usado no botão "Gerar resumo com IA" de
+  `conteudos.html` (borra o `.cnt-card` inteiro) e no botão "Gerar relatório" de
+  `relatorios.html` (borra o card `#genCard`).
 
 ## Auditoria de segurança (22/07/2026)
 

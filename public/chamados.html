@@ -831,6 +831,7 @@ document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];
 document.querySelectorAll('#cselGroupBy .csel-opt').forEach(o => o.classList.toggle('active', o.dataset.value === groupBy));
 document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewMode));
 updateGroupByVisibility();
+document.getElementById('board').innerHTML = pageLoaderHtml();
 load();
 </script>
 </body>
