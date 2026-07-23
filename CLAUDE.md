@@ -255,21 +255,26 @@ estados") fica pra uma fase seguinte, ver limite abaixo.
   primeiro modo disponível automaticamente.
 - **Dia/Noite** (`.style-toggle`) troca só as texturas (`globeImageUrl`/`bumpImageUrl`/
   `backgroundImageUrl`) — sem chamada nova ao servidor.
-- **Drill-down por estado, só Brasil (23/07/2026):** clicar no Brasil no mapa-mundo troca
-  `polygonsData` pro conjunto de 27 estados (GeoJSON de `codeforamerica/click_that_hood`, servido
-  via `cdn.jsdelivr.net` em "modo GitHub" `/gh/...` — mesmo host já liberado na CSP, não precisou
-  abrir domínio novo) e recolore pelo valor por estado. Como a API não expõe uma dimensão nativa
-  de estado/província, o estado é **derivado** da string de cidade que a Meta devolve (ex: "São
-  Luís, Maranhão" → "Maranhão"; "São Paulo, São Paulo (state)" → "São Paulo", sufixo "(state)" que
-  a Meta usa quando cidade e estado têm o mesmo nome) — `deriveState()`/`buildBrStateBreakdown()`
-  em `src/audience.js`. Confirmado ao vivo que esse padrão "Cidade, Região" é global (testado nas
-  duas contas), não exclusivo do Brasil, mas o drill-down visual só está ligado pro Brasil por
-  enquanto (`STATE_SOURCES` em `audiencia.html` só tem a chave `BR`) — outros países continuam só
-  com zoom de câmera, sem trocar a camada de polígonos. Uma whitelist fixa dos 26 estados + DF
-  (`BR_STATES` em `audience.js`) filtra ruído de outros países cuja cidade também contenha uma
-  vírgula seguida de algo parecido com nome de estado brasileiro. Botão "Voltar ao mundo" troca de
-  volta pra `countriesFeatures`; mudar de conta/marca também sai do drill-down automaticamente
-  (`loadAudience()` chama `exitStateView()` se necessário).
+- **Drill-down por estado, Brasil e Estados Unidos (23/07/2026, EUA adicionado no mesmo dia logo
+  depois do Brasil):** clicar num desses dois países no mapa-mundo troca `polygonsData` pro
+  conjunto de estados daquele país (GeoJSON de `codeforamerica/click_that_hood`, um arquivo por
+  país, servido via `cdn.jsdelivr.net` em "modo GitHub" `/gh/...` — mesmo host já liberado na CSP,
+  não precisou abrir domínio novo) e recolore pelo valor por estado. Como a API não expõe uma
+  dimensão nativa de estado/província, o estado é **derivado** da string de cidade que a Meta
+  devolve (ex: "São Luís, Maranhão" → "Maranhão"; "São Paulo, São Paulo (state)" → "São Paulo",
+  sufixo "(state)" que a Meta usa quando cidade e estado têm o mesmo nome; "Austin, Texas" →
+  "Texas") — `deriveState()`/`buildStateBreakdown()` (genérica, recebe a whitelist do país) em
+  `src/audience.js`. Confirmado ao vivo que esse padrão "Cidade, Região" é global (testado nas
+  duas contas), não exclusivo de nenhum país, mas o drill-down visual só está ligado pra Brasil e
+  EUA por enquanto (`STATE_SOURCES` em `audiencia.html` só tem as chaves `BR`/`US`) — outros
+  países continuam só com zoom de câmera, sem trocar a camada de polígonos. Cada país tem sua
+  própria whitelist fixa (`BR_STATES`: 26 estados + DF; `US_STATES`: 50 estados + Distrito
+  Federal) que filtra ruído de outros países cuja cidade também contenha uma vírgula seguida de
+  algo parecido com nome de estado/região. **Alasca e Havaí não aparecem no mapa** (o GeoJSON de
+  `click_that_hood` pros EUA só tem 49 features, os 48 contíguos + DC) mas continuam contados
+  certo no ranking "Top estados" ao lado, só sem polígono pra colorir. Botão "Voltar ao mundo"
+  troca de volta pra `countriesFeatures`; mudar de conta/marca também sai do drill-down
+  automaticamente (`loadAudience()` chama `exitStateView()` se necessário).
 - **Cor do mapa, escolhida pelo usuário (23/07/2026):** seletor `<input type="color">` no toolbar
   (padrão = rosa do Instagram, `#dd2a7b`) — `colorForValue()` interpola de uma versão bem clara da
   cor escolhida até a cor plena (escala log), tanto no globo quanto no gradiente das barras de

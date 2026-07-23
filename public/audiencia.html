@@ -160,8 +160,8 @@
       ("Todas"), alguém que segue Brasil e Estados Unidos ao mesmo tempo conta duas vezes, a Meta
       não permite deduplicar audiência entre contas diferentes. Só Instagram tem esse dado, o
       Facebook descontinuou as métricas equivalentes. O drill-down por estado (clique num país)
-      só existe pro Brasil por enquanto, com o estado inferido a partir da cidade que a Meta
-      devolve; outros países mostram só o total nacional.</p>
+      só existe pro Brasil e Estados Unidos por enquanto, com o estado inferido a partir da cidade
+      que a Meta devolve; outros países mostram só o total nacional.</p>
     </div>
     <button class="notice-fab" id="limitNoteFab" title="Como ler este globo" aria-label="Mostrar aviso"><i class="bi bi-info-circle-fill"></i></button>
 
@@ -184,7 +184,7 @@
         <div id="globeViz"></div>
         <div class="globe-loading" id="globeLoading"><div class="page-loader"></div></div>
         <button class="globe-back-btn" id="backToWorldBtn"><i class="bi bi-arrow-left"></i> Voltar ao mundo</button>
-        <div class="globe-hint" id="globeHint">Arraste pra girar · clique num país pra aproximar (Brasil abre por estado)</div>
+        <div class="globe-hint" id="globeHint">Arraste pra girar · clique num país pra aproximar (Brasil e EUA abrem por estado)</div>
       </div>
 
       <div class="side-panel">
@@ -213,7 +213,7 @@ const GLOBE_TEXTURES = {
   night: { globe: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg', bump: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png', bg: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png' },
 };
 const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson';
-// Drill-down por estado: só Brasil por enquanto (ver BR_STATES/buildBrStateBreakdown em
+// Drill-down por estado: Brasil e Estados Unidos por enquanto (ver BR_STATES/US_STATES em
 // src/audience.js). Fronteiras via click_that_hood (mesmo host cdn.jsdelivr.net já liberado
 // na CSP, servido em "modo GitHub" — não precisou abrir a CSP pra um domínio novo).
 const STATE_SOURCES = {
@@ -221,6 +221,11 @@ const STATE_SOURCES = {
     url: 'https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/brazil-states.geojson',
     nameProp: 'name',
     dataKey: 'br',
+  },
+  US: {
+    url: 'https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/united-states.geojson',
+    nameProp: 'name',
+    dataKey: 'us',
   },
 };
 
@@ -484,7 +489,7 @@ function exitStateView() {
   world.polygonsData(countriesFeatures);
   world.pointOfView({ lat: 10, lng: -40, altitude: 2.2 }, 1000);
   document.getElementById('backToWorldBtn').classList.remove('show');
-  document.getElementById('globeHint').textContent = 'Arraste pra girar · clique num país pra aproximar (Brasil abre por estado)';
+  document.getElementById('globeHint').textContent = 'Arraste pra girar · clique num país pra aproximar (Brasil e EUA abrem por estado)';
   renderAll();
 }
 document.getElementById('backToWorldBtn').addEventListener('click', exitStateView);

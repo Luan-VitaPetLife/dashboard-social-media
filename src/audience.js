@@ -18,17 +18,30 @@ function mergeBreakdown(lists) {
   return [...map.entries()].map(([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value);
 }
 
-// Lista fixa (constitucional, nunca muda) — usada como whitelist pra extrair estado a partir da
-// string de cidade da Meta (ex: "São Paulo, São Paulo (state)" → "São Paulo"), já que a API não
-// expõe uma dimensão nativa de estado/província. Sem whitelist, um follower de outro país cuja
-// cidade contenha uma vírgula seguida de algo parecido com nome de estado brasileiro entraria
-// incorretamente no agregado.
+// Listas fixas (não mudam) — usadas como whitelist pra extrair estado a partir da string de
+// cidade da Meta (ex: "São Paulo, São Paulo (state)" → "São Paulo"; "Austin, Texas" → "Texas"),
+// já que a API não expõe uma dimensão nativa de estado/província. Sem whitelist, um follower de
+// outro país cuja cidade contenha uma vírgula seguida de algo parecido com nome de estado/região
+// entraria incorretamente no agregado. Confirmado ao vivo (23/07/2026) que o padrão "Cidade,
+// Região" nas duas contas segue esse formato de forma consistente.
 const BR_STATES = new Set([
   'Acre', 'Alagoas', 'Amazonas', 'Amapá', 'Bahia', 'Ceará', 'Espírito Santo', 'Goiás',
   'Maranhão', 'Minas Gerais', 'Mato Grosso do Sul', 'Mato Grosso', 'Pará', 'Paraíba',
   'Pernambuco', 'Piauí', 'Paraná', 'Rio de Janeiro', 'Rio Grande do Norte', 'Rondônia',
   'Roraima', 'Rio Grande do Sul', 'Santa Catarina', 'Sergipe', 'São Paulo', 'Tocantins',
   'Distrito Federal',
+]);
+// 50 estados + Distrito Federal. Alasca e Havaí ficam de fora do GeoJSON de fronteiras usado no
+// front (public/audiencia.html), mas continuam na whitelist — um follower de lá aparece certo no
+// ranking "Top estados", só não pinta no mapa por falta de polígono.
+const US_STATES = new Set([
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
+  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
+  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
+  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
+  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia',
 ]);
 
 function deriveState(cityKey) {
@@ -37,11 +50,11 @@ function deriveState(cityKey) {
   return cityKey.slice(idx + 2).replace(/\s*\(state\)\s*$/i, '').trim();
 }
 
-function buildBrStateBreakdown(cityEntries) {
+function buildStateBreakdown(cityEntries, whitelist) {
   const map = new Map();
   for (const { key, value } of cityEntries || []) {
     const state = deriveState(key);
-    if (state && BR_STATES.has(state)) map.set(state, (map.get(state) || 0) + value);
+    if (state && whitelist.has(state)) map.set(state, (map.get(state) || 0) + value);
   }
   return [...map.entries()].map(([state, value]) => ({ state, value })).sort((a, b) => b.value - a.value);
 }
@@ -66,16 +79,20 @@ export async function computeAudienceDashboard({ brandId, country }) {
     const entries = withData.map(a => a.data[field]).filter(Boolean);
     if (!entries.length) return null;
     const brEntry = withData.find(a => a.countryId === 'br')?.data?.[field];
+    const usEntry = withData.find(a => a.countryId === 'us')?.data?.[field];
     return {
       timeframe: entries.find(d => d.timeframe)?.timeframe || null,
       byCountry: mergeBreakdown(entries.map(d => d.country)),
       byCity: mergeBreakdown(entries.map(d => d.city)),
       byAge: mergeBreakdown(entries.map(d => d.age)),
       byGender: mergeBreakdown(entries.map(d => d.gender)),
-      // Drill-down por estado só existe pra Brasil por enquanto (única fonte com GeoJSON de
-      // fronteiras ligado no front) — chave 'br' minúscula, mesmo padrão do countryId do resto
-      // do app. Ver public/audiencia.html (STATE_SOURCES) pro consumidor.
-      byState: { br: brEntry ? buildBrStateBreakdown(brEntry.city) : [] },
+      // Drill-down por estado: chave = countryId minúsculo (mesmo padrão do resto do app), só
+      // existe pra Brasil e Estados Unidos por enquanto (únicos com GeoJSON de fronteiras ligado
+      // no front, ver STATE_SOURCES em public/audiencia.html).
+      byState: {
+        br: brEntry ? buildStateBreakdown(brEntry.city, BR_STATES) : [],
+        us: usEntry ? buildStateBreakdown(usEntry.city, US_STATES) : [],
+      },
     };
   }
 
