@@ -277,7 +277,10 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
    <uiverse.io/andrew-manzyk>. IDs internos do SVG (mask/gradientes) podem se repetir se houver
    mais de uma instância na página ao mesmo tempo — inofensivo aqui porque todas as instâncias
    usam exatamente as mesmas definições, então não importa qual delas o navegador resolve. ── */
-.ai-loader{display:flex;align-items:center;justify-content:center;padding:6px 0}
+/* min-height reserva espaço pro alcance vertical real da animação (as "joias" viajam bem além da
+   caixa 0-altura do .loader via translateY absoluto) — sem isso, o texto abaixo (na pilha flex do
+   .ai-thinking-overlay) fica perto demais do centro da animação e as joias passam por cima dele. */
+.ai-loader{display:flex;align-items:center;justify-content:center;padding:6px 0;min-height:140px}
 .ai-loader .loader{--fill-color:#946200;--shine-color:#94620033;transform:scale(.4);width:100px;height:auto;position:relative;filter:drop-shadow(0 0 10px var(--shine-color))}
 .ai-loader .loader #pegtopone{position:absolute;animation:aiLoaderFloweOne 1s linear infinite}
 .ai-loader .loader #pegtoptwo{position:absolute;opacity:0;transform:scale(0) translateY(-200px) translateX(-100px);animation:aiLoaderFloweTwo 1s linear infinite;animation-delay:.3s}
