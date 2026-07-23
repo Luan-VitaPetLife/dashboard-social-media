@@ -12,6 +12,7 @@ import { computeGoalsDashboard } from './src/goals.js';
 import { computeStoriesDashboard } from './src/storyMetrics.js';
 import { runStorySync } from './src/storySync.js';
 import { computeCofrinhoDashboard } from './src/cofrinho.js';
+import { computeAudienceDashboard } from './src/audience.js';
 import { probeInsights, probeEngagement, probeDemographics } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
@@ -46,8 +47,10 @@ const REPORT_SCHEDULE_CHECK_MINUTES = Number(process.env.REPORT_SCHEDULE_CHECK_M
 app.set('trust proxy', 1);
 
 // ── Segurança: cabeçalhos (helmet), sem quebrar os assets via CDN já usados nas páginas ──
-// (cdn.jsdelivr.net serve o Chart.js e a fonte/CSS do Bootstrap Icons). CSP em modo
-// allowlist explícita em vez de desligada — 'unsafe-inline' é necessário porque todas as
+// (cdn.jsdelivr.net serve o Chart.js, a fonte/CSS do Bootstrap Icons, e a lib globe.gl + as
+// texturas/GeoJSON do globo 3D da tela Audiência — imgSrc/connectSrc liberados pra esse mesmo
+// host em vez de baixar/hospedar os assets aqui, pra não duplicar o dataset de países). CSP em
+// modo allowlist explícita em vez de desligada — 'unsafe-inline' é necessário porque todas as
 // páginas hoje usam <script>/<style> inline (sem nonce/hash); reavaliar se algum dia isso
 // mudar para arquivos .js/.css separados.
 app.use(helmet({
@@ -57,8 +60,9 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'data:'],
-      imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+      connectSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+      workerSrc: ["'self'", 'blob:'],
     },
   },
   // Sem iframes/recursos cross-origin embutidos nesta app — nenhuma necessidade de COEP.
@@ -390,6 +394,19 @@ app.get('/api/stories', (req, res) => {
   const country = req.query.country || 'all';
   try {
     res.json(computeStoriesDashboard({ brandId, country }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Geografia/demografia de audiência (país/cidade/idade/gênero) pra tela de Audiência (globo 3D).
+// Cache de 30min já embutido em fetchInstagramAudienceDemographics — não precisa de rate limit
+// dedicado (não dispara chamada nova a cada request, ao contrário das rotas com syncLimiter).
+app.get('/api/audience', async (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  const country = req.query.country || 'all';
+  try {
+    res.json(await computeAudienceDashboard({ brandId, country }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

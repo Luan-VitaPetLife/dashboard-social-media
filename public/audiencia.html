@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audiência · Coco and Luna</title>
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+  :root{
+    --bg:#f4f6fb; --surface:#fff; --surface2:#f6f8fc; --border:#e7eaf1; --border2:#d8dee9;
+    --text:#1c2b39; --sub:#4b5c6b; --muted:#8a97a3; --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+    --ig-2:#dd2a7b;
+    --radius:14px; --radius-sm:9px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    position:sticky;top:0;z-index:100}
+  .topbar h1{font-size:18px;margin:0}
+  .topbar .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .topbar-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+  .filter-pill img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
+  .csel-opt img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+  .csel-opt.disabled{opacity:.4;cursor:default;pointer-events:none}
+
+  .content{padding:28px 32px;max-width:1400px;width:100%;margin:0 auto;flex:1}
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;box-shadow:0 1px 2px rgba(28,43,57,.04)}
+
+  .limit-note{display:flex;align-items:flex-start;gap:12px;background:rgba(148,98,0,.06);
+    border:1px solid rgba(148,98,0,.18);border-radius:var(--radius);padding:16px 18px;margin-bottom:24px}
+  .limit-note i{color:var(--gold);font-size:16px;margin-top:1px;flex-shrink:0}
+  .limit-note p{margin:0;font-size:12.5px;color:var(--sub);line-height:1.6}
+
+  .globe-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+  .globe-toolbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mode-group{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px}
+  .mode-btn{border:none;background:none;padding:7px 14px;border-radius:16px;font-size:11.5px;font-weight:600;
+    color:var(--sub);cursor:pointer;white-space:nowrap}
+  .mode-btn.active{background:var(--text);color:#fff}
+  .mode-btn:disabled{opacity:.35;cursor:default}
+  .mode-btn:hover:not(.active):not(:disabled){color:var(--text)}
+  .style-toggle{display:flex;gap:3px;background:var(--surface2);border-radius:20px;padding:3px}
+  .style-btn{border:none;background:none;padding:7px 12px;border-radius:16px;font-size:11.5px;font-weight:600;
+    color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px}
+  .style-btn.active{background:var(--text);color:#fff}
+
+  .globe-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
+  @media(max-width:1000px){.globe-layout{grid-template-columns:1fr}}
+  .globe-card{padding:0;overflow:hidden;position:relative}
+  #globeViz{width:100%;height:600px;cursor:grab}
+  #globeViz:active{cursor:grabbing}
+  .globe-hint{position:absolute;bottom:14px;left:18px;font-size:11px;color:rgba(255,255,255,.75);
+    background:rgba(0,0,0,.35);padding:6px 12px;border-radius:20px;pointer-events:none}
+  .globe-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#0b1220}
+
+  .side-panel{display:flex;flex-direction:column;gap:16px}
+  .metric-summary .kc-label{font-size:10.5px;font-weight:700;letter-spacing:.3px;color:var(--muted);
+    margin-bottom:8px;text-transform:uppercase}
+  .metric-summary .kc-value{font-size:24px;font-weight:300;color:var(--text);margin-bottom:4px}
+  .metric-summary .kc-note{font-size:11px;color:var(--muted)}
+
+  .rank-list{display:flex;flex-direction:column;gap:9px}
+  .rank-row{display:flex;align-items:center;gap:10px;font-size:12px}
+  .rank-name{flex:1;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rank-bar-wrap{flex:1;height:6px;border-radius:20px;background:var(--surface2);overflow:hidden}
+  .rank-bar{height:100%;border-radius:20px;background:linear-gradient(90deg,#f8d3e0,var(--ig-2))}
+  .rank-value{font-size:11.5px;font-weight:700;color:var(--text);min-width:44px;text-align:right}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Audiência</h1>
+      <div class="sub" id="topSub">De onde vem quem segue, interage e é alcançado no Instagram</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill" id="brandPillStatic" style="display:none">
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal">—</span>
+      </div>
+      <div class="filter-pill csel" id="cselBrand" style="display:none">
+        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal">—</span><span class="arr">▾</span>
+        <div class="csel-pop"></div>
+      </div>
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">Conta</span><span class="val" id="countryVal">Todas</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="limit-note">
+      <i class="bi bi-info-circle-fill"></i>
+      <p><b>Como ler este globo:</b> dado real da Meta Graph API, nunca estimado. "Seguidores" é o
+      histórico completo (sempre disponível); "Engajamento" e "Alcance" dependem de atividade
+      recente, ficam indisponíveis pra contas sem posts nas últimas semanas. Somando as duas contas
+      ("Todas"), alguém que segue Brasil e Estados Unidos ao mesmo tempo conta duas vezes, a Meta
+      não permite deduplicar audiência entre contas diferentes. Só Instagram tem esse dado, o
+      Facebook descontinuou as métricas equivalentes.</p>
+    </div>
+
+    <div class="globe-toolbar">
+      <div class="globe-toolbar-left">
+        <div class="mode-group" id="modeGroup"></div>
+      </div>
+      <div class="style-toggle" id="styleToggle">
+        <button class="style-btn active" data-style="day"><i class="bi bi-sun-fill"></i> Dia</button>
+        <button class="style-btn" data-style="night"><i class="bi bi-moon-stars-fill"></i> Noite</button>
+      </div>
+    </div>
+
+    <div class="globe-layout">
+      <div class="card globe-card">
+        <div id="globeViz"></div>
+        <div class="globe-loading" id="globeLoading"><div class="page-loader"></div></div>
+        <div class="globe-hint">Arraste pra girar · clique num país pra aproximar</div>
+      </div>
+
+      <div class="side-panel">
+        <div class="card metric-summary" id="metricSummary"></div>
+        <div class="card">
+          <h3 class="section" style="margin-top:0">Top países</h3>
+          <div class="rank-list" id="rankList"><div class="empty">carregando…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+<script src="sidebar.js"></script>
+<script>
+const MODE_META = {
+  followers:  { label: 'Seguidores', icon: 'bi-people-fill' },
+  engaged:    { label: 'Engajamento', icon: 'bi-heart-fill' },
+  reached:    { label: 'Alcance', icon: 'bi-broadcast' },
+};
+const GLOBE_TEXTURES = {
+  day:   { globe: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg', bump: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png', bg: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png' },
+  night: { globe: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg', bump: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png', bg: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png' },
+};
+const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson';
+
+let registryTree = null;
+let brandId = localStorage.getItem('coco_aud_brand') || null;
+let countryScope = localStorage.getItem('coco_aud_country') || 'all';
+let mode = localStorage.getItem('coco_aud_mode') || 'followers';
+let globeStyle = localStorage.getItem('coco_aud_style') || 'day';
+let audienceData = null;
+let countriesFeatures = null;
+let iso2ToName = new Map();
+let world = null;
+
+function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+
+// ── dropdowns (mesmo padrão de todas as outras páginas) ──
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.csel').forEach(csel => {
+    if (!csel.contains(e.target)) csel.classList.remove('open');
+    else if (e.target.closest('.filter-pill') && !e.target.closest('.csel-opt')) csel.classList.toggle('open');
+  });
+});
+function setupCsel(el, onSelect) {
+  el.addEventListener('click', e => {
+    if (e.target.closest('.csel-opt')) {
+      onSelect(e.target.closest('.csel-opt').dataset.value);
+      el.classList.remove('open');
+    }
+  });
+}
+
+function buildBrandSelector(brands) {
+  const staticPill = document.getElementById('brandPillStatic');
+  const dropdown = document.getElementById('cselBrand');
+  if (brands.length <= 1) {
+    dropdown.style.display = 'none';
+    staticPill.style.display = brands.length ? '' : 'none';
+    if (brands.length) {
+      document.getElementById('brandStaticVal').textContent = brands[0].name;
+      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
+    }
+    return;
+  }
+  staticPill.style.display = 'none';
+  dropdown.style.display = '';
+  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
+    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
+  ).join('');
+  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
+  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
+  setupCsel(dropdown, val => {
+    brandId = val;
+    localStorage.setItem('coco_aud_brand', brandId);
+    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
+    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
+    buildCountrySelector(currentBrand()?.countries || []);
+    loadAudience();
+  });
+}
+
+function buildCountrySelector(countries) {
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+  const pop = document.getElementById('countryPop');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+  pop.innerHTML = opt('all', 'Todas (combinado)') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todas' : (countries.find(c => c.id === countryScope)?.name || 'Todas');
+  setupCsel(document.getElementById('cselCountry'), val => {
+    countryScope = val;
+    localStorage.setItem('coco_aud_country', countryScope);
+    document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todas' : (countries.find(c => c.id === countryScope)?.name || 'Todas');
+    loadAudience();
+  });
+}
+
+async function loadRegistry() {
+  const res = await fetch('/api/registry');
+  registryTree = await res.json();
+  const brands = registryTree.brands || [];
+  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
+  buildBrandSelector(brands);
+  buildCountrySelector(currentBrand()?.countries || []);
+}
+
+// ── modo de visualização (métrica) ──
+function renderModeGroup() {
+  const group = document.getElementById('modeGroup');
+  group.innerHTML = Object.entries(MODE_META).map(([key, m]) => {
+    const hasData = Boolean(audienceData?.metrics?.[key]);
+    const disabled = audienceData && !hasData;
+    return `<button class="mode-btn${mode === key ? ' active' : ''}" data-mode="${key}" ${disabled ? 'disabled title="Sem dado disponível pra essa conta/escopo"' : ''}><i class="bi ${m.icon}"></i> ${m.label}</button>`;
+  }).join('');
+  group.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      mode = btn.dataset.mode;
+      localStorage.setItem('coco_aud_mode', mode);
+      renderModeGroup();
+      renderAll();
+    });
+  });
+}
+
+// ── estilo do globo (dia/noite) ──
+document.querySelectorAll('.style-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    globeStyle = btn.dataset.style;
+    localStorage.setItem('coco_aud_style', globeStyle);
+    document.querySelectorAll('.style-btn').forEach(b => b.classList.toggle('active', b === btn));
+    applyGlobeStyle();
+  });
+});
+document.querySelectorAll('.style-btn').forEach(b => b.classList.toggle('active', b.dataset.style === globeStyle));
+
+function applyGlobeStyle() {
+  if (!world) return;
+  const t = GLOBE_TEXTURES[globeStyle];
+  world.globeImageUrl(t.globe).bumpImageUrl(t.bump).backgroundImageUrl(t.bg);
+}
+
+// ── cor por valor (escala log — o Brasil domina tanto que uma escala linear apagaria o resto) ──
+function colorForValue(value, max) {
+  if (!value || !max) return 'rgba(120,130,140,0.16)';
+  const t = Math.min(1, Math.log(value + 1) / Math.log(max + 1));
+  const from = [246, 214, 230], to = [221, 42, 123];
+  const rgb = from.map((c, i) => Math.round(c + (to[i] - c) * t));
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.9)`;
+}
+
+function polygonCentroid(feature) {
+  const geom = feature.geometry;
+  const ring = geom.type === 'Polygon' ? geom.coordinates[0] : geom.coordinates[0][0];
+  let x = 0, y = 0;
+  for (const [lng, lat] of ring) { x += lng; y += lat; }
+  return { lng: x / ring.length, lat: y / ring.length };
+}
+
+// ── globo (criado uma vez, dado atualizado depois) ──
+async function initGlobe() {
+  const res = await fetch(COUNTRIES_GEOJSON_URL);
+  const geo = await res.json();
+  countriesFeatures = geo.features;
+  for (const f of countriesFeatures) iso2ToName.set(f.properties.ISO_A2, f.properties.NAME);
+
+  const el = document.getElementById('globeViz');
+  world = Globe()(el)
+    .width(el.clientWidth)
+    .height(el.clientHeight)
+    .polygonsData(countriesFeatures)
+    .polygonAltitude(0.01)
+    .polygonSideColor(() => 'rgba(80,80,90,0.12)')
+    .polygonStrokeColor(() => 'rgba(255,255,255,0.35)')
+    .polygonLabel(f => {
+      const v = valueForCode(f.properties.ISO_A2);
+      return `<div style="background:rgba(20,20,30,.9);color:#fff;padding:6px 10px;border-radius:8px;font-size:12px">
+        <b>${f.properties.NAME}</b><br>${v != null ? fmt(v) : 'sem dado'}</div>`;
+    })
+    .onPolygonClick(f => {
+      const { lat, lng } = polygonCentroid(f);
+      world.pointOfView({ lat, lng, altitude: 1.4 }, 1000);
+    })
+    .onPolygonHover(hoverF => world.polygonAltitude(f => f === hoverF ? 0.06 : 0.01));
+
+  applyGlobeStyle();
+  const controls = world.controls();
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.4;
+  controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+  window.addEventListener('resize', () => {
+    world.width(el.clientWidth).height(el.clientHeight);
+  });
+
+  document.getElementById('globeLoading').style.display = 'none';
+  renderAll();
+}
+
+function currentMetric() { return audienceData?.metrics?.[mode] || null; }
+
+function valueForCode(code) {
+  const m = currentMetric();
+  if (!m) return null;
+  const entry = m.byCountry.find(e => e.key === code);
+  return entry ? entry.value : null;
+}
+
+function renderGlobeColors() {
+  if (!world) return;
+  const m = currentMetric();
+  const max = m ? Math.max(...m.byCountry.map(e => e.value), 1) : 1;
+  world.polygonCapColor(f => colorForValue(valueForCode(f.properties.ISO_A2), max));
+}
+
+function renderSummary() {
+  const box = document.getElementById('metricSummary');
+  const m = currentMetric();
+  if (!m) {
+    box.innerHTML = `<div class="kc-label">${MODE_META[mode].label}</div><div class="empty" style="padding:8px 0 0">sem dado disponível pra essa conta/escopo</div>`;
+    return;
+  }
+  const total = m.byCountry.reduce((a, e) => a + e.value, 0);
+  box.innerHTML = `
+    <div class="kc-label">${MODE_META[mode].label} · total</div>
+    <div class="kc-value">${fmt(total)}</div>
+    <div class="kc-note">${m.byCountry.length} país(es) com dado${m.timeframe ? ` · janela: ${m.timeframe.replace(/_/g, ' ')}` : ' · histórico completo'}</div>
+  `;
+}
+
+function renderRanking() {
+  const list = document.getElementById('rankList');
+  const m = currentMetric();
+  if (!m || !m.byCountry.length) { list.innerHTML = '<div class="empty">sem dado disponível</div>'; return; }
+  const top = m.byCountry.slice(0, 10);
+  const max = top[0].value || 1;
+  list.innerHTML = top.map(e => `
+    <div class="rank-row">
+      <span class="rank-name">${escapeHtml(iso2ToName.get(e.key) || e.key)}</span>
+      <span class="rank-bar-wrap"><span class="rank-bar" style="width:${Math.max(4, (e.value / max) * 100)}%"></span></span>
+      <span class="rank-value">${fmt(e.value)}</span>
+    </div>
+  `).join('');
+}
+
+function renderAll() {
+  renderGlobeColors();
+  renderSummary();
+  renderRanking();
+}
+
+async function loadAudience() {
+  if (!brandId) return;
+  const res = await fetch(`/api/audience?brand=${brandId}&country=${countryScope}`);
+  audienceData = await res.json();
+  // se o modo atual ficou sem dado nesse escopo novo, cai pro primeiro modo que tiver dado
+  if (!audienceData.metrics[mode]) {
+    const fallback = Object.keys(MODE_META).find(k => audienceData.metrics[k]);
+    if (fallback) mode = fallback;
+  }
+  renderModeGroup();
+  renderAll();
+}
+
+renderModeGroup();
+loadRegistry().then(() => Promise.all([loadAudience(), initGlobe()]).then(renderAll));
+</script>
+</body>
+</html>

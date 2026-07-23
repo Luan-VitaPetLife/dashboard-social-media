@@ -490,3 +490,69 @@ export async function probeDemographics(brandId, countryId) {
 
   return out;
 }
+
+// ── Demografia/geografia de audiência (produção — usado pela seção Audiência/globo) ────────
+// Diferente do probeDemographics acima (diagnóstico bruto, sempre testa tudo): aqui, uma vez que
+// um timeframe funciona pro primeiro breakdown de engaged/reached, reaproveita esse mesmo
+// timeframe pros outros 3 breakdowns (evita até 16 chamadas por métrica — só cai pra tentar os
+// outros candidatos de novo se o confirmado parar de funcionar). Cache de 30min: dado de
+// demografia de audiência não muda rápido, diferente do engajamento do período (5min).
+const audienceCache = new Map();
+const AUDIENCE_CACHE_TTL_MS = 30 * 60 * 1000;
+async function cachedAudience(key, fn) {
+  const hit = audienceCache.get(key);
+  if (hit && Date.now() - hit.at < AUDIENCE_CACHE_TTL_MS) return hit.value;
+  const value = await fn();
+  audienceCache.set(key, { value, at: Date.now() });
+  return value;
+}
+
+function parseBreakdownResults(json) {
+  const results = json.data?.[0]?.total_value?.breakdowns?.[0]?.results || [];
+  return results.map(r => ({ key: r.dimension_values[0], value: r.value }));
+}
+
+async function fetchLifetimeDemographics(id) {
+  const out = {};
+  for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
+    try {
+      const json = await graphGet(`${id}/insights?metric=follower_demographics&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
+      out[breakdown] = parseBreakdownResults(json);
+    } catch {
+      out[breakdown] = null;
+    }
+  }
+  return out;
+}
+
+// engaged_audience_demographics / reached_audience_demographics — null se a conta não tem
+// atividade recente o bastante pra nenhum dos timeframes candidatos responder (não é erro, é
+// limitação real: contas sem post recente não têm o que mostrar aqui, ver CLAUDE.md).
+async function fetchTimeframedDemographics(id, metric) {
+  const out = {};
+  let confirmedTimeframe = null;
+  for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
+    const candidates = confirmedTimeframe ? [confirmedTimeframe, ...TIMEFRAME_CANDIDATES] : TIMEFRAME_CANDIDATES;
+    let got = null;
+    for (const timeframe of candidates) {
+      try {
+        const json = await graphGet(`${id}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
+        got = parseBreakdownResults(json);
+        confirmedTimeframe = timeframe;
+        break;
+      } catch { /* tenta o próximo candidato */ }
+    }
+    out[breakdown] = got;
+  }
+  const hasData = Object.values(out).some(v => v && v.length);
+  return hasData ? { timeframe: confirmedTimeframe, ...out } : null;
+}
+
+export async function fetchInstagramAudienceDemographics(id) {
+  if (!TOKEN || !id) return null;
+  return cachedAudience(`ig-audience-${id}`, async () => ({
+    followers: await fetchLifetimeDemographics(id),
+    engaged: await fetchTimeframedDemographics(id, 'engaged_audience_demographics'),
+    reached: await fetchTimeframedDemographics(id, 'reached_audience_demographics'),
+  }));
+}

@@ -84,6 +84,8 @@ src/reports.js        Os 5 tipos de relatório do briefing (D+7, Stories 24h, me
 public/relatorios.html Tela do gerador de relatórios (geração manual, agendamentos configuráveis
                       pelo usuário, lista de relatórios gerados)
 public/sobre.html     Panorama da dashboard pro usuário final + cuidados no uso de IA
+src/audience.js       Geografia/demografia de audiência (globo 3D) — ver seção própria abaixo
+public/audiencia.html Tela do globo 3D de audiência
 public/sidebar.js     Sidebar compartilhada (mesmo padrão IIFE do dashboard principal); marca o item
                       ativo pelo nome do arquivo atual (`location.pathname`); expõe `window.escapeHtml`
                       global usado por qualquer página que injete texto livre via innerHTML
@@ -212,6 +214,53 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
 - Retenção: só mantém na lista stories publicados nas últimas 48h (`RETENTION_HOURS` em
   `storyMetrics.js`) — depois disso o story já expirou de verdade, a última amostra vira só um
   retrato final.
+
+### Audiência — globo 3D (`src/audience.js`, `public/audiencia.html`)
+Implementado em 23/07/2026, primeira frente do pedido de longo prazo da Aline por uma seção "com
+um globo terrestre, mostrando os dados ao vivo". Esta é a **base**: mundo completo, três métricas,
+zoom de clique por país. Drill-down por estado (o próximo pedido do Luan, "amplia nele e nos
+estados") fica pra uma fase seguinte, ver limite abaixo.
+- **Confirmado ao vivo antes de escrever qualquer código** (mesmo princípio de "nunca estimar" do
+  resto do projeto): o Instagram expõe `follower_demographics` (país/cidade/idade/gênero dos
+  seguidores, `period=lifetime`, sempre disponível se a conta tem seguidor) e
+  `engaged_audience_demographics`/`reached_audience_demographics` (mesmas quebras, mas exigem
+  `period=lifetime` **e** `timeframe` — `last_30_days` não é mais aceito a partir da v20+ da API;
+  candidatos confirmados funcionando: `this_month`, `last_14_days`, `this_week_mon_today`,
+  `prev_month`, dependendo de a conta ter atividade recente o bastante na janela). O Facebook
+  **não tem equivalente** (`page_fans_city`/`page_fans_country` confirmados mortos: "must be a
+  valid insights metric"). `GET /api/meta/probe-demographics` é a ferramenta de confirmação ao
+  vivo (mesmo padrão de `probe-insights`/`probe-engagement`), testa todas as combinações de
+  métrica × quebra × timeframe antes de qualquer suposição.
+- `fetchInstagramAudienceDemographics()` (`meta.js`) é o fetcher de produção (cache de 30min,
+  mesmo padrão de `fetchInstagramEngagement`) — descobre um `timeframe` que funciona uma vez (na
+  primeira quebra) e reutiliza nas outras 3, só voltando a testar os candidatos se o confirmado
+  parar de funcionar, pra não multiplicar chamadas à Graph API por página carregada.
+- `computeAudienceDashboard()` (`audience.js`) combina as contas do escopo pedido somando por
+  chave (país/cidade/idade/gênero) — **"Todas as contas" soma com sobreposição**: alguém que segue
+  BR e US ao mesmo tempo conta duas vezes, a Meta não expõe como deduplicar audiência entre contas
+  diferentes. Isso está escrito no `.limit-note` da própria tela, não é escondido do usuário.
+- **Front-end**: biblioteca `globe.gl` (wrapper de `three-globe`/Three.js, CDN via
+  `cdn.jsdelivr.net`, MIT) — escolhida por trazer clique-em-país-pra-zoom pronto
+  (`onPolygonClick` + `pointOfView()`) sem precisar montar a lógica de câmera 3D do zero. GeoJSON
+  de países (`ne_110m_admin_0_countries.geojson`, 177 features) e as texturas dia/noite do globo
+  também vêm do mesmo host jsdelivr já usado pelo Chart.js/Bootstrap Icons — não precisou abrir a
+  CSP (`imgSrc`/`connectSrc`) pra um domínio novo, só liberar esse host pra essas duas diretivas
+  (mais `workerSrc: blob:`, que o Three.js usa internamente).
+- **Três modos de visualização** (botões Seguidores/Engajamento/Alcance, `#modeGroup`) coloreiam o
+  globo (choropleth, escala **logarítmica** — o Brasil domina tanto a base de seguidores que uma
+  escala linear apagaria a cor de todos os outros países) pela métrica ativa. Um modo sem dado
+  nenhum pro escopo atual (ex: Engajamento/Alcance numa conta sem post recente, como a US) fica
+  **desabilitado** em vez de escondido — o usuário vê que a métrica existe mas não tem dado agora,
+  não que ela simplesmente não existe. Trocar de conta e cair num modo sem dado recalcula pro
+  primeiro modo disponível automaticamente.
+- **Dia/Noite** (`.style-toggle`) troca só as texturas (`globeImageUrl`/`bumpImageUrl`/
+  `backgroundImageUrl`) — sem chamada nova ao servidor.
+- **Limite conhecido, documentado na tela**: hoje o zoom de clique só centraliza a câmera no país
+  (via centroide aproximado do polígono do GeoJSON) — não existe ainda uma camada de estado dentro
+  do país. Um drill-down de verdade pro Brasil exigiria **derivar** estado a partir do texto de
+  cidade que a Meta devolve (ex: "São Paulo, São Paulo (state)" → estado "São Paulo"), já que a
+  API não expõe uma dimensão nativa de estado/província — não é "ainda não implementado" por
+  esquecimento, é uma fase de trabalho distinta, ainda não iniciada.
 
 ### Bateria de crescimento (`src/goals.js`, `public/metas.html`)
 - Implementado em 21/07/2026. Meta editável por marca/país/conta/rede (`POST /api/goals`), hoje só
@@ -389,20 +438,12 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
   `GET /api/meta/probe-insights` e `GET /api/meta/probe-engagement` devolvem a resposta crua da API para
   confirmar ao vivo antes de confiar em qualquer novo campo/métrica (rodar antes de assumir que uma
   métrica existe para a conta).
-- **Demografia/geografia de audiência do Instagram (confirmado ao vivo 23/07/2026, investigação
-  pontual, nada construído em cima ainda):** `follower_demographics` (quem segue, `period=lifetime`)
-  e `engaged_audience_demographics`/`reached_audience_demographics` (quem interagiu/foi alcançado,
-  precisam de `period=lifetime` **e** `timeframe`) funcionam de verdade nas duas contas de
-  Instagram, com breakdown por `city`, `country`, `age` e `gender` — retornam nome de cidade+estado
-  (ex: "São Paulo, São Paulo (state)") e código de país ISO (ex: "BR"), com contagem real de
-  seguidores/pessoas por localização. `timeframe` aceito mudou de nome entre versões da API
-  (`last_30_days` não funciona mais na v20+; `this_month`/`last_14_days`/`prev_month` funcionam,
-  qual exatamente depende de ter dado recente o bastante na janela — a conta US, sem postar desde
-  26/05/2026, não tem dado em nenhum timeframe recente pra engaged/reached, só `follower_demographics`
-  segue funcionando porque é lifetime). **Facebook Page não tem equivalente:** `page_fans_city`/
-  `page_fans_country` estão mortos ("must be a valid insights metric"), mesma descontinuação já
-  documentada pra `page_fans`/`page_fan_adds` acima. `GET /api/meta/probe-demographics` (ver
-  `probeDemographics` em `src/meta.js`) devolve a resposta crua pra confirmar de novo se precisar.
+- **Demografia/geografia de audiência do Instagram (confirmado ao vivo 23/07/2026):**
+  `follower_demographics`/`engaged_audience_demographics`/`reached_audience_demographics`
+  funcionam nas duas contas de Instagram, sem equivalente no Facebook Page. Base de dado da
+  seção "Audiência" (globo 3D) — detalhes completos na seção própria acima
+  ("Audiência — globo 3D"). `GET /api/meta/probe-demographics` continua disponível pra confirmar
+  de novo ao vivo se um campo novo precisar ser testado.
 
 ### Regra de "nunca estimar" já em vigor
 Sem snapshot no período anterior (conta nova, ainda sem 2 janelas de histórico), o delta fica `null`
