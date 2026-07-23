@@ -149,6 +149,18 @@ export function setContentContext(brandId, countryId, mediaId, context) {
   return slot;
 }
 
+// Resumo gerado por IA (força/gargalo/recomendação) — só existe quando alguém pede pela tela
+// (nunca gerado automaticamente no sync). Sobrescreve o anterior por completo a cada "gerar de
+// novo" (não guarda histórico de versões, diferente de goals/cofrinho — aqui não faz sentido
+// manter resumo desatualizado).
+export function setContentAiSummary(brandId, countryId, mediaId, aiSummary) {
+  const slot = ensureContentSlot(brandId, countryId, mediaId);
+  slot.aiSummary = aiSummary;
+  saveJson();
+  mongoSet('content', cache.content);
+  return slot;
+}
+
 // ── Bateria de crescimento (metas editáveis) ────────────────────────────────────────────────
 // goals[brandId][countryId][platform] = [ {id, metric, target, deadline, createdAt}, ... ] em
 // ordem de criação — a última é a meta "atual"; as anteriores ficam de histórico (nunca

@@ -109,6 +109,22 @@
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
 
+  /* ── Resumo por IA (força/gargalo/recomendação) — só existe quando alguém pede, nunca automático ── */
+  .cnt-ai{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .cnt-ai-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .cnt-ai-head h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0;display:flex;align-items:center;gap:6px}
+  .cnt-ai-btn{height:30px;padding:0 13px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:11.5px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit}
+  .cnt-ai-btn:hover{border-color:var(--text);color:var(--text)}
+  .cnt-ai-btn:disabled{opacity:.6;cursor:default}
+  .cnt-ai-meta{font-size:10.5px;color:var(--muted);margin-top:8px}
+  .cnt-ai-fields{display:flex;flex-direction:column;gap:9px;margin-top:10px}
+  .cnt-ai-field b{font-size:11px;color:var(--text);display:block;margin-bottom:2px}
+  .cnt-ai-field span{font-size:12px;color:var(--sub);line-height:1.5}
+  .cnt-ai-rec{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.3px;
+    text-transform:uppercase;padding:4px 10px;border-radius:20px}
+  .cnt-ai-err{font-size:11px;color:var(--red);margin-top:8px}
+
   /* ── Resumo (gráfico/tabela/lista + ocultar) ── */
   .sum-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px}
   .sum-head h2{font-size:13px;font-weight:700;margin:0}
@@ -199,6 +215,10 @@
 <script>
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtDateBR(iso) { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 function deltaHtml(p) {
   if (p == null) return `<span class="delta-val flat">—</span>`;
   const up = p >= 0, cls = Math.abs(p) < 0.05 ? 'flat' : (up ? 'up' : 'down');
@@ -329,6 +349,29 @@ function contextFieldsHtml(item) {
   `).join('');
 }
 
+const RECOMENDACAO_META = {
+  repetir: { label: 'Repetir', color: '#2e7d5b' },
+  adaptar: { label: 'Adaptar', color: '#1877f2' },
+  testar: { label: 'Testar de novo', color: '#946200' },
+  nao_priorizar: { label: 'Não priorizar', color: '#c0392b' },
+};
+
+function aiSummaryHtml(s) {
+  const rec = RECOMENDACAO_META[s.recomendacao];
+  const field = (label, val) => val ? `<div class="cnt-ai-field"><b>${label}</b><span>${escapeHtml(val)}</span></div>` : '';
+  return `
+    <div class="cnt-ai-fields">
+      ${field('Força', s.forca)}
+      ${field('Gargalo', s.gargalo)}
+      ${field('Comparação com a mediana', s.comparacao)}
+      ${field('Hipótese', s.hipotese)}
+      ${rec ? `<div><span class="cnt-ai-rec" style="background:${rec.color}22;color:${rec.color}">${rec.label}</span>
+        ${s.recomendacaoTexto ? ` <span style="font-size:11.5px;color:var(--sub)">${escapeHtml(s.recomendacaoTexto)}</span>` : ''}</div>` : ''}
+    </div>
+    <div class="cnt-ai-meta">Gerado por IA em ${fmtDateTime(s.generatedAt)}</div>
+  `;
+}
+
 function cardHtml(item) {
   // caption vem da legenda real do post (texto de terceiros) e context/etc. vêm de PATCH
   // /api/content/:id/context sem autenticação nenhuma hoje — nunca interpolar sem escapeHtml.
@@ -349,6 +392,13 @@ function cardHtml(item) {
       <span>${checkpointLabel(item, 7, item.checkpoint7)}</span>
       <span>${checkpointLabel(item, 14, item.checkpoint14)}</span>
       <span>${checkpointLabel(item, 30, item.checkpoint30)}</span>
+    </div>
+    <div class="cnt-ai" data-ai>
+      <div class="cnt-ai-head">
+        <h4><i class="bi bi-stars"></i> Resumo por IA</h4>
+        <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
+      </div>
+      <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo — clique em "Gerar resumo"</div>'}</div>
     </div>
     <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
     <div class="cnt-context">${contextFieldsHtml(item)}</div>
@@ -375,6 +425,31 @@ function attachCardHandlers(grid) {
           setTimeout(() => savedEl.classList.remove('show'), 1500);
         } catch { /* falha silenciosa de rede — o campo continua editável, tenta de novo no próximo blur */ }
       });
+    });
+
+    const aiBtn = card.querySelector('[data-ai-btn]');
+    const aiBody = card.querySelector('[data-ai-body]');
+    aiBtn.addEventListener('click', async () => {
+      const mediaId = card.dataset.mediaId;
+      const countryId = card.dataset.countryId;
+      aiBtn.disabled = true;
+      aiBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando…';
+      try {
+        const res = await fetch(`/api/content/${mediaId}/ai-summary`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId, countryId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha ao gerar resumo.');
+        aiBody.innerHTML = aiSummaryHtml(data);
+        aiBtn.innerHTML = '<i class="bi bi-magic"></i> Gerar de novo';
+      } catch (e) {
+        aiBody.innerHTML = `<div class="cnt-ai-err"><i class="bi bi-exclamation-triangle-fill"></i> ${escapeHtml(e.message)}</div>`;
+        aiBtn.innerHTML = '<i class="bi bi-magic"></i> Tentar de novo';
+      } finally {
+        aiBtn.disabled = false;
+      }
     });
   });
 }

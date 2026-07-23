@@ -5,6 +5,7 @@ import { getContentList } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries, getAdAccountId } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
+import { generateText, isConfigured as aiConfigured } from './ai.js';
 
 const METRIC_KEYS = ['reach', 'likes', 'comments', 'saved', 'shares', 'totalInteractions', 'views'];
 
@@ -133,6 +134,9 @@ export async function computeContentDashboard({ brandId, country, since, until }
         checkpoint7: checkpointSnapshot(entry.snapshots, entry.meta.publishedAt, 7)?.data || null,
         checkpoint14: checkpointSnapshot(entry.snapshots, entry.meta.publishedAt, 14)?.data || null,
         checkpoint30: checkpointSnapshot(entry.snapshots, entry.meta.publishedAt, 30)?.data || null,
+        // Resumo por IA (força/gargalo/recomendação) — null até alguém pedir pela tela, nunca
+        // gerado sozinho no sync. Ver generateContentAiSummary() abaixo.
+        aiSummary: entry.aiSummary || null,
       });
     }
   }
@@ -173,5 +177,85 @@ export async function computeContentDashboard({ brandId, country, since, until }
     scope: { country: country && country !== 'all' ? country : 'all' },
     items,
     organicPaid: buildOrganicPaidSummary(items, scopedCountries, brandId, { since, until }),
+  };
+}
+
+// ── Resumo por IA (força/gargalo/recomendação) ──────────────────────────────────────────────
+// Só chamado quando alguém clica "Gerar resumo" na tela — nunca automático no sync (custaria
+// dinheiro sem necessidade e analisaria post com dado ainda incompleto). Recebe um item já
+// montado por computeContentDashboard (reaproveita toda a lógica de vsMedian/checkpoint/isBoosted
+// já calculada ali, em vez de duplicar).
+const RECOMENDACAO_VALUES = ['repetir', 'adaptar', 'testar', 'nao_priorizar'];
+
+const AI_SUMMARY_SYSTEM_PROMPT = `Você é um analista de social media da marca Coco and Luna (suplementos pet), avaliando o desempenho de UM post/Reels do Instagram pra equipe de marketing.
+Responda SOMENTE com um JSON válido (sem markdown, sem texto antes ou depois), exatamente neste formato:
+{"forca": "...", "gargalo": "...", "comparacao": "...", "hipotese": "...", "recomendacao": "repetir|adaptar|testar|nao_priorizar", "recomendacaoTexto": "..."}
+Regras:
+- Português do Brasil, tom direto e objetivo, cada campo com 1-2 frases curtas (nunca um parágrafo longo).
+- "forca": a métrica ou aspecto que mais se destacou positivamente.
+- "gargalo": o principal ponto fraco ou limitação do resultado.
+- "comparacao": como esse conteúdo se saiu frente à mediana do grupo (cite o percentual quando disponível).
+- "hipotese": uma hipótese plausível pro resultado (formato, gancho, horário, tema — baseada só no que foi informado, nunca inventada do nada).
+- "recomendacao": escolha exatamente um valor entre repetir, adaptar, testar, nao_priorizar.
+- "recomendacaoTexto": uma frase justificando a recomendação.
+- Se faltar dado (sem checkpoint D+7 ainda, grupo de comparação pequeno/inexistente), diga isso
+  explicitamente no campo relevante em vez de inventar — nunca estime um número que não foi informado.`;
+
+function buildAiSummaryPrompt(item) {
+  const ctx = item.context || {};
+  const lines = [];
+  lines.push(`Formato: ${item.formatLabel || item.meta.mediaProductType}`);
+  lines.push(`Publicado há ${item.ageDays} dia(s)`);
+  if (item.isBoosted === true) lines.push('Impulsionado: sim (teve distribuição paga além do orgânico).');
+  else if (item.isBoosted === false) lines.push('Impulsionado: não (totalmente orgânico, sem impulsionamento detectado).');
+  else lines.push('Impulsionado: não verificável (sem conta de anúncio configurada pra esse país).');
+  if (ctx.tema) lines.push(`Tema: ${ctx.tema}`);
+  if (ctx.objetivo) lines.push(`Objetivo: ${ctx.objetivo}`);
+  if (ctx.pilar) lines.push(`Pilar: ${ctx.pilar}`);
+  if (ctx.produto) lines.push(`Produto: ${ctx.produto}`);
+  if (ctx.gancho) lines.push(`Gancho: ${ctx.gancho}`);
+  if (ctx.cta) lines.push(`CTA: ${ctx.cta}`);
+  if (ctx.observacao) lines.push(`Observação da equipe: ${ctx.observacao}`);
+  if (item.meta.caption) lines.push(`Legenda: ${item.meta.caption.slice(0, 300)}`);
+
+  lines.push('\nMétricas atuais (lifetime até agora):');
+  const m = item.latest || {};
+  for (const k of METRIC_KEYS) lines.push(`- ${k}: ${m[k] ?? 'sem dado'}`);
+
+  for (const [days, cp] of [[7, item.checkpoint7], [14, item.checkpoint14], [30, item.checkpoint30]]) {
+    lines.push(`\nCheckpoint D+${days}: ${cp ? JSON.stringify(cp) : 'ainda não disponível — não estime, diga que falta esse dado'}`);
+  }
+
+  lines.push(`\nComparação com a mediana de ${item.groupSize} conteúdo(s) orgânico(s) do mesmo formato/país:`);
+  for (const [k, v] of Object.entries(item.vsMedian || {})) {
+    lines.push(`- ${k}: ${v == null ? 'sem comparação possível' : v.toFixed(1) + '% vs. mediana'}`);
+  }
+
+  return lines.join('\n');
+}
+
+export async function generateContentAiSummary(item) {
+  if (!aiConfigured()) throw new Error('ANTHROPIC_API_KEY não configurado no servidor.');
+  const prompt = buildAiSummaryPrompt(item);
+  // 500 tokens cortava a resposta no meio do JSON em posts com mais dado (checkpoints, contexto
+  // completo) — confirmado ao vivo (22/07/2026) que o texto vinha truncado, nunca inválido de
+  // verdade. 1000 dá folga suficiente pro formato de 6 campos curtos pedido no system prompt.
+  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 1000 });
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error('A IA não respondeu em JSON válido — tente gerar de novo.');
+  }
+  if (!RECOMENDACAO_VALUES.includes(parsed.recomendacao)) parsed.recomendacao = null;
+  return {
+    forca: parsed.forca || null,
+    gargalo: parsed.gargalo || null,
+    comparacao: parsed.comparacao || null,
+    hipotese: parsed.hipotese || null,
+    recomendacao: parsed.recomendacao,
+    recomendacaoTexto: parsed.recomendacaoTexto || null,
+    generatedAt: new Date().toISOString(),
   };
 }

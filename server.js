@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import { initStore, getLastSync, getSnapshots, getStoreBackend } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
-import { computeContentDashboard } from './src/contentMetrics.js';
+import { computeContentDashboard, generateContentAiSummary } from './src/contentMetrics.js';
 import { computeGoalsDashboard } from './src/goals.js';
 import { computeStoriesDashboard } from './src/storyMetrics.js';
 import { runStorySync } from './src/storySync.js';
@@ -16,7 +16,7 @@ import { probeInsights, probeEngagement } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
 import {
-  setContentContext, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings,
+  setContentContext, setContentAiSummary, addGoal, addCofrinhoEntry, addCofrinhoGoal, getSettings, updateSettings,
   getPeople, addPerson, updatePerson, deletePerson,
   getTickets, addTicket, updateTicket, deleteTicket, addTicketComment, deleteTicketComment,
 } from './src/store.js';
@@ -311,6 +311,26 @@ app.patch('/api/content/:mediaId/context', (req, res) => {
   try {
     const updated = setContentContext(brandId, countryId, mediaId, context);
     res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Gera (ou regenera) o resumo por IA de um post — só quando a equipe pede pela tela, nunca
+// automático. syncLimiter reaproveitado aqui porque, assim como o sync da Meta, essa rota custa
+// dinheiro de verdade (chamada à API da Anthropic) e não deveria ser disparável em massa.
+app.post('/api/content/:mediaId/ai-summary', syncLimiter, async (req, res) => {
+  const { mediaId } = req.params;
+  const brandId = req.body.brandId || getDefaultBrandId();
+  const countryId = req.body.countryId;
+  if (!countryId) return res.status(400).json({ error: 'countryId é obrigatório.' });
+  try {
+    const dashboard = await computeContentDashboard({ brandId, country: countryId });
+    const item = dashboard.items.find(i => i.mediaId === mediaId);
+    if (!item) return res.status(404).json({ error: 'Conteúdo não encontrado.' });
+    const summary = await generateContentAiSummary(item);
+    setContentAiSummary(brandId, countryId, mediaId, summary);
+    res.json(summary);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
