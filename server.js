@@ -80,6 +80,20 @@ const syncLimiter = rateLimit({
   message: { error: 'Muitas solicitações de sincronização em pouco tempo — aguarde um minuto e tente de novo.' },
 });
 
+// Limite dedicado pro login — senha única de equipe, então força bruta é uma preocupação real
+// (diferente do apiLimiter geral, generoso demais pra essa rota especificamente). 15 tentativas
+// por 15min por IP é alto o bastante pra não travar alguém errando a senha algumas vezes, mas
+// baixo o bastante pra tornar força bruta inviável. `skipSuccessfulRequests` faz só as tentativas
+// que falham (401) consumirem a cota — logar certo de primeira nunca é penalizado.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Muitas tentativas de login em pouco tempo — aguarde alguns minutos e tente de novo.' },
+});
+
 // ── Segurança: nunca ecoar segredo nenhum (token da Meta, credencial do Mongo) numa resposta
 // JSON — mesmo sem querer, um e.message de erro de rede pode conter a URL completa da chamada
 // (com ?access_token=...) ou, em teoria, parte de uma connection string. Um único ponto (aqui,
@@ -123,7 +137,7 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] })
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // ── Login único compartilhado (liga/desliga em Configurações) ──────────────────────────────
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { password } = req.body;
   if (!process.env.DASHBOARD_PASSWORD) return res.status(500).json({ error: 'DASHBOARD_PASSWORD não configurado no servidor.' });
   if (!checkPassword(password)) return res.status(401).json({ error: 'Senha incorreta.' });

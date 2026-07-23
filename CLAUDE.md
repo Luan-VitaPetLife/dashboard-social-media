@@ -603,6 +603,13 @@ por severidade, o que foi corrigido e o que ficou só documentado.
   bem mais apertado (3 req/min, `syncLimiter` em `server.js`) em `POST /api/sync`, `POST
   /api/social/backfill`, `GET /api/meta/probe-insights` e `GET /api/meta/probe-engagement` — as únicas
   rotas que de fato disparam chamada à Meta Graph API. Isso é só um stop-gap; não substitui autenticação.
+- **Rate limit dedicado no login (adicionado 23/07/2026, a pedido do Luan):** `POST
+  /api/auth/login` antes só caía no limite genérico de 300 req/15min (`apiLimiter`) — generoso
+  demais pra uma rota de senha única de equipe, onde força bruta é uma preocupação real.
+  `loginLimiter` (`server.js`): 15 tentativas por 15min por IP, com `skipSuccessfulRequests: true`
+  — só tentativas que **falham** (401) consomem a cota, um login certo nunca é penalizado. Testado
+  ao vivo: 15 tentativas com senha errada passam (401), a partir da 16ª vira 429; 20 tentativas
+  seguidas com a senha certa nunca são bloqueadas.
 - **Cabeçalhos de segurança (corrigido):** adicionado `helmet` com CSP em allowlist explícita
   (`default-src 'self'`), liberando só `https://cdn.jsdelivr.net` em `script-src`/`style-src`/`font-src`
   (Chart.js + Bootstrap Icons, os únicos recursos externos usados) e `'unsafe-inline'` em
@@ -610,6 +617,15 @@ por severidade, o que foi corrigido e o que ficou só documentado.
   algum dia isso migrar pra arquivos separados, dá pra apertar o CSP e tirar o `unsafe-inline`).
   Verificado rodando o servidor localmente (`data/db.json`, sem `MONGODB_URI`) e confirmando as 5
   páginas carregando (200) com o CSP ativo, sem erro de recurso bloqueado.
+- **Chaves de API nunca chegam ao navegador (verificado 23/07/2026, não se aplica):** o Luan
+  perguntou se dava pra "proteger as chaves" de leitura via JavaScript/DevTools. Confirmado por
+  `grep` em todo `public/*.html`: `META_ACCESS_TOKEN`, `ANTHROPIC_API_KEY` e `MONGODB_URI` não
+  aparecem em nenhum arquivo servido ao navegador — elas só existem em `process.env` no servidor,
+  usadas dentro de `src/meta.js`/`src/ai.js`/`src/store.js`, nunca numa resposta HTTP. O único
+  ponto onde uma chave poderia vazar por acidente (mensagem de erro de rede) já é coberto pelo
+  `redactSecrets`/`redactDeep` (ver acima). O cookie de sessão do login também já era `httpOnly:
+  true` desde que foi implementado (ver `POST /api/auth/login`) — o JS da página já não consegue
+  ler esse cookie via `document.cookie`. Nada a implementar aqui além do que já existia.
 - **`npm audit` (verificado, nada a corrigir):** 0 vulnerabilidades nas 3 dependências existentes
   (express/dotenv/mongodb) — rodado tanto antes quanto depois de adicionar `helmet` e
   `express-rate-limit` (0 vulnerabilidades também com as duas novas).
