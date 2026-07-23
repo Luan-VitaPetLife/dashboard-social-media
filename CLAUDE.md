@@ -151,9 +151,31 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
     `server.js`) — confirmado ao vivo que todo `media_url`/`thumbnail_url` das duas contas vem
     sempre desse host (nunca `fbcdn.net`), então só esse domínio foi liberado, não um wildcard
     maior.
+- **Pesquisa + filtro por categoria + Resumo por IA/Contexto colapsáveis (23/07/2026, a pedido do
+  Luan, "diminuir o tamanho do card"):** tudo client-side sobre o payload já carregado de
+  `/api/content`, sem chamada nova a cada tecla/seleção. Pesquisa (`#cntSearch`) casa contra
+  legenda + todos os campos de contexto (tema/objetivo/pilar/produto/gancho/cta/observação);
+  filtro de categoria (`#cselFormat`) é um dropdown fixo com os 4 formatos que já existem em
+  `FORMAT_LABELS` (`contentMetrics.js`): Reels/Carrossel/Estático/Vídeo. Ambos persistidos em
+  `localStorage`, e o rodapé mostra "X de Y conteúdo(s) (filtrado)" quando algum filtro reduz a
+  lista, pra deixar claro que não é a lista inteira. "Resumo por IA" ganhou o mesmo padrão de
+  abrir/fechar que "Contexto" já tinha, fechado por padrão nos dois — mas com classes
+  independentes no card (`ctx-open`/`ai-open`, ex-`open` renomeado pra `ctx-open` nessa mudança)
+  pra abrir/fechar cada seção sem afetar a outra. Gerar um resumo novo força a seção a abrir
+  (`card.classList.add('ai-open')`), pra não esconder o resultado de quem acabou de pedir.
 - Só **Instagram** (Reels, Carrossel, Estático, Vídeo de feed) — Facebook e TikTok ficam de fora por
   enquanto. `runContentSync()` roda dentro do mesmo `runSync()` (mesmo ciclo de 12h / botão
-  "Sincronizar agora" — não existe um sync separado pro usuário acionar).
+  "Sincronizar agora" — não existe um sync separado pro usuário acionar). **Por que só Instagram
+  (confirmado ao vivo 23/07/2026, respondendo pergunta do Luan):** não é um bloqueio técnico
+  absoluto, é falta de trabalho ainda não feito, mais complexo do que parece à primeira vista.
+  Page posts do Facebook **têm** algumas métricas por post (`post_clicks`,
+  `post_reactions_by_type_total`, `post_video_views`, `post_fan_reach` confirmados funcionando),
+  mas o conjunto é **diferente e incompatível** com o que a ficha de conteúdo já usa pro
+  Instagram: não existe equivalente confirmado pra `reach`/`saved`/`total_interactions` como estão
+  hoje (`post_impressions*`, `post_reach`, `post_engaged_users` testados e mortos, mesmo padrão de
+  descontinuação já visto em outras métricas do Facebook nesse projeto). Construir isso exigiria
+  um mapeamento de métricas próprio pro Facebook, não só reaproveitar o pipeline do Instagram —
+  fica registrado como pendência real, não decisão definitiva de nunca fazer.
 - Confirmado ao vivo (21/07/2026, ver histórico de probes descartáveis) que `reach`, `likes`,
   `comments`, `saved`, `shares`, `total_interactions`, `views` funcionam **uniformemente** por post via
   `/{media-id}/insights`, independente de ser REELS/CAROUSEL_ALBUM/IMAGE — não precisa de conjunto de

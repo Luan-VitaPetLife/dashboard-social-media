@@ -71,6 +71,13 @@
   .delta-val.down{background:rgba(192,57,43,.09);color:var(--red)}
   .delta-val.flat{background:rgba(28,43,57,.06);color:var(--muted)}
 
+  .cnt-filters{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .cnt-search{display:flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);flex:1;min-width:220px;max-width:380px}
+  .cnt-search i{color:var(--muted);font-size:12px}
+  .cnt-search input{border:none;background:none;outline:none;font-size:12.5px;font-family:inherit;color:var(--text);width:100%}
+  .cnt-search input::placeholder{color:var(--muted)}
+
   .cnt-grid{display:flex;flex-direction:column;gap:14px}
   .cnt-card{border-top:3px solid var(--ig-2)}
   .cnt-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
@@ -147,8 +154,8 @@
   .cnt-toggle:hover{color:var(--text)}
   .cnt-context{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);
     grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-  .cnt-card.open .cnt-context{display:grid}
-  .cnt-card.open .cnt-toggle .bi-chevron-down{transform:rotate(180deg)}
+  .cnt-card.ctx-open .cnt-context{display:grid}
+  .cnt-card.ctx-open .cnt-toggle .bi-chevron-down{transform:rotate(180deg)}
   .cnt-field{display:flex;flex-direction:column;gap:4px}
   .cnt-field label{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
   .cnt-field input,.cnt-field textarea{font-size:12px;font-family:inherit;color:var(--text);padding:7px 10px;
@@ -161,10 +168,17 @@
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
 
-  /* ── Resumo por IA (força/gargalo/recomendação) — só existe quando alguém pede, nunca automático ── */
+  /* ── Resumo por IA (força/gargalo/recomendação) — só existe quando alguém pede, nunca automático.
+     Fechado por padrão (igual ao Contexto) pra diminuir a altura do card; abre/fecha
+     independente do Contexto (classe própria no card, `ai-open`, não reaproveita `ctx-open`). ── */
   .cnt-ai{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
   .cnt-ai-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .cnt-ai-head h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0;display:flex;align-items:center;gap:6px}
+  .cnt-ai-head h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0;
+    display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .cnt-ai-chevron{font-size:9px;transition:transform .15s;margin-left:2px}
+  .cnt-card.ai-open .cnt-ai-chevron{transform:rotate(180deg)}
+  .cnt-ai [data-ai-body]{display:none}
+  .cnt-card.ai-open .cnt-ai [data-ai-body]{display:block}
   .cnt-ai-btn{height:30px;padding:0 13px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
     font-size:11.5px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit}
   .cnt-ai-btn:hover{border-color:var(--text);color:var(--text)}
@@ -255,6 +269,16 @@
     </div>
 
     <h3 class="section">Posts e Reels recentes (Instagram · últimos 35 dias)</h3>
+    <div class="cnt-filters">
+      <div class="cnt-search">
+        <i class="bi bi-search"></i>
+        <input type="text" id="cntSearch" placeholder="Pesquisar por legenda, tema, gancho...">
+      </div>
+      <div class="filter-pill csel" id="cselFormat">
+        <span class="lbl">Categoria</span><span class="val" id="formatVal">Todas</span><span class="arr">▾</span>
+        <div class="csel-pop" id="formatPop"></div>
+      </div>
+    </div>
     <div class="cnt-grid" id="cntGrid">
       <div class="empty">carregando…</div>
     </div>
@@ -465,10 +489,10 @@ function cardHtml(item) {
       </div>
       <div class="cnt-ai" data-ai>
         <div class="cnt-ai-head">
-          <h4><i class="bi bi-stars"></i> Resumo por IA</h4>
+          <h4 data-ai-toggle><i class="bi bi-stars"></i> Resumo por IA <i class="bi bi-chevron-down cnt-ai-chevron"></i></h4>
           <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
         </div>
-        <div data-ai-body>${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
+        <div data-ai-body style="margin-top:10px">${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
       </div>
       <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
       <div class="cnt-context">${contextFieldsHtml(item)}</div>
@@ -568,7 +592,8 @@ document.addEventListener('keydown', (e) => {
 
 function attachCardHandlers(grid) {
   grid.querySelectorAll('.cnt-card').forEach(card => {
-    card.querySelector('[data-toggle]').addEventListener('click', () => card.classList.toggle('open'));
+    card.querySelector('[data-toggle]').addEventListener('click', () => card.classList.toggle('ctx-open'));
+    card.querySelector('[data-ai-toggle]').addEventListener('click', () => card.classList.toggle('ai-open'));
     card.querySelector('[data-thumb]').addEventListener('click', () => {
       const item = lastData.items.find(i => i.mediaId === card.dataset.mediaId && i.countryId === card.dataset.countryId);
       if (item) openLightbox(item);
@@ -596,6 +621,7 @@ function attachCardHandlers(grid) {
     aiBtn.addEventListener('click', async () => {
       const mediaId = card.dataset.mediaId;
       const countryId = card.dataset.countryId;
+      card.classList.add('ai-open');
       aiBtn.disabled = true;
       aiBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando…';
       const hideOverlay = showAiThinkingOverlay(card);
@@ -773,14 +799,63 @@ async function load() {
   render(data);
 }
 
+// ── Pesquisa + filtro por categoria (formato) — tudo client-side sobre o payload já
+// carregado, sem chamada nova ao servidor a cada tecla/seleção. ──
+const FORMAT_OPTIONS = ['Reels', 'Carrossel', 'Estático', 'Vídeo'];
+let searchQuery = localStorage.getItem('coco_cnt_search') || '';
+let formatFilter = localStorage.getItem('coco_cnt_format') || 'all';
+
+function buildFormatSelector() {
+  const pop = document.getElementById('formatPop');
+  const opt = (value, label) => `<div class="csel-opt${formatFilter === value ? ' active' : ''}" data-value="${value}">${label}</div>`;
+  pop.innerHTML = opt('all', 'Todas') + FORMAT_OPTIONS.map(f => opt(f, f)).join('');
+  document.getElementById('formatVal').textContent = formatFilter === 'all' ? 'Todas' : formatFilter;
+  setupCsel(document.getElementById('cselFormat'), val => {
+    formatFilter = val;
+    localStorage.setItem('coco_cnt_format', formatFilter);
+    document.getElementById('formatVal').textContent = formatFilter === 'all' ? 'Todas' : formatFilter;
+    renderGrid();
+  });
+}
+buildFormatSelector();
+
+const searchInput = document.getElementById('cntSearch');
+searchInput.value = searchQuery;
+searchInput.addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  localStorage.setItem('coco_cnt_search', searchQuery);
+  renderGrid();
+});
+
+function matchesFilters(item) {
+  if (formatFilter !== 'all' && item.formatLabel !== formatFilter) return false;
+  const q = searchQuery.trim().toLowerCase();
+  if (q) {
+    const haystack = [
+      item.meta.caption, item.context?.tema, item.context?.objetivo, item.context?.pilar,
+      item.context?.produto, item.context?.gancho, item.context?.cta, item.context?.observacao,
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+  return true;
+}
+
+function renderGrid() {
+  const grid = document.getElementById('cntGrid');
+  const totalCount = lastData?.items.length || 0;
+  const items = (lastData?.items || []).filter(matchesFilters);
+  document.getElementById('footerNote').textContent = totalCount
+    ? (items.length === totalCount ? `${totalCount} conteúdo(s) rastreado(s)` : `${items.length} de ${totalCount} conteúdo(s) (filtrado)`)
+    : 'nenhum conteúdo rastreado ainda, rode uma sincronização';
+  grid.innerHTML = items.length
+    ? items.map(cardHtml).join('')
+    : (totalCount ? '<div class="empty">nenhum conteúdo encontrado com esse filtro</div>' : '<div class="empty">sem dado ainda</div>');
+  attachCardHandlers(grid);
+}
+
 function render(d) {
   lastData = d;
-  const grid = document.getElementById('cntGrid');
-  document.getElementById('footerNote').textContent = d.items.length
-    ? `${d.items.length} conteúdo(s) rastreado(s)`
-    : 'nenhum conteúdo rastreado ainda, rode uma sincronização';
-  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda</div>';
-  attachCardHandlers(grid);
+  renderGrid();
   if (!sumHidden) renderSummary(d);
 }
 
