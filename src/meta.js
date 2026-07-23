@@ -417,3 +417,76 @@ export async function probeEngagement(brandId, countryId) {
 
   return out;
 }
+
+// ── Diagnóstico: demografia/geografia de audiência (cidade, país, idade, gênero) ──────────
+// Investigação pontual (23/07/2026, a pedido do Luan — quer uma seção com globo mostrando de
+// onde vem a audiência). Nunca chamado fora de diagnóstico manual: só confirma ao vivo se essas
+// métricas respondem pra este token/conta antes de qualquer coisa ser construída em cima, mesmo
+// princípio dos outros probes acima. `follower_demographics` (quem segue) é lifetime;
+// `engaged_audience_demographics`/`reached_audience_demographics` (quem interagiu/foi alcançado)
+// pedem `timeframe` em vez de period=lifetime — testa as três porque os nomes mudaram entre
+// versões da API e não dá pra saber de antemão qual essa conta aceita.
+const IG_DEMOGRAPHIC_METRICS = ['follower_demographics', 'engaged_audience_demographics', 'reached_audience_demographics'];
+const DEMOGRAPHIC_BREAKDOWNS = ['city', 'country', 'age', 'gender'];
+const FB_DEMOGRAPHIC_METRICS = ['page_fans_city', 'page_fans_country'];
+// last_30_days parou de ser aceito em engaged/reached_audience_demographics a partir da v20 (erro
+// confirmado ao vivo 23/07/2026) — testa os candidatos atuais até um funcionar.
+const TIMEFRAME_CANDIDATES = ['last_14_days', 'this_month', 'this_week_mon_today', 'prev_month'];
+
+export async function probeDemographics(brandId, countryId) {
+  const accounts = getAccounts(brandId, countryId);
+  const igId = accounts.find(a => a.platform === 'instagram')?.metaId;
+  const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
+  const out = { brandId, countryId };
+  if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+
+  if (igId) {
+    out.instagram = {};
+    for (const metric of IG_DEMOGRAPHIC_METRICS) {
+      out.instagram[metric] = {};
+      for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
+        if (metric === 'follower_demographics') {
+          try {
+            const json = await graphGet(`${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
+            out.instagram[metric][breakdown] = { ok: true, raw: json.data?.[0]?.total_value };
+          } catch (e) {
+            out.instagram[metric][breakdown] = { ok: false, error: e.message };
+          }
+          continue;
+        }
+        // engaged/reached_audience_demographics: tenta cada timeframe candidato até um funcionar
+        let lastError = null;
+        for (const timeframe of TIMEFRAME_CANDIDATES) {
+          try {
+            const json = await graphGet(`${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
+            out.instagram[metric][breakdown] = { ok: true, timeframe, raw: json.data?.[0]?.total_value };
+            lastError = null;
+            break;
+          } catch (e) {
+            lastError = e.message;
+          }
+        }
+        if (lastError) out.instagram[metric][breakdown] = { ok: false, error: lastError, triedTimeframes: TIMEFRAME_CANDIDATES };
+      }
+    }
+  } else out.instagramError = 'Nenhuma conta Instagram configurada para essa marca/país.';
+
+  if (fbId) {
+    out.facebook = {};
+    try {
+      const pageToken = await fetchPageAccessToken(fbId);
+      for (const metric of FB_DEMOGRAPHIC_METRICS) {
+        try {
+          const json = await graphGetAs(pageToken, `${fbId}/insights/${metric}?period=lifetime`);
+          out.facebook[metric] = { ok: true, raw: json.data?.[0]?.values?.slice(-1) };
+        } catch (e) {
+          out.facebook[metric] = { ok: false, error: e.message };
+        }
+      }
+    } catch (e) {
+      out.facebookTokenError = e.message;
+    }
+  } else out.facebookError = 'Nenhuma conta Facebook configurada para essa marca/país.';
+
+  return out;
+}

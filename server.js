@@ -12,7 +12,7 @@ import { computeGoalsDashboard } from './src/goals.js';
 import { computeStoriesDashboard } from './src/storyMetrics.js';
 import { runStorySync } from './src/storySync.js';
 import { computeCofrinhoDashboard } from './src/cofrinho.js';
-import { probeInsights, probeEngagement } from './src/meta.js';
+import { probeInsights, probeEngagement, probeDemographics } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
 import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
 import { generateReport, checkScheduledReports, computeNextRun, REPORT_TYPES, INTERVAL_UNITS } from './src/reports.js';
@@ -594,6 +594,16 @@ app.get('/api/meta/probe-engagement', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || 'br';
   try { res.json(await probeEngagement(brandId, countryId)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Diagnóstico: testa se demografia/geografia de audiência (cidade, país, idade, gênero)
+// responde pro token atual, antes de qualquer seção nova ser construída em cima disso.
+// Ver src/meta.js probeDemographics.
+app.get('/api/meta/probe-demographics', syncLimiter, async (req, res) => {
+  const brandId = req.query.brand || getDefaultBrandId();
+  const countryId = req.query.country || 'br';
+  try { res.json(await probeDemographics(brandId, countryId)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

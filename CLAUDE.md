@@ -389,6 +389,20 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
   `GET /api/meta/probe-insights` e `GET /api/meta/probe-engagement` devolvem a resposta crua da API para
   confirmar ao vivo antes de confiar em qualquer novo campo/métrica (rodar antes de assumir que uma
   métrica existe para a conta).
+- **Demografia/geografia de audiência do Instagram (confirmado ao vivo 23/07/2026, investigação
+  pontual, nada construído em cima ainda):** `follower_demographics` (quem segue, `period=lifetime`)
+  e `engaged_audience_demographics`/`reached_audience_demographics` (quem interagiu/foi alcançado,
+  precisam de `period=lifetime` **e** `timeframe`) funcionam de verdade nas duas contas de
+  Instagram, com breakdown por `city`, `country`, `age` e `gender` — retornam nome de cidade+estado
+  (ex: "São Paulo, São Paulo (state)") e código de país ISO (ex: "BR"), com contagem real de
+  seguidores/pessoas por localização. `timeframe` aceito mudou de nome entre versões da API
+  (`last_30_days` não funciona mais na v20+; `this_month`/`last_14_days`/`prev_month` funcionam,
+  qual exatamente depende de ter dado recente o bastante na janela — a conta US, sem postar desde
+  26/05/2026, não tem dado em nenhum timeframe recente pra engaged/reached, só `follower_demographics`
+  segue funcionando porque é lifetime). **Facebook Page não tem equivalente:** `page_fans_city`/
+  `page_fans_country` estão mortos ("must be a valid insights metric"), mesma descontinuação já
+  documentada pra `page_fans`/`page_fan_adds` acima. `GET /api/meta/probe-demographics` (ver
+  `probeDemographics` em `src/meta.js`) devolve a resposta crua pra confirmar de novo se precisar.
 
 ### Regra de "nunca estimar" já em vigor
 Sem snapshot no período anterior (conta nova, ainda sem 2 janelas de histórico), o delta fica `null`
