@@ -268,8 +268,10 @@ document.addEventListener('click', (e) => {
 
 function setupCsel(el, onSelect) {
   el.addEventListener('click', e => {
-    if (e.target.closest('.csel-opt')) {
-      onSelect(e.target.closest('.csel-opt').dataset.value);
+    const opt = e.target.closest('.csel-opt');
+    if (opt) {
+      el.querySelectorAll('.csel-opt').forEach(o => o.classList.toggle('active', o === opt));
+      onSelect(opt.dataset.value);
       el.classList.remove('open');
     }
   });

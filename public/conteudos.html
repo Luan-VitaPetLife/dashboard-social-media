@@ -247,6 +247,7 @@ function setupCsel(el, onSelect) {
     opt.addEventListener('click', e => {
       e.stopPropagation();
       el.classList.remove('open');
+      el.querySelectorAll('.csel-opt').forEach(o => o.classList.toggle('active', o === opt));
       onSelect(opt.dataset.value);
     });
   });

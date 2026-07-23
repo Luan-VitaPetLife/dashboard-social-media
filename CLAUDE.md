@@ -255,12 +255,26 @@ estados") fica pra uma fase seguinte, ver limite abaixo.
   primeiro modo disponível automaticamente.
 - **Dia/Noite** (`.style-toggle`) troca só as texturas (`globeImageUrl`/`bumpImageUrl`/
   `backgroundImageUrl`) — sem chamada nova ao servidor.
-- **Limite conhecido, documentado na tela**: hoje o zoom de clique só centraliza a câmera no país
-  (via centroide aproximado do polígono do GeoJSON) — não existe ainda uma camada de estado dentro
-  do país. Um drill-down de verdade pro Brasil exigiria **derivar** estado a partir do texto de
-  cidade que a Meta devolve (ex: "São Paulo, São Paulo (state)" → estado "São Paulo"), já que a
-  API não expõe uma dimensão nativa de estado/província — não é "ainda não implementado" por
-  esquecimento, é uma fase de trabalho distinta, ainda não iniciada.
+- **Drill-down por estado, só Brasil (23/07/2026):** clicar no Brasil no mapa-mundo troca
+  `polygonsData` pro conjunto de 27 estados (GeoJSON de `codeforamerica/click_that_hood`, servido
+  via `cdn.jsdelivr.net` em "modo GitHub" `/gh/...` — mesmo host já liberado na CSP, não precisou
+  abrir domínio novo) e recolore pelo valor por estado. Como a API não expõe uma dimensão nativa
+  de estado/província, o estado é **derivado** da string de cidade que a Meta devolve (ex: "São
+  Luís, Maranhão" → "Maranhão"; "São Paulo, São Paulo (state)" → "São Paulo", sufixo "(state)" que
+  a Meta usa quando cidade e estado têm o mesmo nome) — `deriveState()`/`buildBrStateBreakdown()`
+  em `src/audience.js`. Confirmado ao vivo que esse padrão "Cidade, Região" é global (testado nas
+  duas contas), não exclusivo do Brasil, mas o drill-down visual só está ligado pro Brasil por
+  enquanto (`STATE_SOURCES` em `audiencia.html` só tem a chave `BR`) — outros países continuam só
+  com zoom de câmera, sem trocar a camada de polígonos. Uma whitelist fixa dos 26 estados + DF
+  (`BR_STATES` em `audience.js`) filtra ruído de outros países cuja cidade também contenha uma
+  vírgula seguida de algo parecido com nome de estado brasileiro. Botão "Voltar ao mundo" troca de
+  volta pra `countriesFeatures`; mudar de conta/marca também sai do drill-down automaticamente
+  (`loadAudience()` chama `exitStateView()` se necessário).
+- **Cor do mapa, escolhida pelo usuário (23/07/2026):** seletor `<input type="color">` no toolbar
+  (padrão = rosa do Instagram, `#dd2a7b`) — `colorForValue()` interpola de uma versão bem clara da
+  cor escolhida até a cor plena (escala log), tanto no globo quanto no gradiente das barras de
+  "Top países"/"Top estados". Persistido em `localStorage`, não no servidor (preferência de tela,
+  mesmo padrão de outras preferências de UI da casa).
 
 ### Bateria de crescimento (`src/goals.js`, `public/metas.html`)
 - Implementado em 21/07/2026. Meta editável por marca/país/conta/rede (`POST /api/goals`), hoje só
@@ -502,6 +516,17 @@ nenhum estado do sistema) — se TikTok for integrado, por exemplo, essa linha s
 - Dropdowns customizados (`.csel`), period picker com presets + intervalo customizado — mesmo padrão
   visual/interativo do dashboard principal (`../dashboard`), mas implementado à parte neste HTML (sem
   módulo JS compartilhado entre os dois repositórios).
+- **Bug real corrigido em todas as 7 páginas com `.csel` (23/07/2026):** a bolinha de "✓" dentro do
+  dropdown só era calculada quando a lista de opções era montada (`pop.innerHTML = ...`), nunca
+  recalculada depois de uma seleção — então ao reabrir o dropdown, o "✓" continuava preso na opção
+  que estava ativa no momento em que o HTML foi gerado (geralmente "Todos"/"Todas"), mesmo com a
+  pílula já mostrando o valor certo. O Luan encontrou isso em Audiência (print do dropdown "Conta"
+  com "✓" grudado em "Todas" mesmo com a pílula selecionada em outra conta) e pediu pra achar em
+  outras telas também. `setupCsel()` (duplicada por página, sem módulo compartilhado) agora
+  alterna a classe `active` no próprio clique, antes de chamar `onSelect` — corrigido em
+  `index.html`, `conteudos.html`, `stories.html`, `cofrinho.html`, `metas.html`, `relatorios.html`
+  e `audiencia.html`. `chamados.html` não tinha esse bug (seus dropdowns reconstroem o HTML inteiro
+  a cada seleção, o que já recalcula o "✓" certo por acidente).
 - **Seletores de Marca/País:** `loadRegistry()` busca `/api/registry` uma vez no carregamento e monta os
   dois seletores dinamicamente — nenhuma marca/país fica hardcoded no HTML/JS. Com uma única marca
   (hoje), o seletor de Marca vira um pill estático (`#brandPillStatic`) em vez de dropdown; com 2+ vira

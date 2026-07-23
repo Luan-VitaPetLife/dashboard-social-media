@@ -18,6 +18,34 @@ function mergeBreakdown(lists) {
   return [...map.entries()].map(([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value);
 }
 
+// Lista fixa (constitucional, nunca muda) — usada como whitelist pra extrair estado a partir da
+// string de cidade da Meta (ex: "São Paulo, São Paulo (state)" → "São Paulo"), já que a API não
+// expõe uma dimensão nativa de estado/província. Sem whitelist, um follower de outro país cuja
+// cidade contenha uma vírgula seguida de algo parecido com nome de estado brasileiro entraria
+// incorretamente no agregado.
+const BR_STATES = new Set([
+  'Acre', 'Alagoas', 'Amazonas', 'Amapá', 'Bahia', 'Ceará', 'Espírito Santo', 'Goiás',
+  'Maranhão', 'Minas Gerais', 'Mato Grosso do Sul', 'Mato Grosso', 'Pará', 'Paraíba',
+  'Pernambuco', 'Piauí', 'Paraná', 'Rio de Janeiro', 'Rio Grande do Norte', 'Rondônia',
+  'Roraima', 'Rio Grande do Sul', 'Santa Catarina', 'Sergipe', 'São Paulo', 'Tocantins',
+  'Distrito Federal',
+]);
+
+function deriveState(cityKey) {
+  const idx = cityKey.lastIndexOf(', ');
+  if (idx === -1) return null;
+  return cityKey.slice(idx + 2).replace(/\s*\(state\)\s*$/i, '').trim();
+}
+
+function buildBrStateBreakdown(cityEntries) {
+  const map = new Map();
+  for (const { key, value } of cityEntries || []) {
+    const state = deriveState(key);
+    if (state && BR_STATES.has(state)) map.set(state, (map.get(state) || 0) + value);
+  }
+  return [...map.entries()].map(([state, value]) => ({ state, value })).sort((a, b) => b.value - a.value);
+}
+
 export async function computeAudienceDashboard({ brandId, country }) {
   brandId = brandId || getDefaultBrandId();
   const brand = getBrand(brandId);
@@ -37,12 +65,17 @@ export async function computeAudienceDashboard({ brandId, country }) {
   function buildMetric(field) {
     const entries = withData.map(a => a.data[field]).filter(Boolean);
     if (!entries.length) return null;
+    const brEntry = withData.find(a => a.countryId === 'br')?.data?.[field];
     return {
       timeframe: entries.find(d => d.timeframe)?.timeframe || null,
       byCountry: mergeBreakdown(entries.map(d => d.country)),
       byCity: mergeBreakdown(entries.map(d => d.city)),
       byAge: mergeBreakdown(entries.map(d => d.age)),
       byGender: mergeBreakdown(entries.map(d => d.gender)),
+      // Drill-down por estado só existe pra Brasil por enquanto (única fonte com GeoJSON de
+      // fronteiras ligado no front) — chave 'br' minúscula, mesmo padrão do countryId do resto
+      // do app. Ver public/audiencia.html (STATE_SOURCES) pro consumidor.
+      byState: { br: brEntry ? buildBrStateBreakdown(brEntry.city) : [] },
     };
   }
 
