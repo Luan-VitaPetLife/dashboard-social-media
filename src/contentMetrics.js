@@ -191,13 +191,16 @@ const AI_SUMMARY_SYSTEM_PROMPT = `Você é um analista de social media da marca 
 Responda SOMENTE com um JSON válido (sem markdown, sem texto antes ou depois), exatamente neste formato:
 {"forca": "...", "gargalo": "...", "comparacao": "...", "hipotese": "...", "recomendacao": "repetir|adaptar|testar|nao_priorizar", "recomendacaoTexto": "..."}
 Regras:
-- Português do Brasil, tom direto e objetivo, cada campo com 1-2 frases curtas (nunca um parágrafo longo).
-- "forca": a métrica ou aspecto que mais se destacou positivamente.
-- "gargalo": o principal ponto fraco ou limitação do resultado.
-- "comparacao": como esse conteúdo se saiu frente à mediana do grupo (cite o percentual quando disponível).
-- "hipotese": uma hipótese plausível pro resultado (formato, gancho, horário, tema — baseada só no que foi informado, nunca inventada do nada).
+- Português do Brasil, tom direto e objetivo, cada campo com 3-5 frases — desenvolva o raciocínio
+  (cite os números relevantes, explique o porquê, não só afirme) em vez de uma frase solta genérica.
+- "forca": a métrica ou aspecto que mais se destacou positivamente, com os números que sustentam isso.
+- "gargalo": o principal ponto fraco ou limitação do resultado, com números quando houver.
+- "comparacao": como esse conteúdo se saiu frente à mediana do grupo, métrica por métrica quando fizer
+  sentido (cite os percentuais disponíveis, não só um resumo genérico de "acima/abaixo da mediana").
+- "hipotese": uma ou duas hipóteses plausíveis pro resultado (formato, gancho, horário, tema — baseada
+  só no que foi informado, nunca inventada do nada), explicando o raciocínio por trás de cada uma.
 - "recomendacao": escolha exatamente um valor entre repetir, adaptar, testar, nao_priorizar.
-- "recomendacaoTexto": uma frase justificando a recomendação.
+- "recomendacaoTexto": 2-4 frases justificando a recomendação com base no que foi observado acima.
 - Se faltar dado (sem checkpoint D+7 ainda, grupo de comparação pequeno/inexistente), diga isso
   explicitamente no campo relevante em vez de inventar — nunca estime um número que não foi informado.`;
 
@@ -239,8 +242,9 @@ export async function generateContentAiSummary(item) {
   const prompt = buildAiSummaryPrompt(item);
   // 500 tokens cortava a resposta no meio do JSON em posts com mais dado (checkpoints, contexto
   // completo) — confirmado ao vivo (22/07/2026) que o texto vinha truncado, nunca inválido de
-  // verdade. 1000 dá folga suficiente pro formato de 6 campos curtos pedido no system prompt.
-  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 1000 });
+  // verdade. 1600 dá folga pro formato de 6 campos de 3-5 frases pedido no system prompt (23/07/2026,
+  // resumo original saía curto demais — 1000 não sobraria depois de deixar os campos mais longos).
+  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 1600 });
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
   let parsed;
   try {
