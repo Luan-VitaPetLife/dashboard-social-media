@@ -88,7 +88,7 @@
         </label>
       </div>
       <div class="warn-box" id="passwordWarn" style="display:none">
-        <i class="bi bi-exclamation-triangle-fill"></i> A variável de ambiente <code>DASHBOARD_PASSWORD</code> ainda não está configurada — defina-a (no <code>.env</code> local ou nas variáveis do Railway) antes de ligar o login, senão ninguém vai conseguir entrar.
+        <i class="bi bi-exclamation-triangle-fill"></i> A variável de ambiente <code>DASHBOARD_PASSWORD</code> ainda não está configurada. Defina-a (no <code>.env</code> local ou nas variáveis do Railway) antes de ligar o login, senão ninguém vai conseguir entrar.
       </div>
       <div class="msg" id="msg"></div>
       <div class="status-line">
@@ -132,10 +132,10 @@
     toggle.disabled = false;
     if (data.loginEnabled) {
       statusDot.className = 'status-dot ok';
-      statusText.textContent = 'Login está ligado — o dashboard exige senha pra ser acessado.';
+      statusText.textContent = 'Login está ligado. O dashboard exige senha pra ser acessado.';
     } else {
       statusDot.className = 'status-dot warn';
-      statusText.textContent = 'Login está desligado — o dashboard está com acesso aberto.';
+      statusText.textContent = 'Login está desligado. O dashboard está com acesso aberto.';
     }
   }
 

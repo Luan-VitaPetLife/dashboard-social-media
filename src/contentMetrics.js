@@ -254,7 +254,7 @@ export async function generateContentAiSummary(item) {
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    throw new Error('A IA não respondeu em JSON válido — tente gerar de novo.');
+    throw new Error('A IA não respondeu em JSON válido. Tente gerar de novo.');
   }
   if (!RECOMENDACAO_VALUES.includes(parsed.recomendacao)) parsed.recomendacao = null;
   return {

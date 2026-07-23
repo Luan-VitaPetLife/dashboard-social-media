@@ -147,7 +147,7 @@
       <i class="bi bi-info-circle-fill"></i>
       <p><b>Cobertura parcial, por limite real da API do Instagram:</b> stories somem da API assim que expiram
       (24h após publicar) e a Graph API não expõe mais avanços/voltas/saídas separados, só um total agregado
-      de navegação. Este painel captura uma leitura a cada ~2h enquanto o story está ativo — um story
+      de navegação. Este painel captura uma leitura a cada ~2h enquanto o story está ativo; um story
       publicado e expirado entre duas capturas pode não ser registrado por completo.</p>
     </div>
     <button class="notice-fab" id="limitNoteFab" title="Ver cobertura parcial de Stories" aria-label="Mostrar aviso de cobertura parcial"><i class="bi bi-info-circle-fill"></i></button>
@@ -273,9 +273,9 @@ function metricsHtml(item) {
 
 function footnoteHtml(item) {
   if (item.sampleCount >= 2) {
-    return `<div class="story-footnote">${item.sampleCount} leituras capturadas — primeira em ${fmtDateTimeBR(item.first.polledAt)}, última em ${fmtDateTimeBR(item.latest.polledAt)}. Variação acima é entre essas duas leituras, não o ciclo de vida completo do story.</div>`;
+    return `<div class="story-footnote">${item.sampleCount} leituras capturadas, primeira em ${fmtDateTimeBR(item.first.polledAt)}, última em ${fmtDateTimeBR(item.latest.polledAt)}. Variação acima é entre essas duas leituras, não o ciclo de vida completo do story.</div>`;
   }
-  return `<div class="story-footnote">Só 1 leitura capturada até agora (${fmtDateTimeBR(item.latest?.polledAt)}) — ainda sem base pra medir evolução.</div>`;
+  return `<div class="story-footnote">Só 1 leitura capturada até agora (${fmtDateTimeBR(item.latest?.polledAt)}), ainda sem base pra medir evolução.</div>`;
 }
 
 function cardHtml(item) {
@@ -308,7 +308,7 @@ function render(d) {
   document.getElementById('footerNote').textContent = d.items.length
     ? `${d.items.length} story(s) rastreado(s) nas últimas ${d.retentionHours}h`
     : 'nenhum story rastreado ainda';
-  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda — pode ser que não haja stories ativos, ou que ainda não tenha passado uma sincronização desde a publicação</div>';
+  grid.innerHTML = d.items.length ? d.items.map(cardHtml).join('') : '<div class="empty">sem dado ainda, pode ser que não haja stories ativos, ou que ainda não tenha passado uma sincronização desde a publicação</div>';
 }
 
 document.getElementById('syncBtn').addEventListener('click', async (e) => {

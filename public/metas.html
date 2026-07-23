@@ -245,14 +245,14 @@ const PLATFORM_META = {
 function paceText(g) {
   if (!g) return '';
   if (g.achieved) return '<span class="goal-pace achieved"><i class="bi bi-trophy-fill"></i> Meta atingida! Defina uma nova meta pra continuar acompanhando.</span>';
-  if (g.daysLeft <= 0) return `<span class="goal-pace overdue">Prazo vencido (${fmtDateBR(g.deadline)}) — ainda faltam ${fmt(g.remaining)} seguidores.</span>`;
+  if (g.daysLeft <= 0) return `<span class="goal-pace overdue">Prazo vencido (${fmtDateBR(g.deadline)}), ainda faltam ${fmt(g.remaining)} seguidores.</span>`;
   return `<span class="goal-pace">Ritmo necessário: <b>${fmt(Math.ceil(g.dailyPaceNeeded))}/dia</b> para bater a meta até ${fmtDateBR(g.deadline)} (${g.daysLeft} dia(s) restantes).</span>`;
 }
 
 function historyHtml(item) {
   if (!item.goal.history.length) return '';
   const rows = item.goal.history.map(h => `
-    <div class="goal-history-row">Meta de ${fmt(h.target)} até ${fmtDateBR(h.deadline)} — criada em ${fmtDateTimeBR(h.createdAt)}</div>
+    <div class="goal-history-row">Meta de ${fmt(h.target)} até ${fmtDateBR(h.deadline)}, criada em ${fmtDateTimeBR(h.createdAt)}</div>
   `).join('');
   return `
     <div class="goal-hist-toggle" data-hist-toggle>Ver histórico de metas (${item.goal.history.length})</div>
@@ -326,7 +326,7 @@ function attachHandlers(grid) {
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede — tente de novo.'; }
+      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
     });
   });
 }

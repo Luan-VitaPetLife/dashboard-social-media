@@ -596,6 +596,23 @@ andrew-manzyk) — duas animações, ambas expostas globalmente por `sidebar.js`
   `conteudos.html` (borra o `.cnt-card` inteiro) e no botão "Gerar relatório" de
   `relatorios.html` (borra o card `#genCard`).
 
+### Estilo de texto: nunca usar travessão "—" em texto visível ao usuário (23/07/2026)
+A pedido do Luan ("dá uma cara de IA gigante"), o travessão longo (—) foi removido de todo texto
+visível: HTML/JS em `public/*.html` (avisos, labels, mensagens de erro) e strings fixas geradas
+pelo backend (títulos/seções de relatório em `src/reports.js`, mensagens de erro em `server.js`/
+`src/*.js` que voltam pro front). Trocado por ponto final + nova frase, vírgula, dois-pontos ou
+o separador "·" já usado no resto do app (ex: "Instagram · Seguidores"), dependendo do contexto.
+**Duas exceções deliberadas, nunca remover:**
+- `'—'` sozinho como placeholder de "sem dado" (`fmt(n) { return n == null ? '—' : ... }` e
+  equivalentes em cada página) — é o glifo padrão de "valor ausente" do projeto, documentado
+  desde a fundação (`src/metrics.js`: "fica null ('—') em vez de fabricar um número"), não é
+  pontuação de frase.
+- Comentários de código (`//`, `/* */`) — nunca vistos pelo usuário, fora do escopo do pedido.
+Prompts enviados à IA (`AI_SUMMARY_SYSTEM_PROMPT` em `contentMetrics.js`, prompts em
+`reports.js`) também ficaram de fora: são instruções internas, não texto que aparece na tela.
+**Ao escrever qualquer texto novo pro usuário daqui pra frente, seguir esse padrão desde o
+início** (evita ter que caçar e reescrever depois).
+
 ## Auditoria de segurança (22/07/2026)
 
 Auditoria pontual (fora do trabalho de autenticação, que é uma frente separada — ver abaixo). Achados

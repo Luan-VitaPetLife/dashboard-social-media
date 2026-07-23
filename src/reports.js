@@ -66,9 +66,9 @@ function contextLine(context = {}) {
 // no relatório final — "não configurado" é um problema de configuração do servidor; "falhou" é
 // uma chamada real que deu erro (chave inválida/revogada, rate limit, rede) e vale investigar.
 function aiFallbackText(errored) {
-  if (!aiConfigured()) return 'ANTHROPIC_API_KEY não configurado no servidor — este texto não pôde ser gerado por IA.';
-  if (errored) return 'A chamada à IA falhou ao gerar este texto (ver log do servidor) — tente gerar o relatório de novo mais tarde.';
-  return 'ANTHROPIC_API_KEY não configurado no servidor — este texto não pôde ser gerado por IA.';
+  if (!aiConfigured()) return 'ANTHROPIC_API_KEY não configurado no servidor. Este texto não pôde ser gerado por IA.';
+  if (errored) return 'A chamada à IA falhou ao gerar este texto (ver log do servidor). Tente gerar o relatório de novo mais tarde.';
+  return 'ANTHROPIC_API_KEY não configurado no servidor. Este texto não pôde ser gerado por IA.';
 }
 
 // ── D+7 por conteúdo ────────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
 
   sections.push({
     heading: 'Ação',
-    callout: { label: 'Limitação da API', text: 'Visitas, cliques e seguidores atribuídos só existem em nível de conta na API do Instagram, não por publicação individual — não é possível atribuir essa ação a este conteúdo especificamente.' },
+    callout: { label: 'Limitação da API', text: 'Visitas, cliques e seguidores atribuídos só existem em nível de conta na API do Instagram, não por publicação individual. Não é possível atribuir essa ação a este conteúdo especificamente.' },
   });
 
   if (aiSummary) {
@@ -142,7 +142,7 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
   }
 
   const model = {
-    title: `Relatório D+7 — ${item.formatLabel}`,
+    title: `Relatório D+7 · ${item.formatLabel}`,
     subtitle: `${brand?.name || ''} · Instagram · ${item.countryName} · Publicado em ${fmtDateBR(item.meta.publishedAt)}`,
     brandName: brand?.name,
     countryLabel: item.countryName,
@@ -177,7 +177,7 @@ export async function buildStoriesReport({ brandId, countryId, storyId }) {
   const sections = [
     {
       heading: 'Contexto',
-      paragraphs: [`Formato: ${item.meta.mediaType || '—'}. Publicado em ${fmtDateTimeBR(item.meta.timestamp)} — ${item.expired ? 'expirado' : `há ${Math.round(item.ageHours)}h`}. ${item.sampleCount} leitura(s) capturada(s).`],
+      paragraphs: [`Formato: ${item.meta.mediaType || '—'}. Publicado em ${fmtDateTimeBR(item.meta.timestamp)}, ${item.expired ? 'expirado' : `há ${Math.round(item.ageHours)}h`}. ${item.sampleCount} leitura(s) capturada(s).`],
     },
     {
       heading: 'Métricas',
@@ -190,7 +190,7 @@ export async function buildStoriesReport({ brandId, countryId, storyId }) {
       heading: 'Limitações conhecidas',
       callout: {
         label: 'Limite real da API do Instagram',
-        text: 'A Graph API só entrega avanços, voltas e saídas somados (não por tela individual), e stories somem da API assim que expiram (~24h) — retenção/queda tela a tela e desempenho do CTA não são calculáveis com os dados hoje disponíveis.',
+        text: 'A Graph API só entrega avanços, voltas e saídas somados (não por tela individual), e stories somem da API assim que expiram (~24h). Retenção/queda tela a tela e desempenho do CTA não são calculáveis com os dados hoje disponíveis.',
       },
     },
   ];
@@ -247,8 +247,8 @@ export async function buildMonthlyCountryReport({ brandId, countryId, monthKey }
   const goalsDash = computeGoalsDashboard({ brandId, country: countryId });
 
   const growthRows = [];
-  if (c.instagram?.latest) growthRows.push(['Instagram — Seguidores', fmtNum(c.instagram.previous?.followers), fmtNum(c.instagram.latest.followers), fmtPct(c.instagram.delta.followers)]);
-  if (c.facebook?.latest) growthRows.push(['Facebook — Seguidores', fmtNum(c.facebook.previous?.followers), fmtNum(c.facebook.latest.followers), fmtPct(c.facebook.delta.followers)]);
+  if (c.instagram?.latest) growthRows.push(['Instagram · Seguidores', fmtNum(c.instagram.previous?.followers), fmtNum(c.instagram.latest.followers), fmtPct(c.instagram.delta.followers)]);
+  if (c.facebook?.latest) growthRows.push(['Facebook · Seguidores', fmtNum(c.facebook.previous?.followers), fmtNum(c.facebook.latest.followers), fmtPct(c.facebook.delta.followers)]);
 
   const { winners, losers } = topBottomContent(monthItems);
   const goalsRows = goalsDash.items.filter(i => i.goal.current).map(i => [i.platformLabel, fmtNum(i.goal.current.target), fmtNum(i.goal.currentValue), i.goal.current.progressPct != null ? `${i.goal.current.progressPct.toFixed(1)}%` : '—', i.goal.current.achieved ? 'Meta atingida' : fmtDateBR(i.goal.current.deadline)]);
@@ -259,13 +259,13 @@ export async function buildMonthlyCountryReport({ brandId, countryId, monthKey }
   ];
   if (losers.length) sections.push({ heading: 'Conteúdos abaixo da referência', table: { columns: ['Formato', 'Publicado em', 'Interações', 'vs. mediana'], rows: contentRows(losers, false) } });
   sections.push({ heading: 'Metas', table: { columns: ['Conta', 'Meta', 'Atual', 'Progresso', 'Prazo/status'], rows: goalsRows.length ? goalsRows : [['Nenhuma meta definida', '—', '—', '—', '—']] } });
-  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)} — o mês de ${monthLabel(monthKey)} ainda não terminou.` } });
+  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
   const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: country.name, growthRows, winners, losers, goalsRows });
   sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });
 
   const model = {
-    title: `Relatório mensal — ${country.name}`,
+    title: `Relatório mensal · ${country.name}`,
     subtitle: `${brand?.name || ''} · ${monthLabel(monthKey)}${isPartial ? ' (parcial)' : ''}`,
     brandName: brand?.name,
     countryLabel: country.name,
@@ -300,16 +300,16 @@ export async function buildMonthlyPlatformReport({ brandId, platform, monthKey }
     sections.push({ heading: 'Conteúdos em destaque', table: { columns: ['Formato', 'País', 'Publicado em', 'Interações', 'vs. mediana'], rows: winners.length ? contentRows(winners, true) : [['Sem conteúdo suficiente no período', '—', '—', '—', '—']] } });
     if (losers.length) sections.push({ heading: 'Conteúdos abaixo da referência', table: { columns: ['Formato', 'País', 'Publicado em', 'Interações', 'vs. mediana'], rows: contentRows(losers, true) } });
   } else {
-    sections.push({ heading: 'Conteúdos no período', callout: { label: 'Limitação', text: 'A ficha de conteúdo por post ainda só existe para o Instagram — Facebook fica de fora dessa análise por enquanto.' } });
+    sections.push({ heading: 'Conteúdos no período', callout: { label: 'Limitação', text: 'A ficha de conteúdo por post ainda só existe para o Instagram. Facebook fica de fora dessa análise por enquanto.' } });
   }
 
-  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)} — o mês de ${monthLabel(monthKey)} ainda não terminou.` } });
+  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
   const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: PLATFORM_LABELS[platform] || platform, growthRows: rows });
   sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });
 
   const model = {
-    title: `Relatório mensal — ${PLATFORM_LABELS[platform] || platform}`,
+    title: `Relatório mensal · ${PLATFORM_LABELS[platform] || platform}`,
     subtitle: `${brand?.name || ''} · ${monthLabel(monthKey)}${isPartial ? ' (parcial)' : ''}`,
     brandName: brand?.name,
     sections,
@@ -331,9 +331,9 @@ export async function buildMonthlyGeneralReport({ brandId, monthKey }) {
 
   const cb = social.combined;
   const growthRows = [
-    ['Instagram — Seguidores', fmtNum(cb.igFollowers.previousValue), fmtNum(cb.igFollowers.value), cb.igFollowers.deltaPct != null ? fmtPct(cb.igFollowers.deltaPct) : '—'],
-    ['Instagram — Curtidas no período', '—', fmtNum(cb.igLikes.value), cb.igLikes.deltaPct != null ? fmtPct(cb.igLikes.deltaPct) : '—'],
-    ['Facebook — Seguidores', fmtNum(cb.fbFollowers.previousValue), fmtNum(cb.fbFollowers.value), cb.fbFollowers.deltaPct != null ? fmtPct(cb.fbFollowers.deltaPct) : '—'],
+    ['Instagram · Seguidores', fmtNum(cb.igFollowers.previousValue), fmtNum(cb.igFollowers.value), cb.igFollowers.deltaPct != null ? fmtPct(cb.igFollowers.deltaPct) : '—'],
+    ['Instagram · Curtidas no período', '—', fmtNum(cb.igLikes.value), cb.igLikes.deltaPct != null ? fmtPct(cb.igLikes.deltaPct) : '—'],
+    ['Facebook · Seguidores', fmtNum(cb.fbFollowers.previousValue), fmtNum(cb.fbFollowers.value), cb.fbFollowers.deltaPct != null ? fmtPct(cb.fbFollowers.deltaPct) : '—'],
   ];
 
   const monthItems = content.items.filter(i => { const d = i.meta.publishedAt?.slice(0, 10); return d && d >= since && d <= until; });
@@ -346,14 +346,14 @@ export async function buildMonthlyGeneralReport({ brandId, monthKey }) {
     { heading: 'Conteúdos vencedores', table: { columns: ['Formato', 'País', 'Publicado em', 'Interações', 'vs. mediana'], rows: winners.length ? contentRows(winners, true) : [['Sem conteúdo suficiente no período', '—', '—', '—', '—']] } },
   ];
   if (losers.length) sections.push({ heading: 'Conteúdos abaixo da referência', table: { columns: ['Formato', 'País', 'Publicado em', 'Interações', 'vs. mediana'], rows: contentRows(losers, true) } });
-  sections.push({ heading: 'Social Listening', callout: { label: 'Ainda não implementado', text: 'O agrupamento de comentários por assunto/sentimento (Social Listening) ainda não existe no sistema — não há dado a mostrar aqui.' } });
+  sections.push({ heading: 'Social Listening', callout: { label: 'Ainda não implementado', text: 'O agrupamento de comentários por assunto/sentimento (Social Listening) ainda não existe no sistema. Não há dado a mostrar aqui.' } });
   sections.push({ heading: 'Progresso das metas', table: { columns: ['Conta', 'Meta', 'Atual', 'Progresso', 'Prazo/status'], rows: goalsRows.length ? goalsRows : [['Nenhuma meta definida', '—', '—', '—', '—']] } });
   sections.push({
     heading: 'Vendas rastreadas (Cofrinho do Social)',
     table: { columns: ['País', 'Usos do cupom', 'Vendas rastreadas', 'Faturamento informado'], rows: cofrinhoRows.length ? cofrinhoRows : [['Sem registro', '—', '—', '—']] },
-    callout: { label: 'Limite', text: 'Mostra apenas vendas rastreadas por cupom/link do Social, informadas manualmente — não representa sozinho toda a influência das redes sobre as compras. Os totais são acumulados desde o início (o Cofrinho não filtra por mês), não exclusivos deste período.' },
+    callout: { label: 'Limite', text: 'Mostra apenas vendas rastreadas por cupom/link do Social, informadas manualmente. Não representa sozinho toda a influência das redes sobre as compras. Os totais são acumulados desde o início (o Cofrinho não filtra por mês), não exclusivos deste período.' },
   });
-  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)} — o mês de ${monthLabel(monthKey)} ainda não terminou.` } });
+  if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
   const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: 'toda a empresa', growthRows, winners, losers, goalsRows });
   sections.unshift({ heading: 'Resumo executivo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });

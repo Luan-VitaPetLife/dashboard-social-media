@@ -82,7 +82,7 @@ const syncLimiter = rateLimit({
   limit: 3,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  message: { error: 'Muitas solicitações de sincronização em pouco tempo — aguarde um minuto e tente de novo.' },
+  message: { error: 'Muitas solicitações de sincronização em pouco tempo. Aguarde um minuto e tente de novo.' },
 });
 
 // Limite dedicado pro login — senha única de equipe, então força bruta é uma preocupação real
@@ -96,7 +96,7 @@ const loginLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  message: { error: 'Muitas tentativas de login em pouco tempo — aguarde alguns minutos e tente de novo.' },
+  message: { error: 'Muitas tentativas de login em pouco tempo. Aguarde alguns minutos e tente de novo.' },
 });
 
 // ── Segurança: nunca ecoar segredo nenhum (token da Meta, credencial do Mongo) numa resposta
@@ -173,7 +173,7 @@ app.post('/api/settings', (req, res) => {
   // Trava de segurança: nunca liga o login sem senha configurada — senão ninguém mais consegue
   // entrar (nem pra desligar de novo) até alguém mexer na variável de ambiente no Railway.
   if (loginEnabled === true && !process.env.DASHBOARD_PASSWORD) {
-    return res.status(400).json({ error: 'Defina a variável de ambiente DASHBOARD_PASSWORD antes de ativar o login — sem isso, ninguém conseguiria entrar de novo.' });
+    return res.status(400).json({ error: 'Defina a variável de ambiente DASHBOARD_PASSWORD antes de ativar o login. Sem isso, ninguém conseguiria entrar de novo.' });
   }
   try {
     res.json(updateSettings({ loginEnabled: Boolean(loginEnabled) }));
@@ -572,9 +572,9 @@ app.get('/api/tiktok/oauth/callback', (req, res) => {
   const { code, state, error, error_description } = req.query;
   console.log('TikTok OAuth callback recebido:', { code, state, error, error_description });
   res.type('html').send(`<!doctype html><html><body style="font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto">
-    <h2>TikTok — autorização recebida</h2>
-    ${error ? `<p style="color:#c0392b">Erro: ${error} — ${error_description || ''}</p>` :
-      `<p>Código de autorização recebido. A integração ainda está em construção — encaminhe este valor pra equipe técnica concluir a troca por token de acesso:</p>
+    <h2>TikTok: autorização recebida</h2>
+    ${error ? `<p style="color:#c0392b">Erro: ${error}. ${error_description || ''}</p>` :
+      `<p>Código de autorização recebido. A integração ainda está em construção, encaminhe este valor pra equipe técnica concluir a troca por token de acesso:</p>
        <pre style="background:#f4f4f4;padding:12px;border-radius:8px;word-break:break-all">${code || '(nenhum código recebido)'}</pre>`}
   </body></html>`);
 });

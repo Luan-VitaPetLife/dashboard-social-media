@@ -53,7 +53,7 @@ export async function backfillSocialHistory({ brandId, countryId }) {
         result.errors.push('instagram: ' + e.message);
       }
     } else {
-      result.errors.push('instagram: nenhum snapshot ainda pra usar de âncora — rode o sync normal primeiro.');
+      result.errors.push('instagram: nenhum snapshot ainda pra usar de âncora. Rode o sync normal primeiro.');
     }
   }
 
@@ -78,7 +78,7 @@ export async function backfillSocialHistory({ brandId, countryId }) {
         result.errors.push('facebook: ' + e.message);
       }
     } else {
-      result.errors.push('facebook: nenhum snapshot ainda pra usar de âncora — rode o sync normal primeiro.');
+      result.errors.push('facebook: nenhum snapshot ainda pra usar de âncora. Rode o sync normal primeiro.');
     }
   }
 
