@@ -275,6 +275,21 @@ estados") fica pra uma fase seguinte, ver limite abaixo.
   certo no ranking "Top estados" ao lado, só sem polígono pra colorir. Botão "Voltar ao mundo"
   troca de volta pra `countriesFeatures`; mudar de conta/marca também sai do drill-down
   automaticamente (`loadAudience()` chama `exitStateView()` se necessário).
+- **A soma da geografia nunca bate 100% com o total real de seguidores — confirmado ao vivo
+  (23/07/2026), achado pelo Luan comparando o número do perfil real do Instagram BR (5.294) com
+  o total mostrado na Audiência (5.253).** Não é bug de agregação: a própria Meta não geolocaliza
+  todo mundo (perfis sem sinal de localização suficiente, ou buckets pequenos demais que somem por
+  limiar de privacidade) — confirmado comparando `followers_count` (campo direto da conta, o mesmo
+  usado no snapshot diário) contra a soma de `follower_demographics`: por país fica em torno de
+  96-97% do real, mas por **cidade** (que é a base do drill-down por estado) cai bem mais — no
+  teste ao vivo, 37% do total combinado, e só 9% pra conta US isoladamente.
+  `fetchInstagramAudienceDemographics()` (`meta.js`) agora também busca `followers_count`
+  (chamada leve, mesmo cache de 30min) e expõe como `metrics.followers.realTotal` (combinado) e
+  `.realTotalByCountry` (por conta) — só existe
+  pra "Seguidores", não pra "Engajamento"/"Alcance" (esses não têm um "total verdadeiro"
+  equivalente, são amostra de período). O painel lateral (`renderSummary()` em `audiencia.html`)
+  mostra "X de Y seguidores com país/estado identificado (Z%)" sempre que esse dado existir, tanto
+  no mapa-mundo quanto dentro do drill-down — nunca deixa o número parecer completo quando não é.
 - **Cor do mapa, escolhida pelo usuário (23/07/2026):** seletor `<input type="color">` no toolbar
   (padrão = rosa do Instagram, `#dd2a7b`) — `colorForValue()` interpola de uma versão bem clara da
   cor escolhida até a cor plena (escala log), tanto no globo quanto no gradiente das barras de

@@ -550,9 +550,18 @@ async function fetchTimeframedDemographics(id, metric) {
 
 export async function fetchInstagramAudienceDemographics(id) {
   if (!TOKEN || !id) return null;
-  return cachedAudience(`ig-audience-${id}`, async () => ({
-    followers: await fetchLifetimeDemographics(id),
-    engaged: await fetchTimeframedDemographics(id, 'engaged_audience_demographics'),
-    reached: await fetchTimeframedDemographics(id, 'reached_audience_demographics'),
-  }));
+  return cachedAudience(`ig-audience-${id}`, async () => {
+    const acc = await graphGet(`${id}?fields=followers_count`).catch(() => null);
+    return {
+      followers: await fetchLifetimeDemographics(id),
+      engaged: await fetchTimeframedDemographics(id, 'engaged_audience_demographics'),
+      reached: await fetchTimeframedDemographics(id, 'reached_audience_demographics'),
+      // Total real de seguidores (mesmo campo do snapshot diário) — usado só pra mostrar quantos
+      // do total a Meta conseguiu geolocalizar na breakdown de demografia (ver "cobertura
+      // geográfica" em audience.js/audiencia.html). A soma de follower_demographics por país/
+      // cidade quase sempre fica ABAIXO desse número: a Meta não atribui geografia a 100% dos
+      // seguidores (limiar de privacidade em buckets pequenos, perfis sem sinal suficiente).
+      followersCount: acc?.followers_count ?? null,
+    };
+  });
 }

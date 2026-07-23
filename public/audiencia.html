@@ -161,7 +161,11 @@
       não permite deduplicar audiência entre contas diferentes. Só Instagram tem esse dado, o
       Facebook descontinuou as métricas equivalentes. O drill-down por estado (clique num país)
       só existe pro Brasil e Estados Unidos por enquanto, com o estado inferido a partir da cidade
-      que a Meta devolve; outros países mostram só o total nacional.</p>
+      que a Meta devolve; outros países mostram só o total nacional. A Meta não geolocaliza 100%
+      dos seguidores (perfis sem sinal de localização, ou países/cidades com pouca gente que somem
+      por limiar de privacidade), então a soma por país/cidade/estado costuma ficar abaixo do
+      total real de seguidores da conta; o painel à direita mostra "X de Y" pra deixar isso
+      explícito, nunca escondendo a diferença.</p>
     </div>
     <button class="notice-fab" id="limitNoteFab" title="Como ler este globo" aria-label="Mostrar aviso"><i class="bi bi-info-circle-fill"></i></button>
 
@@ -514,11 +518,30 @@ function renderSummary() {
     box.innerHTML = `<div class="kc-label">${MODE_META[mode].label}</div><div class="empty" style="padding:8px 0 0">sem dado disponível pra essa conta/escopo</div>`;
     return;
   }
-  const total = m.byCountry.reduce((a, e) => a + e.value, 0);
+  const timeframeSuffix = m.timeframe ? ` · janela: ${m.timeframe.replace(/_/g, ' ')}` : (mode === 'followers' ? ' · histórico completo' : '');
+  let total, scopeNote, coverageNote = '';
+  if (viewLevel === 'state') {
+    const source = STATE_SOURCES[activeCountryIso];
+    const entries = currentStateEntries();
+    total = entries.reduce((a, e) => a + e.value, 0);
+    scopeNote = `${entries.length} estado(s) com dado`;
+    if (mode === 'followers') {
+      const real = m.realTotalByCountry?.[source.dataKey];
+      if (real) coverageNote = `${fmt(total)} de ${fmt(real)} seguidores com estado identificado (${Math.round(total / real * 100)}%)`;
+    }
+  } else {
+    total = m.byCountry.reduce((a, e) => a + e.value, 0);
+    scopeNote = `${m.byCountry.length} país(es) com dado`;
+    if (mode === 'followers' && m.realTotal) {
+      coverageNote = `${fmt(total)} de ${fmt(m.realTotal)} seguidores com país identificado (${Math.round(total / m.realTotal * 100)}%)`;
+    }
+  }
+  const label = viewLevel === 'state' ? `${MODE_META[mode].label} · estados` : `${MODE_META[mode].label} · total`;
   box.innerHTML = `
-    <div class="kc-label">${MODE_META[mode].label} · total</div>
+    <div class="kc-label">${label}</div>
     <div class="kc-value">${fmt(total)}</div>
-    <div class="kc-note">${m.byCountry.length} país(es) com dado${m.timeframe ? ` · janela: ${m.timeframe.replace(/_/g, ' ')}` : ' · histórico completo'}</div>
+    <div class="kc-note">${scopeNote}${timeframeSuffix}</div>
+    ${coverageNote ? `<div class="kc-note" style="margin-top:4px">${coverageNote}</div>` : ''}
   `;
 }
 

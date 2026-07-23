@@ -80,7 +80,7 @@ export async function computeAudienceDashboard({ brandId, country }) {
     if (!entries.length) return null;
     const brEntry = withData.find(a => a.countryId === 'br')?.data?.[field];
     const usEntry = withData.find(a => a.countryId === 'us')?.data?.[field];
-    return {
+    const metric = {
       timeframe: entries.find(d => d.timeframe)?.timeframe || null,
       byCountry: mergeBreakdown(entries.map(d => d.country)),
       byCity: mergeBreakdown(entries.map(d => d.city)),
@@ -94,6 +94,21 @@ export async function computeAudienceDashboard({ brandId, country }) {
         us: usEntry ? buildStateBreakdown(usEntry.city, US_STATES) : [],
       },
     };
+    // Só "followers" tem um total real e estável (followers_count, mesmo campo do snapshot
+    // diário) pra comparar contra. "engaged"/"reached" são amostras de um período, não existe um
+    // "total verdadeiro" equivalente pra checar cobertura. Confirmado ao vivo (23/07/2026,
+    // achado pelo Luan) que a soma de follower_demographics por país/cidade quase sempre fica
+    // abaixo do total real — a Meta não geolocaliza 100% dos seguidores (buckets pequenos somem
+    // por privacidade, perfis sem sinal de localização). Front usa isso pra mostrar "X de Y"
+    // em vez de deixar o usuário achar que bateu tudo.
+    if (field === 'followers') {
+      metric.realTotal = withData.reduce((sum, a) => sum + (a.data.followersCount ?? 0), 0);
+      metric.realTotalByCountry = {
+        br: withData.find(a => a.countryId === 'br')?.data.followersCount ?? null,
+        us: withData.find(a => a.countryId === 'us')?.data.followersCount ?? null,
+      };
+    }
+    return metric;
   }
 
   return {
