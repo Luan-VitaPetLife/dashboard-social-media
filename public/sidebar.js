@@ -228,6 +228,18 @@ body.sidebar-hidden .sidebar{transform:translateX(-100%)}
   .sidebar{transform:translateX(-100%)}
   .sidebar-open-btn{display:flex}
 }
+/* O botão de abrir a sidebar é position:fixed no canto superior esquerdo, por cima de qualquer
+   página — sempre que ele aparece (mobile sempre; desktop com a sidebar minimizada) ele ficava em
+   cima do título/texto do .topbar de baixo (bug real encontrado pelo Luan em 24/07/2026, print
+   mostrando o hambúrguer cobrindo "Redes Sociais"/"última sincronização"). .topbar é a mesma
+   classe em toda página (ver Arquitetura no CLAUDE.md), então um único ponto aqui resolve pra
+   todas de uma vez em vez de duplicar em cada página. CUIDADO: este CSS vive dentro de um
+   template literal JS (a variável css abaixo) — nunca usar crase aqui dentro, ela fecha a
+   string mais cedo e quebra o mount() inteiro (bug real, encontrado e corrigido no mesmo dia). */
+body.sidebar-hidden .topbar{padding-left:64px}
+@media(max-width:768px){
+  .topbar{padding-left:64px}
+}
 
 /* ── Loader genérico (troca o texto "carregando…" enquanto a primeira busca de dado não volta) —
    via pageLoaderHtml() abaixo. Peças de <uiverse.io/Nawsome>. ── */

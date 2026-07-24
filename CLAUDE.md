@@ -39,6 +39,22 @@ Não há suíte de testes nem linter configurados neste projeto.
 Variáveis de ambiente: ver `.env.example`. Sem `META_ACCESS_TOKEN`, o sync roda mas não busca nada (avisa
 em `errors`, nada quebra). Sem `MONGODB_URI`, usa `data/db.json` local (não persiste em deploy sem Volume).
 
+### Ambiente de desenvolvimento e testes locais (ler antes de testar manualmente)
+- **Este projeto usa o mesmo MongoDB de produção** (mesmo `MONGODB_URI` do Railway) — não existe banco
+  de teste separado. Pra qualquer teste manual que escreva dado (metas, contexto de conteúdo, Cofrinho,
+  configurações, agendamentos), rodar com `MONGODB_URI=` vazio pra cair no fallback `data/db.json` local.
+  Se escrever no Mongo de produção por engano, limpar depois (os dados ficam em documentos `_id` fixos
+  na collection `kv`: `goals`, `cofrinho`, `settings`, etc.).
+- **`EADDRINUSE` em `npm start`/`node server.js` local:** processo anterior às vezes fica preso ouvindo a
+  porta mesmo depois que o terminal parece ter fechado — o processo novo crasha silenciosamente (só
+  aparece no log redirecionado) enquanto o antigo continua servindo código desatualizado, o que já
+  causou confusão real (campo novo "sumindo" da resposta da API quando na verdade era só código velho
+  rodando). Achar o PID de verdade com `Get-NetTCPConnection -LocalPort <porta> -State Listen` e matar
+  antes de reiniciar, ou usar uma porta nova.
+- **Texto com acento via `curl -d` inline no Git Bash (Windows) chega corrompido** ("não" vira "n�o") —
+  não é bug do servidor, é o `curl.exe` mangling UTF-8 na linha de comando. Pra testar qualquer rota com
+  texto acentuado, usar um script Node com `fetch()` em vez de `curl` inline.
+
 ## Arquitetura
 
 ```
@@ -365,11 +381,8 @@ estados") fica pra uma fase seguinte, ver limite abaixo.
 - **Cuidado com CSS de espaçamento em `metas.html`:** o Luan já pediu uma vez (21/07/2026) mais
   respiro entre botões e textos empilhados no card (`.goal-actions`, `.goal-pace`,
   `.goal-hist-toggle` têm margin generosa por causa disso) — não voltar a apertar esses elementos.
-- **Cuidado ao testar localmente:** este projeto usa o **mesmo MongoDB de produção** (mesmo
-  `MONGODB_URI` do Railway) — não existe banco de teste separado. Metas/contexto de conteúdo
-  criados durante teste manual ficam gravados de verdade; limpar depois (ex: apagar o documento
-  `_id: 'goals'` da collection `kv`) se não forem dados reais. Mesmo cuidado vale pro Cofrinho
-  (`_id: 'cofrinho'`) — ver seção abaixo.
+- **Cuidado ao testar localmente:** ver "Ambiente de desenvolvimento e testes locais" no topo do
+  arquivo (mesmo MongoDB de produção, sem banco de teste separado).
 
 ### Cofrinho do Social (`src/cofrinho.js`, `public/cofrinho.html`)
 - Implementado em 21/07/2026. **100% entrada manual** — sem sync, sem API externa. O setor
@@ -422,11 +435,9 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
      investigações em aberto) — ver chamados semeados abaixo.
 - **Comentários** (`POST/DELETE /api/tickets/:id/comments`) são a parte de "conversar entre si" —
   um por pessoa, texto livre, sem edição (só exclusão) pra manter simples.
-- **Chamados semeados em produção (22/07/2026)**, todos tipo "Programação", refletindo o backlog
-  real desta sessão: confirmar posts "Patrocinado" não capturados pelo sinal Orgânico×Pago (aguardando
-  link/data do Luan), integração com TikTok (app em revisão), resumo por IA na ficha D+7, Social
-  Listening, relatórios automáticos, e métricas de Ação por conteúdo. As pessoas Luan e Aline Moraes
-  também foram cadastradas — mais gente é adicionada pela própria tela de "Gerenciar pessoas".
+- Backlog técnico real do produto é rastreado como chamados tipo "Programação" no próprio quadro
+  (não neste arquivo) — checar `/chamados` pra ver pendências abertas em vez de confiar numa lista
+  fixa aqui, que ficaria desatualizada.
 - **Sem `<select>` nativo e sem `confirm()` nativo (corrigido em 22/07/2026, a pedido do Luan).**
   Primeira versão usava `<select>` (feio, sem combinar com o resto do app) e `window.confirm()` nos
   botões de excluir — travava a aba inteira até alguém clicar OK/Cancelar (confirmado: travou até
@@ -438,11 +449,8 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
     qualquer outro modal aberto) que devolve uma Promise&lt;boolean&gt;, usado com `await` no lugar de
     `confirm()`. Testado ao vivo (excluir chamado, excluir pessoa com Cancelar e com Excluir) — a
     aba nunca mais travou.
-- **Cuidado com encoding ao testar via curl no Git Bash (Windows):** strings com acento passadas
-  inline como `-d '{"...ã..."}'` chegam corrompidas no servidor (confirmado: "não" virou "n�o"
-  no dado salvo) — não é bug do servidor, é o Git Bash/curl.exe mangling UTF-8 na linha de comando.
-  Pra qualquer teste com texto acentuado, usar um script Node com `fetch()` (string JS é UTF-8
-  nativo) em vez de `curl -d` inline.
+- **Cuidado com encoding ao testar via curl no Git Bash (Windows):** ver "Ambiente de
+  desenvolvimento e testes locais" no topo do arquivo.
 
 ### Login único compartilhado + Configurações (`src/auth.js`, `public/login.html`, `public/configuracoes.html`)
 - Implementado em 22/07/2026, junto com a auditoria de segurança (ver seção própria abaixo) — o
@@ -477,8 +485,7 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
 - "Sair" só aparece na sidebar quando `loginEnabled` é `true` (checado via `GET /api/auth/status`
   no mount de `sidebar.js`) — com login desligado, não existe sessão de verdade pra encerrar, então
   a ação nem é oferecida.
-- **Cuidado ao testar localmente:** mesmo aviso de sempre — usar `MONGODB_URI=` (vazio) na hora de
-  testar liga/desliga do login, pra cair no fallback de `data/db.json` e nunca escrever
+- **Cuidado ao testar localmente:** mesmo aviso de sempre (ver topo do arquivo) — nunca escrever
   `settings.loginEnabled: true` de teste no Mongo de produção.
 
 ### Store (`store.js`)
@@ -561,6 +568,46 @@ nas 5 páginas (`index.html`, `conteudos.html`, `metas.html`, `stories.html`, `c
 - `h3.section`, `.empty` (estado vazio) e `.delta-val` (chip de variação ↑/↓) já eram byte-idênticos
   nas 5 páginas antes deste passe — não precisaram de mudança.
 
+### Mobile: topbar e botão da sidebar (24/07/2026)
+A pedido do Luan ("essas opções devem estar melhor distribuídas" + print mostrando o hambúrguer por
+cima do título), duas correções, uma global e uma por página:
+- **Botão de abrir a sidebar sobrepondo o título do `.topbar` (`public/sidebar.js`):** o botão é
+  `position:fixed;left:14px;top:14px`, e aparece tanto no mobile (sempre) quanto no desktop com a
+  sidebar minimizada — nos dois casos ele ficava por cima do `<h1>`/`.sub` do topbar de baixo, já
+  que nenhuma página reservava espaço pra ele. Corrigido num único lugar (`.topbar` é a mesma
+  classe em toda página): `body.sidebar-hidden .topbar{padding-left:64px}` (desktop minimizado) +
+  `@media(max-width:768px){.topbar{padding-left:64px}}` (mobile). Como o `<style>` de `sidebar.js`
+  é injetado no `<head>` em runtime, depois do `<style>` de cada página, ele vence o empate de
+  especificidade contra o `.topbar{padding:...}` de cada página sem precisar de `!important` — só
+  funciona por causa dessa ordem, então não mover a injeção desse CSS pra antes do HTML da página.
+  **Cuidado ao editar esse bloco:** ele vive dentro de um template literal JS (a variável `css` em
+  `sidebar.js`) — usar crase (`` ` ``) em qualquer comentário dentro dele fecha a string mais cedo e
+  quebra o `mount()` inteiro, derrubando a sidebar de toda página (bug real, encontrado e corrigido
+  no mesmo dia via teste ao vivo).
+- **Pills/botões do `.topbar-controls` malformados no mobile:** sem nenhum tratamento responsivo,
+  eles quebravam linha de forma desigual e ficavam colados à direita (`justify-content:flex-end`),
+  deixando uma pill sozinha numa linha e desperdiçando o resto da largura. Mesmo bloco `@media
+  (max-width:768px)` duplicado nas 8 páginas que têm `.topbar-controls` (`index.html`,
+  `conteudos.html`, `metas.html`, `stories.html`, `cofrinho.html`, `audiencia.html`,
+  `relatorios.html`, `chamados.html` — `configuracoes.html`/`sobre.html` não têm essa div):
+  `.topbar` vira coluna, e cada filho direto de `.topbar-controls` (pill, dropdown, botão) ganha
+  `flex:1 1 140px` — cresce pra preencher a linha em vez de deixar vão vazio, sem precisar contar
+  quantos itens cada página tem (um item sozinho também estica sozinho até a largura toda, graças
+  ao `flex-grow`). `#periodWrap`/`.sync-btn` (só existem em `index.html`) forçados a ocupar a linha
+  inteira, pra dar destaque ao período e à ação de sincronizar. `.csel-pop`/`.period-pop` (dropdowns
+  disparados pela pill) trocam `right:0;min-width:190px/width:270px` fixo por `left:0;right:0;width:
+  auto`, esticando exatamente até a largura da pill em vez de um valor fixo que podia estourar a
+  tela em aparelhos bem estreitos.
+- **Verificado:** ambiente de automação deste projeto não redimensiona a janela real do Chrome pra
+  testar breakpoint (`resize_window` não teve efeito, `window.innerWidth` continuou no tamanho da
+  tela inteira) — confirmado com um `<body>` fixado em `390px` + as mesmas regras do `@media`
+  aplicadas sem a condição, só pra teste visual (nunca commitado). Cobre bem qualquer elemento de
+  layout normal (topbar, pills, dropdowns via `position:absolute`), mas **não** cobre elementos
+  `position:fixed` (lightbox de `conteudos.html`, modais), que continuam renderizando no tamanho
+  real da janela nesse tipo de teste — esses foram conferidos lendo o CSS-fonte diretamente (o
+  lightbox já tinha `@media(max-width:760px)` próprio, empilhando as duas colunas, de uma sessão
+  anterior) em vez de visualmente.
+
 ### URLs limpas (sem `.html`)
 Implementado em 22/07/2026. `express.static(..., { extensions: ['html'] })` em `server.js` deixa
 `/conteudos` resolver pra `conteudos.html` sem redirect nem rota dedicada — o arquivo continua
@@ -604,7 +651,10 @@ nenhum estado do sistema) — se TikTok for integrado, por exemplo, essa linha s
   (hoje), o seletor de Marca vira um pill estático (`#brandPillStatic`) em vez de dropdown; com 2+ vira
   dropdown igual ao de País. Trocar de marca reseta o país pra "Todos". Cards de conta (`#accGrid`),
   tabelas de histórico (`#histGrid`) e a legenda/título do gráfico de tendência são **gerados a partir de
-  `d.byCountry`** a cada `render()` — não existem mais divs fixas por país no HTML.
+  `d.byCountry`** a cada `render()` — não existem mais divs fixas por país no HTML. **Pill só com a logo
+  (23/07/2026, a pedido do Luan):** o texto do nome da marca (`#brandStaticVal`/`#brandVal`) ficou com
+  `display:none` nas 7 páginas que têm esse seletor — só a imagem do logo aparece. O elemento continua
+  no DOM (só escondido) porque o JS ainda escreve o nome nele, sem motivo pra tirar a lógica.
 - Estado (marca, país, período, métrica do gráfico, canal, período de comparação, view do card de
   Comparação) persistido em `localStorage` com prefixo `coco_sm_*`.
 - Card "Comparação de período": três visualizações (Lista/Tabela/Gráfico) sobre os mesmos 6 KPIs
@@ -699,21 +749,13 @@ todos" os 5 tipos, "PDF e DOCX já juntos", "Ambas as opções" de geração).
 - **Social Listening ainda não implementado** — o relatório mensal geral inclui a seção mesmo
   assim, com um callout "Ainda não implementado" (mesma regra de sinalizar limitação em vez de
   omitir a seção inteira, que poderia parecer que ninguém pensou nisso).
-- **Testado ao vivo (23/07/2026):** servidor local com `MONGODB_URI=` (fallback JSON, nunca toca o
-  Mongo de produção) + `META_ACCESS_TOKEN`/`ANTHROPIC_API_KEY` reais do `.env`. Os 5 tipos gerados
-  com sucesso (mensal geral/país/rede via script direto contra dado real da Meta; D+7 manual via
-  navegador, incluindo o formulário completo — Tipo→País→Conteúdo, geração, download de PDF real,
-  exclusão com o modal de confirmação). A geração automática também rodou sozinha no boot do
-  servidor local e gerou os 5 relatórios mensais corretamente. **Nota:** a `ANTHROPIC_API_KEY`
-  local (`.env`) está retornando `401 API key is invalid` no momento deste teste — mesmo sintoma
-  já visto em produção (ver pendência de rotação de chave); o pipeline inteiro (dados, PDF, DOCX,
-  UI) foi validado de ponta a ponta mesmo assim, usando o texto de fallback "a chamada à IA
-  falhou" no lugar do texto gerado — só falta uma chave válida pros textos de IA aparecerem de
-  verdade nos relatórios. **Nota (23/07/2026, mais tarde):** o Luan trocou a chave; a nova
-  funciona (confirmado com chamada real). O redesenho de agendamentos (config-driven, sem
-  cadência fixa) e o campo "Nome" foram implementados depois dessa troca e testados via CRUD por
-  curl (sem gastar crédito de IA à toa — ver `feedback_minimizar_creditos_anthropic_key` na
-  memória do projeto).
+- **Testado ao vivo (23/07/2026):** os 5 tipos de relatório gerados com sucesso (PDF+DOCX, manual e
+  automático no boot) contra dado real da Meta, em servidor local (`MONGODB_URI=`, nunca o Mongo de
+  produção). A `ANTHROPIC_API_KEY` estava inválida no início do teste (401) — validado o pipeline
+  inteiro mesmo assim via texto de fallback, depois confirmado com chamada real assim que o Luan
+  trocou a chave. Testes depois dessa troca (agendamentos, campo "Nome") passaram a usar CRUD via
+  curl em vez de gerar relatório de verdade, pra não gastar crédito de IA à toa (ver
+  `feedback_minimizar_creditos_anthropic_key` na memória do projeto).
 
 ### Sobre a dashboard (`public/sobre.html`)
 Página de apresentação/documentação pro usuário final (23/07/2026, a pedido do Luan) — panorama
@@ -724,6 +766,20 @@ coletado), todo texto rotulado "Gerado por IA em...", pode falhar (chave inváli
 sempre dá pra gerar de novo), tem custo real por chamada (cuidado com agendamentos muito
 frequentes) e nunca compartilha nada fora do que já está na tela. Página estática, sem seletor de
 marca/país (não depende de dado nenhum) — só `sidebar.js` pro menu.
+
+### Avisos minimizáveis (`initCollapsibleNotice()` em `public/sidebar.js`)
+Implementado em 21/07/2026 (Audiência), estendido em 22/07/2026 pra Visão geral, Cofrinho e Stories,
+a pedido do Luan — helper global (mesmo padrão de `escapeHtml`/`pageLoaderHtml`, um só lugar pro
+SVG/CSS/comportamento em vez de duplicar por página). Qualquer caixa `.limit-note`/`.coverage-note`
+de aviso fixo pode virar minimizável chamando `initCollapsibleNotice({ noteId, collapseBtnId, fabId,
+storageKey })`: clicar no "x" (`collapseBtnId`) encolhe a caixa com animação (`max-height`/`opacity`/
+`transform`, classe `.is-collapsing`) e revela uma bolinha (`fabId`, `.notice-fab`) fixa no canto
+inferior direito da tela; clicar na bolinha reabre. Estado (aberto/fechado) persistido em
+`localStorage` por `storageKey`, uma chave própria por página (ex: `coco_aud_limitnote_collapsed`).
+Usado hoje em `index.html`, `cofrinho.html`, `stories.html`, `audiencia.html` e `relatorios.html` —
+o CSS de `.limit-note`/`.notice-collapse-btn`/`.notice-fab` ainda é duplicado no `<style>` de cada
+página (não centralizado em `sidebar.js` como o loader), então uma página nova que precisar de aviso
+minimizável precisa copiar esse bloco de CSS também, não só chamar a função.
 
 ### Animações de carregamento (`public/sidebar.js`)
 Implementado em 23/07/2026, a pedido do Luan (peças originais de uiverse.io — Nawsome e
@@ -747,6 +803,14 @@ andrew-manzyk) — duas animações, ambas expostas globalmente por `sidebar.js`
   erro), senão o borrão fica preso na tela. Usado no botão "Gerar resumo com IA" de
   `conteudos.html` (borra o `.cnt-card` inteiro) e no botão "Gerar relatório" de
   `relatorios.html` (borra o card `#genCard`).
+- **`audiencia.html` (24/07/2026, a pedido do Luan, "os dados demoram um pouquinho pra chegar"):**
+  o overlay escuro do globo (`#globeLoading`) escondia assim que o **mesh 3D** terminava de montar,
+  antes da resposta real de `/api/audience` voltar — ficava parecendo carregado enquanto ainda
+  esperava a Meta. Corrigido escondendo o overlay só depois que `Promise.all([loadAudience(),
+  initGlobe()])` resolve as duas coisas, não só uma. Os cards de métrica/ranking (`#metricSummary`/
+  `#rankList`) também não tinham nenhum indicador visual de espera; agora mostram `pageLoaderHtml()`
+  (`showAudienceLoading()`) tanto na carga inicial quanto em toda troca de conta/marca, não só a
+  primeira vez.
 
 ### Estilo de texto: nunca usar travessão "—" em texto visível ao usuário (23/07/2026)
 A pedido do Luan ("dá uma cara de IA gigante"), o travessão longo (—) foi removido de todo texto
@@ -830,17 +894,9 @@ por severidade, o que foi corrigido e o que ficou só documentado.
   `redactSecrets`/`redactDeep` (ver acima). O cookie de sessão do login também já era `httpOnly:
   true` desde que foi implementado (ver `POST /api/auth/login`) — o JS da página já não consegue
   ler esse cookie via `document.cookie`. Nada a implementar aqui além do que já existia.
-- **`npm audit` (verificado, nada a corrigir):** 0 vulnerabilidades nas 3 dependências existentes
-  (express/dotenv/mongodb) — rodado tanto antes quanto depois de adicionar `helmet` e
-  `express-rate-limit` (0 vulnerabilidades também com as duas novas).
-- **NoSQL injection (verificado, não se aplica):** toda leitura/escrita em `store.js` usa `_id` fixo e
-  literal na collection `kv` (`'snapshots'`, `'content'`, `'goals'`, `'stories'`, `'cofrinho'`,
-  `'lastSync'`) — nunca uma chave derivada de `req.body`/`req.query`. `brandId`/`countryId`/`mediaId`/etc.
-  vindos de request só indexam dentro de um objeto JS já carregado em memória (`cache.content[brandId]
-  [countryId][mediaId]`), nunca viram parte de uma query Mongo — não há superfície de NoSQL injection
-  neste projeto hoje.
-- **Segredos no git (verificado, ok):** `.env` está no `.gitignore` desde sempre; `git log --all
-  --full-history -- .env` não retorna nenhum commit — nunca foi versionado.
-- **CORS (verificado, não se aplica):** nenhum middleware de CORS configurado, e não precisa — é uma
-  app same-origin (front estático em `public/` servido pelo mesmo Express que expõe `/api/*`), sem
-  motivo pra liberar origem cruzada nenhuma.
+- **Verificados, nada a corrigir:** `npm audit` (0 vulnerabilidades, antes e depois de adicionar
+  `helmet`/`express-rate-limit`). NoSQL injection não se aplica — `store.js` só usa `_id` fixo e
+  literal na collection `kv` (`'snapshots'`, `'content'`, `'goals'`, etc.), nunca uma chave derivada
+  de `req.body`/`req.query`; `brandId`/`countryId`/`mediaId` de request só indexam objeto JS já em
+  memória, nunca viram query Mongo. `.env` nunca foi versionado (`git log --all --full-history --
+  .env` vazio). CORS não se aplica — app same-origin, front e `/api/*` no mesmo Express.
