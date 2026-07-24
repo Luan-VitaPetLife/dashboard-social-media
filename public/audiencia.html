@@ -434,9 +434,6 @@ async function initGlobe() {
   window.addEventListener('resize', () => {
     world.width(el.clientWidth).height(el.clientHeight);
   });
-
-  document.getElementById('globeLoading').style.display = 'none';
-  renderAll();
 }
 
 function currentMetric() { return audienceData?.metrics?.[mode] || null; }
@@ -577,9 +574,15 @@ function renderAll() {
   renderRanking();
 }
 
+function showAudienceLoading() {
+  document.getElementById('metricSummary').innerHTML = pageLoaderHtml();
+  document.getElementById('rankList').innerHTML = pageLoaderHtml();
+}
+
 async function loadAudience() {
   if (!brandId) return;
   if (viewLevel === 'state' && world) exitStateView();
+  showAudienceLoading();
   const res = await fetch(`/api/audience?brand=${brandId}&country=${countryScope}`);
   audienceData = await res.json();
   // se o modo atual ficou sem dado nesse escopo novo, cai pro primeiro modo que tiver dado
@@ -591,8 +594,12 @@ async function loadAudience() {
   renderAll();
 }
 
+showAudienceLoading();
 renderModeGroup();
-loadRegistry().then(() => Promise.all([loadAudience(), initGlobe()]).then(renderAll));
+loadRegistry().then(() => Promise.all([loadAudience(), initGlobe()]).then(() => {
+  document.getElementById('globeLoading').style.display = 'none';
+  renderAll();
+}));
 initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_aud_limitnote_collapsed' });
 </script>
 </body>
