@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { initStore, getLastSync, getSnapshots, getStoreBackend } from './src/store.js';
+import { initStore, getLastSync, getSnapshots, getStoreBackend, getClicks, recordClickEvent, flushClicks } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
 import { computeContentDashboard, generateContentAiSummary } from './src/contentMetrics.js';
@@ -26,6 +26,7 @@ import {
   getSchedules, addSchedule, updateSchedule, deleteSchedule,
 } from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
+import { computeClicksOverview, computeScreenPanorama, normalizeSource, deviceFromUserAgent, normalizeLabel, todayISO as clicksTodayISO, DIRECT_SOURCE, UNKNOWN_LINK } from './src/clicks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -74,13 +75,31 @@ app.use(helmet({
 // equipe (ver login em src/auth.js). Limite geral generoso (uso normal de uma dashboard
 // interna) + limite bem mais apertado nas rotas que disparam chamada de verdade à Meta Graph
 // API (sync/backfill) — essas são as que custam quota/tempo de verdade.
+const CLICKS_COLLECT_PATH = '/clicks/collect';
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 300,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  // A coleta de cliques é a única rota aberta ao público e tem limite próprio, bem mais alto:
+  // ali o IP não é de uma pessoa da equipe, e sim de qualquer visitante da loja (várias pessoas
+  // atrás do mesmo IP da operadora, no celular). O limite de 300 desta faixa derrubaria evento
+  // legítimo num pico de campanha.
+  skip: (req) => req.path === CLICKS_COLLECT_PATH,
 });
 app.use('/api/', apiLimiter);
+
+// 600/min por IP: alto o bastante pra não descartar evento legítimo quando muita gente cai na
+// página ao mesmo tempo atrás do mesmo IP da operadora (CGNAT no celular é a regra, não a
+// exceção), e ainda assim um teto — abuso de verdade precisaria de muitos IPs.
+const collectLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 600,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Muitos eventos em pouco tempo.' },
+});
 
 const syncLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -594,6 +613,75 @@ app.post('/api/sync', syncLimiter, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Cliques do cardápio de links ────────────────────────────────────────────────────────────
+// A página fica na loja Shopify, em outro domínio, então esta é a única rota da app aberta ao
+// público e a única que precisa de CORS. Origem conferida contra uma allowlist explícita em
+// CLICKS_ALLOWED_ORIGINS (sem a variável, nenhuma origem externa passa) em vez do pacote `cors`,
+// pra não adicionar dependência por causa de uma rota só.
+function allowedOrigins() {
+  return String(process.env.CLICKS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+function applyCollectCors(req, res) {
+  const origin = String(req.headers.origin || '').replace(/\/$/, '');
+  if (!origin || !allowedOrigins().includes(origin)) return false;
+  res.set('Access-Control-Allow-Origin', origin);
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Max-Age', '86400');
+  return true;
+}
+
+app.options('/api/clicks/collect', (req, res) => {
+  if (!applyCollectCors(req, res)) return res.sendStatus(403);
+  res.sendStatus(204);
+});
+
+app.post('/api/clicks/collect', collectLimiter, (req, res) => {
+  if (!applyCollectCors(req, res)) return res.status(403).json({ error: 'Origem não autorizada.' });
+
+  const body = req.body || {};
+  const screenId = normalizeLabel(body.screenId, '');
+  if (!screenId) return res.status(400).json({ error: 'screenId é obrigatório.' });
+
+  const device = deviceFromUserAgent(req.headers['user-agent']);
+  // Bot não entra na contagem: um rastreador de link seguindo a página inflaria a visita e a
+  // taxa de clique sem nenhuma pessoa do outro lado. Responde 204 assim mesmo pra não dar pista
+  // do filtro nem gerar erro no navegador.
+  if (device === 'bot') return res.sendStatus(204);
+
+  const type = body.type === 'view' ? 'view' : 'click';
+  recordClickEvent({
+    screenId,
+    screenLabel: String(body.screenLabel || '').trim().slice(0, 80) || null,
+    screenUrl: String(body.screenUrl || '').trim().slice(0, 300) || null,
+    type,
+    dateISO: clicksTodayISO(),
+    linkLabel: type === 'click' ? normalizeLabel(body.linkLabel, UNKNOWN_LINK) : null,
+    source: normalizeSource({ utmSource: body.utmSource, referrer: body.referrer, selfHost: body.selfHost }) || DIRECT_SOURCE,
+    device,
+    theme: body.theme ? normalizeLabel(body.theme, '') : null,
+  });
+
+  res.sendStatus(204);
+});
+
+app.get('/api/clicks', (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+  const screenId = req.query.screen ? String(req.query.screen) : null;
+
+  if (!screenId) return res.json(computeClicksOverview(getClicks(), { days }));
+
+  const panorama = computeScreenPanorama(getClicks(), screenId, { days });
+  if (!panorama) return res.status(404).json({ error: 'Tela não encontrada.' });
+  res.json(panorama);
+});
+
 // Placeholder do callback de OAuth da TikTok (integração ainda não construída — o app da TikTok
 // for Business Developers precisa de uma URL de redirect válida já no cadastro, antes de termos
 // client_key/client_secret pra fazer a troca do code por token de verdade). Só mostra o code
@@ -698,6 +786,15 @@ async function scheduledReports() {
   } finally {
     reportsInFlight = false;
   }
+}
+
+// Eventos de clique ficam até CLICKS_FLUSH_MS em memória (ver store.js) — sem isso, o
+// redeploy do Railway descartaria os últimos segundos de coleta.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    try { await flushClicks(); } catch {}
+    process.exit(0);
+  });
 }
 
 await initStore();

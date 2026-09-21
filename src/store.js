@@ -474,3 +474,85 @@ export function deleteSchedule(brandId, id) {
   saveJson();
   mongoSet('schedules', cache.schedules);
 }
+
+// ── Cliques de páginas externas (cardápio de links) ─────────────────────────────────────────
+// Um balde por tela por dia, já agregado (ver o porquê em src/clicks.js). Diferente de
+// snapshots/goals/cofrinho, não é por marca/país: a página rastreada é de uma loja só, e o
+// `screenId` já identifica de qual tela veio o evento.
+//
+// Gravação com flush adiado: todo o resto aqui escreve no disco/Mongo a cada chamada, o que é
+// certo pra uma ação humana (criar um chamado, lançar uma venda). Clique é evento de visitante e
+// pode vir em rajada, então reescrever o documento inteiro a cada um seria desperdício puro.
+// Acumula em memória e descarrega depois de CLICKS_FLUSH_MS, com flush garantido no encerramento.
+const CLICKS_RETENTION_DAYS = 400;
+const CLICKS_FLUSH_MS = 2000;
+let clicksFlushTimer = null;
+
+function ensureClicks() {
+  if (!cache.clicks) cache.clicks = {};
+  return cache.clicks;
+}
+
+export function getClicks() {
+  return ensureClicks();
+}
+
+export async function flushClicks() {
+  if (!clicksFlushTimer) return;
+  clearTimeout(clicksFlushTimer);
+  clicksFlushTimer = null;
+  saveJson();
+  await mongoSet('clicks', cache.clicks);
+}
+
+function scheduleClicksFlush() {
+  if (clicksFlushTimer) return;
+  clicksFlushTimer = setTimeout(() => {
+    clicksFlushTimer = null;
+    saveJson();
+    mongoSet('clicks', cache.clicks);
+  }, CLICKS_FLUSH_MS);
+  // unref pra esse timer nunca ser o motivo de o processo continuar vivo no encerramento.
+  clicksFlushTimer.unref?.();
+}
+
+// Remove baldes antigos na própria gravação, em vez de um job separado: é barato (roda sobre as
+// chaves de uma tela só) e garante que o documento nunca cresce indefinidamente.
+function pruneDays(days, todayISO) {
+  const cutoff = new Date(todayISO + 'T00:00:00Z');
+  cutoff.setUTCDate(cutoff.getUTCDate() - CLICKS_RETENTION_DAYS);
+  const limit = cutoff.toISOString().slice(0, 10);
+  for (const date of Object.keys(days)) {
+    if (date < limit) delete days[date];
+  }
+}
+
+export function recordClickEvent({ screenId, screenLabel, screenUrl, type, dateISO, linkLabel, source, device, theme }) {
+  const clicks = ensureClicks();
+  const screen = clicks[screenId] || (clicks[screenId] = { label: screenLabel || screenId, days: {} });
+
+  if (screenLabel) screen.label = screenLabel;
+  if (screenUrl) screen.url = screenUrl;
+  screen.lastEventAt = new Date().toISOString();
+
+  const days = screen.days || (screen.days = {});
+  const day = days[dateISO] || (days[dateISO] = {
+    views: 0, clicks: 0, byLink: {}, bySource: {}, byDevice: {}, byTheme: {}, byLinkSource: {},
+  });
+
+  if (type === 'view') {
+    day.views += 1;
+  } else {
+    day.clicks += 1;
+    day.byLink[linkLabel] = (day.byLink[linkLabel] || 0) + 1;
+    day.byLinkSource[linkLabel] = day.byLinkSource[linkLabel] || {};
+    day.byLinkSource[linkLabel][source] = (day.byLinkSource[linkLabel][source] || 0) + 1;
+  }
+
+  day.bySource[source] = (day.bySource[source] || 0) + 1;
+  day.byDevice[device] = (day.byDevice[device] || 0) + 1;
+  if (theme) day.byTheme[theme] = (day.byTheme[theme] || 0) + 1;
+
+  pruneDays(days, dateISO);
+  scheduleClicksFlush();
+}

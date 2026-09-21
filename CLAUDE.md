@@ -89,6 +89,9 @@ src/cofrinho.js       Cofrinho do Social (vendas rastreadas, 100% entrada manual
                       própria abaixo
 public/cofrinho.html  Tela do Cofrinho do Social
 public/chamados.html  Quadro de Chamados (estilo Monday) — ver seção própria abaixo
+src/clicks.js         Cliques em botões de páginas externas da loja (cardápio de links):
+                      normalização de origem/dispositivo e agregação diária — ver seção própria
+public/cliques.html   Tela de Cliques (cards por tela + panorama de cada uma)
 src/ai.js             Integração com a API da Anthropic (Claude Sonnet 5) — wrapper genérico
                       usado pelo resumo por IA da ficha de conteúdo e pelo gerador de relatórios
 src/reportTemplate.js Paleta e helpers de formatação compartilhados pelos dois exportadores de
@@ -399,6 +402,56 @@ estados") fica pra uma fase seguinte, ver limite abaixo.
 - Texto do "Limite" do briefing (*"o cofrinho mostra apenas vendas rastreadas... não representa
   sozinho toda a influência das redes sociais sobre as compras"*) fica fixo no topo da tela — não
   remover, é uma ressalva deliberada do briefing, não um aviso genérico de UI.
+
+### Cliques do cardápio de links (`src/clicks.js`, `public/cliques.html`)
+Contagem de cliques nos botões de páginas da loja Shopify que vivem fora desta app (hoje só o
+cardápio de links, no estilo Linktree, em `C:/projetos/shopify-br/cardapio-de-links`). Responde
+"quantas pessoas clicaram em cada botão" e "de onde elas vieram", que era o buraco que sobrava
+entre o Analytics do Shopify (não vê clique pra fora) e o marketplace (não diz de onde veio).
+
+**Formato do dado: balde diário agregado, nunca evento cru.** O store é um KV (ver seção Store)
+e grava o valor inteiro de uma chave a cada escrita, então um log de evento cresceria sem teto e
+reescreveria tudo a cada clique. `clicks[screenId].days[dateISO]` guarda `views`, `clicks`,
+`byLink`, `bySource`, `byDevice`, `byTheme` e o cruzamento `byLinkSource` (link × origem, que é o
+que responde "veio do Instagram e clicou na Shopee"). Tamanho limitado por links × origens,
+independente do volume de tráfego. Retenção de 400 dias, podada na própria gravação.
+
+**Nada de dado pessoal.** Sem IP, sem user agent cru, sem identificador de visitante, sem
+sessão. O user agent é lido uma vez no servidor só pra classificar em mobile/tablet/desktop/bot
+e descartado. Evento de bot é aceito com 204 e não contado (não inflar visita e taxa de clique).
+
+**A rota de coleta é a única pública da app.** `POST /api/clicks/collect` está em `PUBLIC_PATHS`
+(`src/auth.js`) porque quem chama é o visitante da loja, que nunca vai ter sessão. O controle
+dela é `CLICKS_ALLOWED_ORIGINS` (allowlist explícita de origem, conferida contra o header
+`Origin`) + `collectLimiter` próprio de 120/min. Sem a variável, nenhuma origem passa e a coleta
+fica desligada na prática. CORS escrito à mão em `server.js` em vez do pacote `cors`, pra não
+adicionar dependência por causa de uma rota. A leitura (`GET /api/clicks`) continua atrás do
+login normal. O `apiLimiter` geral (300/15min) pula essa rota via `skip`: ali o IP não é de
+alguém da equipe, e sim de vários visitantes atrás do mesmo IP de operadora.
+
+**Gravação com flush adiado (`flushClicks`/`scheduleClicksFlush` em `store.js`).** Único lugar do
+projeto que não escreve a cada chamada: clique é evento de visitante e vem em rajada. Acumula em
+memória e descarrega depois de 2s, com flush garantido em SIGTERM/SIGINT (senão o redeploy do
+Railway descartaria os últimos segundos de coleta).
+
+**A tela (`public/cliques.html`).** Duas dobras na mesma página, sem rota nova: grid de cards, um
+por tela rastreada (cliques, visitas, taxa, sparkline, botão mais clicado, maior origem), e ao
+clicar num card o panorama daquela tela (KPIs com variação contra o período anterior, série de
+cliques × visitas, ranking de botões com as origens de cada um, origens, dispositivos e tema
+escolhido). Filtro de período de 7/30/90/180 dias, guardado em `localStorage`.
+
+**Taxa de clique passa de 100% de propósito.** É cliques ÷ visitas, e a mesma pessoa pode clicar
+em mais de um botão na mesma visita. É o número que diz se a página converte, não uma proporção
+de pessoas.
+
+**O lado do Shopify** fica em `sections/link-menu.liquid` do outro projeto: grupo "Rastreamento
+de cliques" no schema (ativar, endereço de coleta, identificador e nome da tela) e um rótulo por
+link. Usa `navigator.sendBeacon`, que entrega mesmo com a página sendo descarregada pela
+navegação do clique (um `fetch` comum seria cancelado). Manda também o tema ativo do seletor de
+cores, então dá pra comparar o comportamento por produto.
+
+**Limite conhecido, não tentar contornar:** para Mercado Livre, Shopee e afins isso mede clique,
+nunca venda. O que acontece depois é do marketplace. Não cruzar esse número com faturamento.
 
 ### Chamados — quadro estilo Monday (`public/chamados.html`)
 Implementado em 22/07/2026 a pedido do Luan — não é do briefing da Aline, é uma ferramenta interna

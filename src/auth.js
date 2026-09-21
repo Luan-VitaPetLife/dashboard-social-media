@@ -66,7 +66,10 @@ export function hasValidSession(req) {
 // nada sensível.
 // '/login' é o link que a gente usa; '/login.html' fica liberado também porque o arquivo
 // continua respondendo pelo nome completo (extensions:['html'] em server.js não desliga isso).
-const PUBLIC_PATHS = new Set(['/login', '/login.html', '/health', '/api/auth/login', '/api/auth/status', '/Logo2.png', '/favicon.png']);
+// '/api/clicks/collect' entra aqui porque quem chama é o visitante da loja Shopify, que nunca
+// terá sessão — o controle dessa rota é a allowlist de origem + rate limit em server.js, não o
+// login da equipe. Só a coleta é pública; a leitura ('/api/clicks') continua atrás do login.
+const PUBLIC_PATHS = new Set(['/login', '/login.html', '/health', '/api/auth/login', '/api/auth/status', '/api/clicks/collect', '/Logo2.png', '/favicon.png']);
 
 // Middleware global — roda antes do arquivo estático e de toda rota /api. Passa direto quando
 // o login está desligado (padrão hoje, nada muda pra quem não configurou nada ainda).

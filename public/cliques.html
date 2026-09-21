@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cliques · Coco and Luna</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f6f7f9;
+    --border:rgba(28,43,57,.10); --border2:rgba(28,43,57,.18);
+    --text:#1c2b39; --sub:#55636f; --muted:#96a3ad;
+    --radius:12px; --radius-sm:8px;
+    --ig-1:#f58529; --ig-2:#dd2a7b; --ig-3:#8134af; --ig-4:#515bd4;
+    --fb:#1877f2; --green:#2e7d5b; --red:#c0392b; --gold:#946200;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5}
+
+  .main{margin-left:224px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+  body.sidebar-hidden .main{margin-left:0}
+  @media(max-width:768px){.main{margin-left:0}}
+
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 32px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:400}
+  .topbar h1{font-size:16px;font-weight:700;margin:0}
+  .topbar .sub{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .topbar-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  /* Mobile: mesmo tratamento das demais páginas com topbar-controls. */
+  @media(max-width:768px){
+    .topbar{padding:14px 16px;flex-direction:column;align-items:stretch;gap:12px}
+    .topbar-controls{width:100%;justify-content:flex-start}
+    .topbar-controls>*{flex:1 1 140px}
+    .topbar-controls button{justify-content:center}
+    .topbar .filter-pill{width:100%;justify-content:space-between}
+    .csel-pop{left:0;right:0;width:auto;min-width:0}
+  }
+
+  .filter-pill{display:flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:20px;
+    border:1px solid var(--border2);background:var(--surface2);font-size:11px;font-weight:500;color:var(--sub);
+    cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+  .filter-pill:hover{border-color:var(--text);color:var(--text)}
+  .filter-pill .lbl{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
+  .filter-pill .val{font-weight:600;color:var(--text)}
+  .filter-pill .arr{color:var(--muted);font-size:9px;margin-left:1px;transition:transform .15s}
+
+  .csel{position:relative}
+  .csel.open .arr{transform:rotate(180deg)}
+  .csel.open{border-color:var(--text)}
+  .csel-pop{position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface);
+    border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(28,43,57,.16);
+    z-index:500;display:none;flex-direction:column;overflow:hidden}
+  .csel.open .csel-pop{display:flex}
+  .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
+  .csel-opt:hover{background:var(--surface2);color:var(--text)}
+  .csel-opt.active{color:var(--text);font-weight:600}
+  .csel-opt.active::before{content:'✓';color:var(--text);font-size:11px;font-weight:700}
+  .csel-opt:not(.active)::before{content:'';display:inline-block;width:11px}
+
+  .sync-btn{height:34px;padding:0 16px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);
+    font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px;font-family:inherit}
+  .sync-btn:hover{border-color:var(--text);color:var(--text)}
+
+  .content{padding:26px 32px;flex:1}
+  @media(max-width:768px){.content{padding:20px 16px}}
+
+  h3.section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:32px 0 14px}
+  h3.section:first-child{margin-top:0}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+
+  .delta-val{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .delta-val.up{background:rgba(46,125,91,.1);color:var(--green)}
+  .delta-val.down{background:rgba(192,57,43,.09);color:var(--red)}
+  .delta-val.flat{background:rgba(28,43,57,.06);color:var(--muted)}
+
+  /* ── Cards de tela (primeira dobra) ── */
+  .screen-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .screen-card{cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+  .screen-card:hover{border-color:var(--border2);box-shadow:0 8px 24px rgba(28,43,57,.08);transform:translateY(-2px)}
+  .screen-head{display:flex;align-items:center;gap:11px;margin-bottom:16px}
+  .screen-badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:15px;flex-shrink:0;background:linear-gradient(135deg,var(--ig-2),var(--ig-4))}
+  .screen-title{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+  .screen-title .name{font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .screen-title .meta{font-size:10.5px;color:var(--muted)}
+  .screen-open{margin-left:auto;color:var(--muted);font-size:13px;flex-shrink:0}
+
+  .screen-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .num-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .num-val{font-size:18px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .num-val small{font-size:11px;font-weight:600;color:var(--muted)}
+
+  .screen-foot{font-size:11.5px;color:var(--sub);padding-top:12px;border-top:1px solid var(--border);line-height:1.6}
+  .screen-foot b{color:var(--text)}
+  .spark{height:40px;margin-bottom:12px}
+
+  /* ── Panorama ── */
+  .back-btn{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--sub);
+    background:none;border:none;padding:0;cursor:pointer;font-family:inherit;margin-bottom:4px}
+  .back-btn:hover{color:var(--text)}
+
+  .kpi-strip-card{padding:0;overflow:hidden}
+  .kpi-strip-grid{display:grid;grid-template-columns:repeat(4,1fr)}
+  .kpi-mini{padding:18px 22px;border-right:1px solid var(--border)}
+  .kpi-mini:last-child{border-right:none}
+  @media(max-width:768px){
+    .kpi-strip-grid{grid-template-columns:1fr 1fr}
+    .kpi-mini:nth-child(2n){border-right:none}
+    .kpi-mini:nth-child(-n+2){border-bottom:1px solid var(--border)}
+  }
+
+  .chart-wrap{height:260px}
+  .panorama-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.panorama-grid{grid-template-columns:1fr}}
+
+  .rank-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .rank-row:last-child{border-bottom:none}
+  .rank-pos{width:20px;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0}
+  .rank-body{flex:1;min-width:0}
+  .rank-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rank-bar{height:5px;border-radius:20px;background:var(--surface2);overflow:hidden;margin-top:6px}
+  .rank-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--ig-2),var(--ig-4))}
+  .rank-sources{font-size:10.5px;color:var(--muted);margin-top:5px}
+  .rank-num{text-align:right;flex-shrink:0}
+  .rank-num .v{font-size:14px;font-weight:700}
+  .rank-num .p{font-size:10px;color:var(--muted)}
+
+  .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <header class="topbar">
+    <div>
+      <h1>Cliques</h1>
+      <div class="sub">Botões clicados nas páginas da loja</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="filter-pill csel" id="cselPeriod">
+        <span class="lbl">Período</span><span class="val" id="periodVal">30 dias</span><span class="arr">▾</span>
+        <div class="csel-pop" id="periodPop"></div>
+      </div>
+      <button class="sync-btn" id="reloadBtn"><i class="bi bi-arrow-repeat"></i> Atualizar</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <section id="overview">
+      <h3 class="section">Telas rastreadas</h3>
+      <div class="screen-grid" id="screenGrid">
+        <div class="empty">carregando…</div>
+      </div>
+    </section>
+
+    <section id="panorama" style="display:none"></section>
+  </main>
+
+  <footer>Coco and Luna · Redes Sociais</footer>
+</div>
+
+<script src="sidebar.js"></script>
+<script>
+const PERIODS = [
+  { days: 7, label: '7 dias' },
+  { days: 30, label: '30 dias' },
+  { days: 90, label: '90 dias' },
+  { days: 180, label: '180 dias' },
+];
+
+let periodDays = Number(localStorage.getItem('coco_clicks_period')) || 30;
+let openScreen = null;
+const charts = {};
+
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
+function fmtPct(n, digits) { return n == null ? '—' : Number(n).toFixed(digits == null ? 1 : digits).replace('.', ',') + '%'; }
+function fmtDateBR(iso) { if (!iso) return '—'; const [y, m, d] = iso.slice(0, 10).split('-'); return `${d}/${m}`; }
+
+function deltaChip(pct) {
+  if (pct == null) return '<span class="delta-val flat">sem base</span>';
+  const cls = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+  const arrow = pct > 0.5 ? '↑' : pct < -0.5 ? '↓' : '=';
+  return `<span class="delta-val ${cls}">${arrow} ${fmtPct(Math.abs(pct), 0)}</span>`;
+}
+
+function setChart(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  const el = document.getElementById(id);
+  if (el) charts[id] = new Chart(el, cfg);
+}
+
+/* ── Seletor de período ─────────────────────────────────────────────────────────────────── */
+function buildPeriodSelector() {
+  const pop = document.getElementById('periodPop');
+  pop.innerHTML = PERIODS.map(p =>
+    `<div class="csel-opt${p.days === periodDays ? ' active' : ''}" data-value="${p.days}">${p.label}</div>`
+  ).join('');
+  document.getElementById('periodVal').textContent = PERIODS.find(p => p.days === periodDays)?.label || periodDays + ' dias';
+
+  pop.querySelectorAll('.csel-opt').forEach(opt => {
+    opt.onclick = (e) => {
+      e.stopPropagation();
+      periodDays = Number(opt.dataset.value);
+      localStorage.setItem('coco_clicks_period', periodDays);
+      document.getElementById('cselPeriod').classList.remove('open');
+      buildPeriodSelector();
+      load();
+    };
+  });
+}
+
+document.getElementById('cselPeriod').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('cselPeriod').classList.toggle('open');
+};
+document.addEventListener('click', () => document.getElementById('cselPeriod').classList.remove('open'));
+document.getElementById('reloadBtn').onclick = () => load();
+
+/* ── Primeira dobra: um card por tela ───────────────────────────────────────────────────── */
+function renderOverview(data) {
+  const grid = document.getElementById('screenGrid');
+  if (!data.screens.length) {
+    grid.innerHTML = `<div class="empty">Nenhum evento recebido ainda. Confira se a página da loja está publicada e se o domínio dela está em CLICKS_ALLOWED_ORIGINS.</div>`;
+    return;
+  }
+
+  grid.innerHTML = data.screens.map(s => `
+    <div class="card screen-card" data-screen="${escapeHtml(s.screenId)}">
+      <div class="screen-head">
+        <div class="screen-badge"><i class="bi bi-cursor-fill"></i></div>
+        <div class="screen-title">
+          <span class="name">${escapeHtml(s.label)}</span>
+          <span class="meta">${s.links} ${s.links === 1 ? 'botão' : 'botões'}</span>
+        </div>
+        <i class="bi bi-chevron-right screen-open"></i>
+      </div>
+
+      <div class="spark"><canvas id="spark-${escapeHtml(s.screenId)}"></canvas></div>
+
+      <div class="screen-nums">
+        <div>
+          <div class="num-lbl">Cliques</div>
+          <div class="num-val">${fmt(s.clicks)} ${deltaChip(s.deltaClicks)}</div>
+        </div>
+        <div>
+          <div class="num-lbl">Visitas</div>
+          <div class="num-val">${fmt(s.views)}</div>
+        </div>
+        <div>
+          <div class="num-lbl">Taxa</div>
+          <div class="num-val">${fmtPct(s.clickRate, 0)}</div>
+        </div>
+      </div>
+
+      <div class="screen-foot">
+        Mais clicado: <b>${s.topLink ? escapeHtml(s.topLink.key) : '—'}</b><br>
+        Maior origem: <b>${s.topSource ? escapeHtml(s.topSource.key) : '—'}</b>
+      </div>
+    </div>
+  `).join('');
+
+  data.screens.forEach(s => {
+    setChart('spark-' + s.screenId, {
+      type: 'line',
+      data: {
+        labels: s.series.map(p => fmtDateBR(p.date)),
+        datasets: [{
+          data: s.series.map(p => p.clicks),
+          borderColor: '#515bd4', borderWidth: 2, tension: .35, pointRadius: 0,
+          fill: true, backgroundColor: 'rgba(81,91,212,.08)',
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+      },
+    });
+  });
+
+  grid.querySelectorAll('.screen-card').forEach(card => {
+    card.onclick = () => openPanorama(card.dataset.screen);
+  });
+}
+
+/* ── Panorama de uma tela ───────────────────────────────────────────────────────────────── */
+function renderPanorama(d) {
+  const el = document.getElementById('panorama');
+  const maxClicks = d.links.length ? d.links[0].clicks : 0;
+
+  el.innerHTML = `
+    <button class="back-btn" id="backBtn"><i class="bi bi-arrow-left"></i> Todas as telas</button>
+    <h3 class="section" style="margin-top:10px">${escapeHtml(d.label)}</h3>
+
+    <div class="card kpi-strip-card">
+      <div class="kpi-strip-grid">
+        <div class="kpi-mini">
+          <div class="num-lbl">Cliques</div>
+          <div class="num-val">${fmt(d.totals.clicks)} ${deltaChip(d.totals.deltaClicks)}</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="num-lbl">Visitas</div>
+          <div class="num-val">${fmt(d.totals.views)} ${deltaChip(d.totals.deltaViews)}</div>
+        </div>
+        <div class="kpi-mini">
+          <div class="num-lbl">Taxa de clique</div>
+          <div class="num-val">${fmtPct(d.totals.clickRate, 0)} <small>cliques por visita</small></div>
+        </div>
+        <div class="kpi-mini">
+          <div class="num-lbl">Botões</div>
+          <div class="num-val">${fmt(d.links.length)}</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="section">Ao longo do período</h3>
+    <div class="card"><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+
+    <div class="panorama-grid" style="margin-top:16px">
+      <div class="card">
+        <h3 class="section" style="margin:0 0 6px">Botões mais clicados</h3>
+        ${d.links.length ? d.links.map((l, i) => `
+          <div class="rank-row">
+            <div class="rank-pos">${i + 1}</div>
+            <div class="rank-body">
+              <div class="rank-name">${escapeHtml(l.label)}</div>
+              <div class="rank-bar"><div class="rank-fill" style="width:${maxClicks ? (l.clicks / maxClicks) * 100 : 0}%"></div></div>
+              ${l.bySource.length ? `<div class="rank-sources">${l.bySource.slice(0, 4).map(s => `${escapeHtml(s.key)}: ${fmt(s.value)}`).join(' · ')}</div>` : ''}
+            </div>
+            <div class="rank-num">
+              <div class="v">${fmt(l.clicks)}</div>
+              <div class="p">${fmtPct(l.share, 0)}</div>
+            </div>
+          </div>
+        `).join('') : '<div class="empty">Nenhum clique no período.</div>'}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card">
+          <h3 class="section" style="margin:0 0 6px">De onde vieram</h3>
+          ${listBlock(d.sources, d.totals.clicks + d.totals.views)}
+        </div>
+        <div class="card">
+          <h3 class="section" style="margin:0 0 6px">Dispositivo</h3>
+          ${listBlock(d.devices, d.totals.clicks + d.totals.views)}
+        </div>
+        ${d.themes.length ? `
+        <div class="card">
+          <h3 class="section" style="margin:0 0 6px">Tema escolhido</h3>
+          ${listBlock(d.themes, d.themes.reduce((sum, t) => sum + t.value, 0))}
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('backBtn').onclick = () => {
+    openScreen = null;
+    load();
+  };
+
+  setChart('trendChart', {
+    type: 'line',
+    data: {
+      labels: d.series.map(p => fmtDateBR(p.date)),
+      datasets: [
+        { label: 'Cliques', data: d.series.map(p => p.clicks), borderColor: '#515bd4', backgroundColor: 'rgba(81,91,212,.10)', borderWidth: 2, tension: .35, pointRadius: 0, fill: true },
+        { label: 'Visitas', data: d.series.map(p => p.views), borderColor: '#96a3ad', borderWidth: 1.5, borderDash: [4, 4], tension: .35, pointRadius: 0, fill: false },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 10 } },
+        y: { beginAtZero: true, grid: { color: 'rgba(28,43,57,.06)' }, ticks: { font: { size: 10 }, precision: 0 } },
+      },
+    },
+  });
+}
+
+function listBlock(rows, total) {
+  if (!rows.length) return '<div class="empty">Sem dado no período.</div>';
+  const max = rows[0].value;
+  return rows.map(r => `
+    <div class="rank-row">
+      <div class="rank-body">
+        <div class="rank-name">${escapeHtml(r.key)}</div>
+        <div class="rank-bar"><div class="rank-fill" style="width:${max ? (r.value / max) * 100 : 0}%"></div></div>
+      </div>
+      <div class="rank-num">
+        <div class="v">${fmt(r.value)}</div>
+        <div class="p">${total ? fmtPct((r.value / total) * 100, 0) : '—'}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openPanorama(screenId) {
+  openScreen = screenId;
+  load();
+}
+
+/* ── Carga ──────────────────────────────────────────────────────────────────────────────── */
+async function load() {
+  const overview = document.getElementById('overview');
+  const panorama = document.getElementById('panorama');
+
+  try {
+    const params = new URLSearchParams({ days: periodDays });
+    if (openScreen) params.set('screen', openScreen);
+    const res = await fetch('/api/clicks?' + params);
+    if (!res.ok) throw new Error('Falha ao carregar os cliques.');
+    const data = await res.json();
+
+    if (openScreen) {
+      overview.style.display = 'none';
+      panorama.style.display = 'block';
+      renderPanorama(data);
+    } else {
+      panorama.style.display = 'none';
+      overview.style.display = 'block';
+      renderOverview(data);
+    }
+  } catch (e) {
+    openScreen = null;
+    panorama.style.display = 'none';
+    overview.style.display = 'block';
+    document.getElementById('screenGrid').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+buildPeriodSelector();
+load();
+</script>
+</body>
+</html>

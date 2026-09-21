@@ -186,6 +186,7 @@ window.initCollapsibleNotice = initCollapsibleNotice;
     <a class="nav-item" href="/stories"><i class="bi bi-play-circle nav-icon"></i> Stories</a>
     <a class="nav-item" href="/audiencia"><i class="bi bi-globe-americas nav-icon"></i> Audiência</a>
     <a class="nav-item" href="/cofrinho"><i class="bi bi-piggy-bank-fill nav-icon"></i> Cofrinho</a>
+    <a class="nav-item" href="/cliques"><i class="bi bi-cursor-fill nav-icon"></i> Cliques</a>
     <a class="nav-item" href="/chamados"><i class="bi bi-kanban-fill nav-icon"></i> Chamados</a>
     <a class="nav-item" href="/relatorios"><i class="bi bi-file-earmark-bar-graph-fill nav-icon"></i> Relatórios</a>
   </div>
