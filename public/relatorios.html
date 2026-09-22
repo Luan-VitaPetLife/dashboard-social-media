@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Relatórios · Coco and Luna</title>
+<title>Relatórios · Vita Pet Life</title>
 <link rel="icon" href="favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <style>
@@ -224,7 +224,7 @@
     <div class="rep-list" id="repList"><div class="empty">carregando…</div></div>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <div class="modal-overlay" id="confirmModalOverlay">
@@ -377,18 +377,27 @@ function updateGenFields() {
 
 async function loadContentOptions() {
   if (!genCountryId) { renderFieldDropdown('ddConteudo', [], null, () => {}, 'Selecione o país primeiro'); return; }
-  const res = await fetch(`/api/content?brand=${brandId}&country=${genCountryId}`);
-  const d = await res.json();
-  const options = d.items.map(i => ({ value: i.mediaId, label: `${i.formatLabel} · ${fmtDateBR(i.meta.publishedAt)} · ${(i.meta.caption || '(sem legenda)').slice(0, 40)}` }));
-  renderFieldDropdown('ddConteudo', options, genMediaId, (v) => { genMediaId = v; updateGenBtn(); }, options.length ? 'Selecione o conteúdo' : 'Nenhum conteúdo rastreado ainda');
+  try {
+    const res = await apiFetch(`/api/content?brand=${brandId}&country=${genCountryId}`);
+    const d = await res.json();
+    const options = d.items.map(i => ({ value: i.mediaId, label: `${i.formatLabel} · ${fmtDateBR(i.meta.publishedAt)} · ${(i.meta.caption || '(sem legenda)').slice(0, 40)}` }));
+    renderFieldDropdown('ddConteudo', options, genMediaId, (v) => { genMediaId = v; updateGenBtn(); }, options.length ? 'Selecione o conteúdo' : 'Nenhum conteúdo rastreado ainda');
+  } catch (e) {
+    // Falhar aqui deixava a lista em "carregando" para sempre, sem dizer o motivo.
+    renderFieldDropdown('ddConteudo', [], null, () => {}, e.message);
+  }
 }
 
 async function loadStoryOptions() {
   if (!genCountryId) { renderFieldDropdown('ddStory', [], null, () => {}, 'Selecione o país primeiro'); return; }
-  const res = await fetch(`/api/stories?brand=${brandId}&country=${genCountryId}`);
-  const d = await res.json();
-  const options = d.items.map(i => ({ value: i.storyId, label: `${fmtDateTimeBR(i.meta.timestamp)} · ${i.expired ? 'expirado' : 'ativo'}` }));
-  renderFieldDropdown('ddStory', options, genStoryId, (v) => { genStoryId = v; updateGenBtn(); }, options.length ? 'Selecione o story' : 'Nenhum story rastreado ainda');
+  try {
+    const res = await apiFetch(`/api/stories?brand=${brandId}&country=${genCountryId}`);
+    const d = await res.json();
+    const options = d.items.map(i => ({ value: i.storyId, label: `${fmtDateTimeBR(i.meta.timestamp)} · ${i.expired ? 'expirado' : 'ativo'}` }));
+    renderFieldDropdown('ddStory', options, genStoryId, (v) => { genStoryId = v; updateGenBtn(); }, options.length ? 'Selecione o story' : 'Nenhum story rastreado ainda');
+  } catch (e) {
+    renderFieldDropdown('ddStory', [], null, () => {}, e.message);
+  }
 }
 
 function updateGenBtn() {
@@ -441,7 +450,7 @@ document.getElementById('schBtn').addEventListener('click', async () => {
   msg.className = 'gen-msg';
   const name = document.getElementById('inpNomeAgenda').value.trim();
   try {
-    const res = await fetch('/api/schedules', {
+    const res = await apiFetch('/api/schedules', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, type: schType, name: name || undefined, countryId: schCountryId, platform: schPlatform, intervalValue, intervalUnit: schIntervalUnit }),
     });
@@ -461,9 +470,13 @@ document.getElementById('schBtn').addEventListener('click', async () => {
 
 async function loadSchedules() {
   if (!brandId) return;
-  const res = await fetch(`/api/schedules?brand=${brandId}`);
-  schedules = await res.json();
-  renderSchList();
+  try {
+    const res = await apiFetch(`/api/schedules?brand=${brandId}`);
+    schedules = await res.json();
+    renderSchList();
+  } catch (e) {
+    document.getElementById('schList').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 function intervalLabel(s) {
@@ -499,7 +512,7 @@ function renderSchList() {
   `).join('');
   list.querySelectorAll('[data-sch-toggle]').forEach(input => {
     input.addEventListener('change', async () => {
-      await fetch(`/api/schedules/${input.dataset.schToggle}`, {
+      await apiFetch(`/api/schedules/${input.dataset.schToggle}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandId, active: input.checked }),
       });
@@ -509,7 +522,7 @@ function renderSchList() {
   list.querySelectorAll('[data-sch-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await showConfirm('Excluir este agendamento? Ele para de gerar relatórios automaticamente.'))) return;
-      await fetch(`/api/schedules/${btn.dataset.schDel}?brand=${brandId}`, { method: 'DELETE' });
+      await apiFetch(`/api/schedules/${btn.dataset.schDel}?brand=${brandId}`, { method: 'DELETE' });
       loadSchedules();
     });
   });
@@ -533,7 +546,7 @@ document.getElementById('genBtn').addEventListener('click', async () => {
   const monthVal = document.getElementById('inpMes').value;
   const name = document.getElementById('inpNome').value.trim();
   try {
-    const res = await fetch('/api/reports/generate', {
+    const res = await apiFetch('/api/reports/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, type: genType, name: name || undefined, countryId: genCountryId, mediaId: genMediaId, storyId: genStoryId, platform: genPlatform, monthKey: monthVal || undefined }),
     });
@@ -557,9 +570,14 @@ renderFieldDropdown('ddFiltro', [{ value: '', label: 'Todos os tipos' }, ...TIPO
 
 async function loadReports() {
   if (!brandId) return;
-  const res = await fetch(`/api/reports?brand=${brandId}`);
-  reports = await res.json();
-  renderReportsList();
+  try {
+    const res = await apiFetch(`/api/reports?brand=${brandId}`);
+    reports = await res.json();
+    renderReportsList();
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a lista ficava presa no loader.
+    document.getElementById('repList').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 function renderReportsList() {
@@ -586,7 +604,7 @@ function renderReportsList() {
   list.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await showConfirm('Excluir este relatório? Essa ação não pode ser desfeita.'))) return;
-      await fetch(`/api/reports/${btn.dataset.del}?brand=${brandId}`, { method: 'DELETE' });
+      await apiFetch(`/api/reports/${btn.dataset.del}?brand=${brandId}`, { method: 'DELETE' });
       loadReports();
     });
   });

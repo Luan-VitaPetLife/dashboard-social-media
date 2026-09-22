@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cofrinho do Social · Coco and Luna</title>
+<title>Cofrinho do Social · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <style>
@@ -170,7 +170,7 @@
     <div id="cofrinhoRoot"><div class="empty">carregando…</div></div>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -180,13 +180,13 @@ function fmtMoney(n) { return n == null ? '—' : Number(n).toLocaleString('pt-B
 function fmtDateBR(iso) { if (!iso) return '—'; const [y,m,d] = iso.slice(0,10).split('-'); return `${d}/${m}/${y}`; }
 function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
 
-initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_cof_limitnote_collapsed' });
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'vpl_cof_limitnote_collapsed' });
 
 // A marca vem do seletor único da sidebar (DashboardBrand em public/sidebar.js). Antes cada
 // página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
 // diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
 let brandId = null;
-let countryScope = localStorage.getItem('coco_cof_country') || 'all';
+let countryScope = localStorage.getItem('vpl_cof_country') || 'all';
 function currentBrand() { return DashboardBrand.current(); }
 
 function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
@@ -217,7 +217,7 @@ function buildCountrySelector(countries) {
   document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
   setupCsel(document.getElementById('cselCountry'), val => {
     countryScope = val;
-    localStorage.setItem('coco_cof_country', countryScope);
+    localStorage.setItem('vpl_cof_country', countryScope);
     document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
     load();
   });
@@ -233,7 +233,7 @@ async function loadRegistry() {
     // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
     // pode nem existir na marca nova.
     countryScope = 'all';
-    try { localStorage.removeItem('coco_cof_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_cof_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -347,13 +347,13 @@ function attachHandlers(root) {
       if (!target || Number(target) <= 0) { errEl.textContent = 'Informe uma meta válida.'; return; }
       if (!deadline) { errEl.textContent = 'Informe um prazo.'; return; }
       try {
-        const res = await fetch('/api/cofrinho/goals', {
+        const res = await apiFetch('/api/cofrinho/goals', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brandId, countryId, metric, target, deadline }),
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
+      } catch (e) { errEl.textContent = e.message; }
     });
 
     const entryForm = block.querySelector(`#entry-form-${countryId}`);
@@ -370,13 +370,13 @@ function attachHandlers(root) {
       if (usos === '' || Number(usos) < 0) { errEl.textContent = 'Informe a quantidade de usos do cupom.'; return; }
       if (vendas === '' || Number(vendas) < 0) { errEl.textContent = 'Informe as vendas rastreadas.'; return; }
       try {
-        const res = await fetch('/api/cofrinho/entries', {
+        const res = await apiFetch('/api/cofrinho/entries', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brandId, countryId, period, cupom, usos, vendas, faturamento: faturamento || null, observacao }),
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
+      } catch (e) { errEl.textContent = e.message; }
     });
   });
 }
@@ -385,9 +385,13 @@ async function load() {
   const params = { country: countryScope };
   if (brandId) params.brand = brandId;
   const p = new URLSearchParams(params);
-  const res = await fetch('/api/cofrinho?' + p);
-  const data = await res.json();
-  render(data);
+  try {
+    const res = await apiFetch('/api/cofrinho?' + p);
+    render(await res.json());
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a tela ficava presa no loader.
+    document.getElementById('cofrinhoRoot').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 function render(d) {

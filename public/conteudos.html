@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conteúdos · Coco and Luna</title>
+<title>Conteúdos · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
@@ -289,7 +289,7 @@
     </div>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <div class="lightbox-overlay" id="lightboxOverlay">
@@ -314,11 +314,11 @@ function deltaHtml(p) {
 // página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
 // diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
 let brandId = null;
-let countryScope = localStorage.getItem('coco_cnt_country') || 'all';
+let countryScope = localStorage.getItem('vpl_cnt_country') || 'all';
 let lastData = null;
-let sumView = localStorage.getItem('coco_cnt_sumview') || 'lista';
+let sumView = localStorage.getItem('vpl_cnt_sumview') || 'lista';
 if (!['lista','tabela','grafico'].includes(sumView)) sumView = 'lista';
-let sumHidden = localStorage.getItem('coco_cnt_sumhidden') === '1';
+let sumHidden = localStorage.getItem('vpl_cnt_sumhidden') === '1';
 function currentBrand() { return DashboardBrand.current(); }
 
 function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
@@ -349,7 +349,7 @@ function buildCountrySelector(countries) {
   document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
   setupCsel(document.getElementById('cselCountry'), val => {
     countryScope = val;
-    localStorage.setItem('coco_cnt_country', countryScope);
+    localStorage.setItem('vpl_cnt_country', countryScope);
     document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
     load();
   });
@@ -365,7 +365,7 @@ async function loadRegistry() {
     // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
     // pode nem existir na marca nova.
     countryScope = 'all';
-    try { localStorage.removeItem('coco_cnt_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_cnt_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -545,7 +545,7 @@ async function openLightbox(item) {
   document.getElementById('lightboxCloseBtn').addEventListener('click', closeLightbox);
 
   try {
-    const res = await fetch(`/api/content/${item.mediaId}/comments?brand=${encodeURIComponent(brandId)}`);
+    const res = await apiFetch(`/api/content/${item.mediaId}/comments?brand=${encodeURIComponent(brandId)}`);
     const data = await res.json();
     const commentsBox = document.getElementById('lightboxComments');
     if (!commentsBox) return; // lightbox já foi fechado antes da resposta chegar
@@ -588,7 +588,7 @@ function attachCardHandlers(grid) {
         const countryId = card.dataset.countryId;
         const body = { brandId, countryId, [input.dataset.field]: input.value };
         try {
-          await fetch(`/api/content/${mediaId}/context`, {
+          await apiFetch(`/api/content/${mediaId}/context`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -609,7 +609,7 @@ function attachCardHandlers(grid) {
       aiBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando…';
       const hideOverlay = showAiThinkingOverlay(card);
       try {
-        const res = await fetch(`/api/content/${mediaId}/ai-summary`, {
+        const res = await apiFetch(`/api/content/${mediaId}/ai-summary`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brandId, countryId }),
@@ -754,7 +754,7 @@ document.querySelectorAll('.sum-view-btn').forEach(btn => {
   btn.classList.toggle('active', btn.dataset.view === sumView);
   btn.addEventListener('click', () => {
     sumView = btn.dataset.view;
-    localStorage.setItem('coco_cnt_sumview', sumView);
+    localStorage.setItem('vpl_cnt_sumview', sumView);
     document.querySelectorAll('.sum-view-btn').forEach(b => b.classList.toggle('active', b === btn));
     if (lastData) renderSummary(lastData);
   });
@@ -767,7 +767,7 @@ function applySumHidden() {
 }
 document.getElementById('sumHideBtn').addEventListener('click', () => {
   sumHidden = !sumHidden;
-  localStorage.setItem('coco_cnt_sumhidden', sumHidden ? '1' : '0');
+  localStorage.setItem('vpl_cnt_sumhidden', sumHidden ? '1' : '0');
   applySumHidden();
   if (!sumHidden && lastData) renderSummary(lastData);
 });
@@ -777,16 +777,20 @@ async function load() {
   const params = { country: countryScope };
   if (brandId) params.brand = brandId;
   const p = new URLSearchParams(params);
-  const res = await fetch('/api/content?' + p);
-  const data = await res.json();
-  render(data);
+  try {
+    const res = await apiFetch('/api/content?' + p);
+    render(await res.json());
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a tela ficava presa no loader.
+    document.getElementById('cntGrid').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 // ── Pesquisa + filtro por categoria (formato) — tudo client-side sobre o payload já
 // carregado, sem chamada nova ao servidor a cada tecla/seleção. ──
 const FORMAT_OPTIONS = ['Reels', 'Carrossel', 'Estático', 'Vídeo'];
-let searchQuery = localStorage.getItem('coco_cnt_search') || '';
-let formatFilter = localStorage.getItem('coco_cnt_format') || 'all';
+let searchQuery = localStorage.getItem('vpl_cnt_search') || '';
+let formatFilter = localStorage.getItem('vpl_cnt_format') || 'all';
 
 function buildFormatSelector() {
   const pop = document.getElementById('formatPop');
@@ -795,7 +799,7 @@ function buildFormatSelector() {
   document.getElementById('formatVal').textContent = formatFilter === 'all' ? 'Todas' : formatFilter;
   setupCsel(document.getElementById('cselFormat'), val => {
     formatFilter = val;
-    localStorage.setItem('coco_cnt_format', formatFilter);
+    localStorage.setItem('vpl_cnt_format', formatFilter);
     document.getElementById('formatVal').textContent = formatFilter === 'all' ? 'Todas' : formatFilter;
     renderGrid();
   });
@@ -806,7 +810,7 @@ const searchInput = document.getElementById('cntSearch');
 searchInput.value = searchQuery;
 searchInput.addEventListener('input', (e) => {
   searchQuery = e.target.value;
-  localStorage.setItem('coco_cnt_search', searchQuery);
+  localStorage.setItem('vpl_cnt_search', searchQuery);
   renderGrid();
 });
 
@@ -845,7 +849,7 @@ function render(d) {
 document.getElementById('syncBtn').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
-  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  try { await apiFetch('/api/sync', { method: 'POST' }); await load(); }
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 

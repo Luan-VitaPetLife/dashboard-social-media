@@ -848,6 +848,21 @@ sempre dá pra gerar de novo), tem custo real por chamada (cuidado com agendamen
 frequentes) e nunca compartilha nada fora do que já está na tela. Página estática, sem seletor de
 marca/país (não depende de dado nenhum) — só `sidebar.js` pro menu.
 
+### Nomenclatura: marca na tela e prefixo do `localStorage` (22/09/2026)
+- As 12 páginas tinham **"Coco and Luna" escrito na mão** no `<title>` e no rodapé. Com duas marcas
+  virou mentira: a aba dizia "Cliques · Coco and Luna" com a Yucaloo selecionada. O HTML passa a
+  trazer **Vita Pet Life** (a empresa) como padrão, e `applyBrandNaming()` em `sidebar.js` troca
+  pelo nome da marca selecionada.
+- Quem opta por mostrar a marca é a própria página, pondo um **`<span data-brand-label>`** no
+  rodapé — marcador explícito em vez de adivinhação por texto, e o mesmo sinal decide se o título
+  da aba acompanha. Telas da equipe inteira (Chamados, Configurações, Sobre) não têm o marcador e
+  ficam com o nome da empresa, que é o certo pra elas.
+- **Prefixo das chaves de `localStorage`: `coco_*` → `vpl_*`.** As chaves nasceram com o nome da
+  única marca que existia; `vpl` é a empresa, que é o escopo real (período, tema e estado da barra
+  lateral são de quem usa, não da marca selecionada). A migração roda uma vez no topo de
+  `sidebar.js`, **antes de qualquer leitura** — inclusive a da marca selecionada —, copiando e
+  apagando a chave antiga, pra ninguém perder o que tinha salvo.
+
 ### Avisos minimizáveis (`initCollapsibleNotice()` em `public/sidebar.js`)
 Implementado em 21/07/2026 (Audiência), estendido em 22/07/2026 pra Visão geral, Cofrinho e Stories,
 a pedido do Luan — helper global (mesmo padrão de `escapeHtml`/`pageLoaderHtml`, um só lugar pro
@@ -866,6 +881,18 @@ minimizável precisa copiar esse bloco de CSS também, não só chamar a funçã
 Implementado em 23/07/2026, a pedido do Luan (peças originais de uiverse.io — Nawsome e
 andrew-manzyk) — duas animações, ambas expostas globalmente por `sidebar.js` (mesmo padrão de
 `escapeHtml`/`initCollapsibleNotice`) pra não duplicar o SVG/CSS em cada página:
+- **`apiFetch(url, options)`** — usar no lugar de `fetch()` em **toda** chamada à API desta app.
+  Devolve a `Response` (quem chama segue fazendo `await res.json()`), mas transforma 4xx/5xx e falha
+  de rede em exceção com mensagem pronta pra tela, lendo o `{error:"..."}` que as rotas respondem.
+  Até 22/09/2026, **40 das 42 chamadas ignoravam o status**: um 500 virava erro de sintaxe do JSON
+  ou, pior, um `{error}` tratado como se fossem os dados. Fora: `login.html` (não carrega
+  `sidebar.js` e já tratava o erro) e as duas buscas externas de `audiencia.html` (GeoJSON e
+  texturas do globo), onde "servidor" e `{error}` não se aplicam.
+- **`loadErrorHtml(mensagem)`** — o bloco que substitui o conteúdo quando a carga da tela falha:
+  ícone, a mensagem e um botão de tentar de novo. Antes disso, `load()` de Conteúdos, Stories,
+  Cofrinho, Metas, Chamados, Audiência e Relatórios **não tinha `try/catch` nenhum** — a promessa
+  era rejeitada sem ninguém ouvir e a tela ficava presa na animação de carregamento, em silêncio,
+  com a causa só no console.
 - **`pageLoaderHtml()`** — máquina de escrever animada (peça de uiverse.io/Nawsome), substitui o
   texto "carregando…" nos placeholders `.empty` de carregamento inicial de cada página (`accGrid`,
   `cntGrid`, `goalGrid`, `storyGrid`, `cofrinhoRoot`, `board`, `repList`). Chamado uma vez, antes

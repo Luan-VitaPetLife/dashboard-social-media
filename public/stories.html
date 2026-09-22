@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stories · Coco and Luna</title>
+<title>Stories · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <style>
@@ -163,7 +163,7 @@
     </div>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -176,13 +176,13 @@ function deltaHtml(p) {
   return `<span class="delta-val ${cls}">${up ? '▲' : '▼'} ${Math.abs(p).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span>`;
 }
 
-initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_story_limitnote_collapsed' });
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'vpl_story_limitnote_collapsed' });
 
 // A marca vem do seletor único da sidebar (DashboardBrand em public/sidebar.js). Antes cada
 // página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
 // diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
 let brandId = null;
-let countryScope = localStorage.getItem('coco_story_country') || 'all';
+let countryScope = localStorage.getItem('vpl_story_country') || 'all';
 function currentBrand() { return DashboardBrand.current(); }
 
 function closeAllDropdowns() { document.querySelectorAll('.csel.open').forEach(el => el.classList.remove('open')); }
@@ -213,7 +213,7 @@ function buildCountrySelector(countries) {
   document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
   setupCsel(document.getElementById('cselCountry'), val => {
     countryScope = val;
-    localStorage.setItem('coco_story_country', countryScope);
+    localStorage.setItem('vpl_story_country', countryScope);
     document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
     load();
   });
@@ -229,7 +229,7 @@ async function loadRegistry() {
     // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
     // pode nem existir na marca nova.
     countryScope = 'all';
-    try { localStorage.removeItem('coco_story_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_story_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -282,9 +282,13 @@ async function load() {
   const params = { country: countryScope };
   if (brandId) params.brand = brandId;
   const p = new URLSearchParams(params);
-  const res = await fetch('/api/stories?' + p);
-  const data = await res.json();
-  render(data);
+  try {
+    const res = await apiFetch('/api/stories?' + p);
+    render(await res.json());
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a tela ficava presa no loader.
+    document.getElementById('storyGrid').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 function render(d) {
@@ -298,7 +302,7 @@ function render(d) {
 document.getElementById('syncBtn').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
-  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  try { await apiFetch('/api/sync', { method: 'POST' }); await load(); }
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 

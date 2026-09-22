@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Redes Sociais · Coco and Luna</title>
+<title>Redes Sociais · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
@@ -472,7 +472,7 @@
     </div>
   </main>
 
-  <footer id="footer">Coco and Luna · Redes Sociais</footer>
+  <footer id="footer"><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -487,7 +487,7 @@ const todayISO = isoLocal(new Date());
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString('pt-BR') : '—'; }
 
-initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'coco_sm_limitnote_collapsed' });
+initCollapsibleNotice({ noteId: 'limitNote', collapseBtnId: 'limitNoteCollapseBtn', fabId: 'limitNoteFab', storageKey: 'vpl_sm_limitnote_collapsed' });
 
 function deltaHtml(p, suffix = 'vs. período anterior') {
   if (p == null) return `<span class="delta-val flat">—</span> ${suffix}`;
@@ -502,13 +502,13 @@ function seriesMap(series, key) {
 }
 
 // ── Estado persistido ──
-let sinceDate = localStorage.getItem('coco_sm_since') || isoLocal(addDays(new Date(), -29));
-let untilDate = localStorage.getItem('coco_sm_until') || todayISO;
+let sinceDate = localStorage.getItem('vpl_sm_since') || isoLocal(addDays(new Date(), -29));
+let untilDate = localStorage.getItem('vpl_sm_until') || todayISO;
 // Período de comparação do card "Comparação de período" — null/null = automático (período
 // anterior de mesmo tamanho, calculado no backend). Escolhido manualmente sobrepõe isso.
-let cmpSince = localStorage.getItem('coco_sm_cmpSince') || null;
-let cmpUntil = localStorage.getItem('coco_sm_cmpUntil') || null;
-let refreshMin = Number(localStorage.getItem('coco_sm_refresh') ?? 15);
+let cmpSince = localStorage.getItem('vpl_sm_cmpSince') || null;
+let cmpUntil = localStorage.getItem('vpl_sm_cmpUntil') || null;
+let refreshMin = Number(localStorage.getItem('vpl_sm_refresh') ?? 15);
 // ── Marca/país (fundação multimarca/multipaís) ──
 // O seletor de País é montado a partir de GET /api/registry (empresa → marcas → países →
 // plataformas, sem credenciais) — nenhum país fica hardcoded no HTML/JS. countryScope 'all' =
@@ -517,7 +517,7 @@ let refreshMin = Number(localStorage.getItem('coco_sm_refresh') ?? 15);
 // página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
 // diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
 let brandId = null;
-let countryScope = localStorage.getItem('coco_sm_country') || 'all';
+let countryScope = localStorage.getItem('vpl_sm_country') || 'all';
 const COUNTRY_PALETTE = ['#1c2b39', '#dd2a7b', '#2e7d5b', '#8134af', '#f58529'];
 function countryColor(countryId, idx) {
   if (countryId === 'br') return '#1c2b39';
@@ -530,10 +530,10 @@ const METRIC_SOURCES = {
   fbLikes:     { label: 'Facebook · Curtidas', key: 'likes', platform: 'facebook' },
   fbFollowers: { label: 'Facebook · Seguidores', key: 'followers', platform: 'facebook' },
 };
-let metric = localStorage.getItem('coco_sm_metric') || 'igFollowers';
+let metric = localStorage.getItem('vpl_sm_metric') || 'igFollowers';
 if (!METRIC_SOURCES[metric]) metric = 'igFollowers';
 const CHANNEL_LABEL = { todos: 'Todos', instagram: 'Instagram', facebook: 'Facebook' };
-let channel = localStorage.getItem('coco_sm_channel') || 'todos';
+let channel = localStorage.getItem('vpl_sm_channel') || 'todos';
 if (!CHANNEL_LABEL[channel]) channel = 'todos';
 
 let lastData = null;
@@ -580,7 +580,7 @@ function updateChannelVisibility() {
   });
   if (channel !== 'todos' && METRIC_SOURCES[metric].platform !== channel) {
     metric = channel === 'facebook' ? 'fbLikes' : 'igFollowers';
-    localStorage.setItem('coco_sm_metric', metric);
+    localStorage.setItem('vpl_sm_metric', metric);
   }
 }
 
@@ -610,19 +610,19 @@ document.addEventListener('click', () => {
 
 setupCsel(document.getElementById('cselRefresh'), val => {
   refreshMin = Number(val);
-  localStorage.setItem('coco_sm_refresh', refreshMin);
+  localStorage.setItem('vpl_sm_refresh', refreshMin);
   syncControls();
   applyRefresh();
 });
 setupCsel(document.getElementById('cselMetric'), val => {
   metric = val;
-  localStorage.setItem('coco_sm_metric', metric);
+  localStorage.setItem('vpl_sm_metric', metric);
   syncControls();
   if (lastData) drawTrendChart(lastData);
 });
 setupCsel(document.getElementById('cselChannel'), val => {
   channel = val;
-  localStorage.setItem('coco_sm_channel', channel);
+  localStorage.setItem('vpl_sm_channel', channel);
   updateChannelVisibility();
   syncControls();
   if (lastData) { renderAccountCards(lastData); drawTrendChart(lastData); renderComparison(lastData); renderHistoryTables(lastData); }
@@ -638,7 +638,7 @@ function buildCountrySelector(countries) {
   document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
   setupCsel(document.getElementById('cselCountry'), val => {
     countryScope = val;
-    localStorage.setItem('coco_sm_country', countryScope);
+    localStorage.setItem('vpl_sm_country', countryScope);
     document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
     load();
   });
@@ -654,7 +654,7 @@ async function loadRegistry() {
     // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
     // pode nem existir na marca nova.
     countryScope = 'all';
-    try { localStorage.removeItem('coco_sm_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_sm_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -687,7 +687,7 @@ periodPop.addEventListener('click', e => e.stopPropagation());
 document.querySelectorAll('#periodPop .pp-presets button').forEach(b => b.addEventListener('click', () => {
   const [s, u] = presetRange(b.dataset.preset);
   sinceDate = s; untilDate = u;
-  localStorage.setItem('coco_sm_since', s); localStorage.setItem('coco_sm_until', u);
+  localStorage.setItem('vpl_sm_since', s); localStorage.setItem('vpl_sm_until', u);
   periodPop.classList.remove('open');
   syncControls(); load();
 }));
@@ -698,7 +698,7 @@ document.getElementById('applyRange').addEventListener('click', () => {
   if (parseISO(s) > parseISO(u)) { ppErr.textContent = 'A data inicial deve ser anterior à final.'; return; }
   ppErr.textContent = '';
   sinceDate = s; untilDate = u;
-  localStorage.setItem('coco_sm_since', s); localStorage.setItem('coco_sm_until', u);
+  localStorage.setItem('vpl_sm_since', s); localStorage.setItem('vpl_sm_until', u);
   periodPop.classList.remove('open');
   syncControls(); load();
 });
@@ -732,7 +732,7 @@ cmpPeriodPop.addEventListener('click', e => e.stopPropagation());
 
 document.querySelector('[data-cmp-preset="auto"]').addEventListener('click', () => {
   cmpSince = null; cmpUntil = null;
-  localStorage.removeItem('coco_sm_cmpSince'); localStorage.removeItem('coco_sm_cmpUntil');
+  localStorage.removeItem('vpl_sm_cmpSince'); localStorage.removeItem('vpl_sm_cmpUntil');
   cmpPeriodPop.classList.remove('open');
   syncCmpPeriodLabel(); load();
 });
@@ -742,7 +742,7 @@ document.getElementById('cmpApplyRange').addEventListener('click', () => {
   if (parseISO(s) > parseISO(u)) { cmpPpErr.textContent = 'A data inicial deve ser anterior à final.'; return; }
   cmpPpErr.textContent = '';
   cmpSince = s; cmpUntil = u;
-  localStorage.setItem('coco_sm_cmpSince', s); localStorage.setItem('coco_sm_cmpUntil', u);
+  localStorage.setItem('vpl_sm_cmpSince', s); localStorage.setItem('vpl_sm_cmpUntil', u);
   cmpPeriodPop.classList.remove('open');
   syncCmpPeriodLabel(); load();
 });
@@ -812,7 +812,7 @@ const COMPARISON_METRICS = [
   { key: 'fbLikes',      label: 'Curtidas Facebook',      icon: 'bi-facebook',     group: 'facebook' },
   { key: 'fbVideoViews', label: 'Visualizações de vídeo (Facebook)', icon: 'bi-play-circle', group: 'facebook' },
 ];
-let cmpView = localStorage.getItem('coco_sm_cmpview') || 'lista';
+let cmpView = localStorage.getItem('vpl_sm_cmpview') || 'lista';
 if (!['lista','tabela','grafico'].includes(cmpView)) cmpView = 'lista';
 
 function activeComparisonMetrics() {
@@ -888,7 +888,7 @@ document.querySelectorAll('.cmp-view-btn').forEach(btn => {
   btn.classList.toggle('active', btn.dataset.view === cmpView);
   btn.addEventListener('click', () => {
     cmpView = btn.dataset.view;
-    localStorage.setItem('coco_sm_cmpview', cmpView);
+    localStorage.setItem('vpl_sm_cmpview', cmpView);
     document.querySelectorAll('.cmp-view-btn').forEach(b => b.classList.toggle('active', b === btn));
     if (lastData) renderComparison(lastData);
   });
@@ -1086,16 +1086,21 @@ async function load() {
   if (brandId) params.brand = brandId;
   if (cmpSince && cmpUntil) { params.cmpSince = cmpSince; params.cmpUntil = cmpUntil; }
   const p = new URLSearchParams(params);
-  const res = await fetch('/api/dashboard?' + p);
-  const data = await res.json();
-  render(data);
+  try {
+    const res = await apiFetch('/api/dashboard?' + p);
+    render(await res.json());
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a tela ficava presa no loader.
+    document.getElementById('accGrid').innerHTML = loadErrorHtml(e.message);
+    return;
+  }
 
   // Orgânico×Pago é calculado à parte (ficha de conteúdo, não o snapshot de perfil) — busca
   // paralela, sem travar o resto do dashboard se essa chamada falhar.
   try {
     const contentParams = { since: sinceDate, until: untilDate, country: countryScope };
     if (brandId) contentParams.brand = brandId;
-    const contentRes = await fetch('/api/content?' + new URLSearchParams(contentParams));
+    const contentRes = await apiFetch('/api/content?' + new URLSearchParams(contentParams));
     renderOrganicPaid(await contentRes.json());
   } catch {
     renderOrganicPaid(null);
@@ -1105,7 +1110,7 @@ async function load() {
 document.getElementById('syncBtn').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
-  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  try { await apiFetch('/api/sync', { method: 'POST' }); await load(); }
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 

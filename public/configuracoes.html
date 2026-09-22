@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Configurações · Coco and Luna</title>
+<title>Configurações · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <style>
@@ -109,7 +109,7 @@
     </div>
   </div>
 
-  <footer style="padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center">Vita Pet Life · Coco and Luna · Redes Sociais</footer>
+  <footer style="padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center">Vita Pet Life · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -140,16 +140,20 @@
   }
 
   async function loadStatus() {
-    const res = await fetch('/api/auth/status');
-    const data = await res.json();
-    renderStatus(data);
+    try {
+      const res = await apiFetch('/api/auth/status');
+      renderStatus(await res.json());
+    } catch (e) {
+      // Sem isto a tela ficava sem dizer nada sobre o estado do login.
+      showMsg(e.message, 'error');
+    }
   }
 
   toggle.addEventListener('change', async () => {
     const desired = toggle.checked;
     toggle.disabled = true;
     try {
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginEnabled: desired }),
@@ -163,15 +167,17 @@
       }
       showMsg(desired ? 'Login ativado.' : 'Login desativado.', 'success');
       await loadStatus();
-    } catch {
-      showMsg('Erro de conexão.', 'error');
+    } catch (e) {
+      // A mensagem do servidor importa aqui: ligar o login sem DASHBOARD_PASSWORD é recusado
+      // com um motivo específico, e "Erro de conexão" escondia exatamente isso.
+      showMsg(e.message, 'error');
       toggle.checked = !desired;
       toggle.disabled = false;
     }
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
     location.href = '/login';
   });
 

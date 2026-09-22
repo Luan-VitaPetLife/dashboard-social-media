@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Metas · Coco and Luna</title>
+<title>Metas · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <style>
@@ -154,7 +154,7 @@
     </div>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -167,7 +167,7 @@ function fmtDateTimeBR(iso) { return iso ? new Date(iso).toLocaleString('pt-BR')
 // página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
 // diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
 let brandId = null;
-let countryScope = localStorage.getItem('coco_meta_country') || 'all';
+let countryScope = localStorage.getItem('vpl_meta_country') || 'all';
 let lastData = null;
 function currentBrand() { return DashboardBrand.current(); }
 
@@ -199,7 +199,7 @@ function buildCountrySelector(countries) {
   document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
   setupCsel(document.getElementById('cselCountry'), val => {
     countryScope = val;
-    localStorage.setItem('coco_meta_country', countryScope);
+    localStorage.setItem('vpl_meta_country', countryScope);
     document.getElementById('countryVal').textContent = countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
     load();
   });
@@ -215,7 +215,7 @@ async function loadRegistry() {
     // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
     // pode nem existir na marca nova.
     countryScope = 'all';
-    try { localStorage.removeItem('coco_meta_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_meta_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector(currentBrand()?.countries || []);
     load();
   });
@@ -303,14 +303,14 @@ function attachHandlers(grid) {
       if (!target || Number(target) <= 0) { errEl.textContent = 'Informe uma meta de seguidores válida.'; return; }
       if (!deadline) { errEl.textContent = 'Informe um prazo.'; return; }
       try {
-        const res = await fetch('/api/goals', {
+        const res = await apiFetch('/api/goals', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brandId, countryId, platform, target, deadline }),
         });
         if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'Erro ao salvar.'; return; }
         await load();
-      } catch { errEl.textContent = 'Falha de rede. Tente de novo.'; }
+      } catch (e) { errEl.textContent = e.message; }
     });
   });
 }
@@ -319,9 +319,13 @@ async function load() {
   const params = { country: countryScope };
   if (brandId) params.brand = brandId;
   const p = new URLSearchParams(params);
-  const res = await fetch('/api/goals?' + p);
-  const data = await res.json();
-  render(data);
+  try {
+    const res = await apiFetch('/api/goals?' + p);
+    render(await res.json());
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e a tela ficava presa no loader.
+    document.getElementById('goalGrid').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 function render(d) {
@@ -334,7 +338,7 @@ function render(d) {
 document.getElementById('syncBtn').addEventListener('click', async (e) => {
   e.target.disabled = true;
   e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizando…';
-  try { await fetch('/api/sync', { method: 'POST' }); await load(); }
+  try { await apiFetch('/api/sync', { method: 'POST' }); await load(); }
   finally { e.target.disabled = false; e.target.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar agora'; }
 });
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cliques · Coco and Luna</title>
+<title>Cliques · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
@@ -181,7 +181,7 @@
     <section id="panorama" style="display:none"></section>
   </main>
 
-  <footer>Coco and Luna · Redes Sociais</footer>
+  <footer><span data-brand-label>Vita Pet Life</span> · Redes Sociais</footer>
 </div>
 
 <script src="sidebar.js"></script>
@@ -193,7 +193,7 @@ const PERIODS = [
   { days: 180, label: '180 dias' },
 ];
 
-let periodDays = Number(localStorage.getItem('coco_clicks_period')) || 30;
+let periodDays = Number(localStorage.getItem('vpl_clicks_period')) || 30;
 let openScreen = null;
 const charts = {};
 
@@ -217,7 +217,7 @@ function setChart(id, cfg) {
 /* ── Seletor de país ────────────────────────────────────────────────────────────────────── */
 // Mesma chave por página que as outras telas usam pro país (a marca é global, o país não — ver
 // DashboardBrand em sidebar.js).
-let countryScope = localStorage.getItem('coco_clicks_country') || 'all';
+let countryScope = localStorage.getItem('vpl_clicks_country') || 'all';
 
 function buildCountrySelector() {
   const countries = DashboardBrand.current()?.countries || [];
@@ -237,7 +237,7 @@ function buildCountrySelector() {
     o.onclick = (e) => {
       e.stopPropagation();
       countryScope = o.dataset.value;
-      localStorage.setItem('coco_clicks_country', countryScope);
+      localStorage.setItem('vpl_clicks_country', countryScope);
       document.getElementById('cselCountry').classList.remove('open');
       document.getElementById('countryVal').textContent = rotulo();
       buildCountrySelector();
@@ -264,7 +264,7 @@ function buildPeriodSelector() {
     opt.onclick = (e) => {
       e.stopPropagation();
       periodDays = Number(opt.dataset.value);
-      localStorage.setItem('coco_clicks_period', periodDays);
+      localStorage.setItem('vpl_clicks_period', periodDays);
       document.getElementById('cselPeriod').classList.remove('open');
       buildPeriodSelector();
       load();
@@ -497,7 +497,7 @@ async function load() {
   try {
     const params = new URLSearchParams({ days: periodDays, brand: DashboardBrand.id() || '', country: countryScope });
     if (openScreen) params.set('screen', openScreen);
-    const res = await fetch('/api/clicks?' + params);
+    const res = await apiFetch('/api/clicks?' + params);
     if (!res.ok) throw new Error('Falha ao carregar os cliques.');
     const data = await res.json();
 
@@ -514,7 +514,9 @@ async function load() {
     openScreen = null;
     panorama.style.display = 'none';
     overview.style.display = 'block';
-    document.getElementById('screenGrid').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
+    // Mesmo bloco de erro das outras telas (loadErrorHtml em sidebar.js), com ícone e a opção
+    // de tentar de novo — antes esta era a única com um formato próprio.
+    document.getElementById('screenGrid').innerHTML = loadErrorHtml(e.message);
   }
 }
 
@@ -534,7 +536,7 @@ buildPeriodSelector();
     // Os países são por marca, então o seletor precisa ser remontado (e o país escolhido volta
     // pra "todos" se não existir na marca nova — ver buildCountrySelector).
     countryScope = 'all';
-    try { localStorage.removeItem('coco_clicks_country'); } catch (error) { /* modo privado */ }
+    try { localStorage.removeItem('vpl_clicks_country'); } catch (error) { /* modo privado */ }
     buildCountrySelector();
     load();
   }, { metaNotice: false });

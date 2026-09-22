@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chamados · Coco and Luna</title>
+<title>Chamados · Vita Pet Life</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <style>
@@ -259,7 +259,7 @@
     <div id="board"><div class="empty">carregando…</div></div>
   </div>
 
-  <footer style="padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center">Vita Pet Life · Coco and Luna · Redes Sociais</footer>
+  <footer style="padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center">Vita Pet Life · Redes Sociais</footer>
 </div>
 
 <!-- Modal: detalhe/edição de chamado -->
@@ -410,10 +410,10 @@ const GROUPBY_LABELS = { status: 'Status', tipo: 'Tipo', urgencia: 'Urgência', 
 
 let people = [];
 let tickets = [];
-let groupBy = localStorage.getItem('coco_chamados_groupby') || 'status';
+let groupBy = localStorage.getItem('vpl_chamados_groupby') || 'status';
 // Modo de visualização — preferência pessoal de tela, por isso localStorage (só neste
 // navegador) e não algo salvo no servidor/compartilhado com o resto da equipe.
-let viewMode = localStorage.getItem('coco_chamados_viewmode') || 'lista';
+let viewMode = localStorage.getItem('vpl_chamados_viewmode') || 'lista';
 let filters = { tipo: null, urgencia: null, pessoa: null };
 let openTicketId = null;
 
@@ -513,7 +513,7 @@ function renderFilterPops() {
 document.getElementById('cselGroupBy').querySelectorAll('.csel-opt').forEach(el => {
   el.addEventListener('click', () => {
     groupBy = el.dataset.value;
-    localStorage.setItem('coco_chamados_groupby', groupBy);
+    localStorage.setItem('vpl_chamados_groupby', groupBy);
     document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];
     document.getElementById('cselGroupBy').querySelectorAll('.csel-opt').forEach(o => o.classList.toggle('active', o === el));
     render();
@@ -528,7 +528,7 @@ function updateGroupByVisibility() {
 document.querySelectorAll('.view-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     viewMode = btn.dataset.view;
-    localStorage.setItem('coco_chamados_viewmode', viewMode);
+    localStorage.setItem('vpl_chamados_viewmode', viewMode);
     document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b === btn));
     updateGroupByVisibility();
     render();
@@ -615,7 +615,7 @@ function renderListView(board, filtered) {
   const { groups, keys } = computeGroups(filtered);
   board.innerHTML = keys.map(k => {
     const items = groups.get(k).slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    const collapsed = localStorage.getItem('coco_chamados_collapsed_' + groupBy + '_' + k) === '1';
+    const collapsed = localStorage.getItem('vpl_chamados_collapsed_' + groupBy + '_' + k) === '1';
     return `<div class="board-group${collapsed ? ' collapsed' : ''}" data-group-key="${k}">
       <div class="board-group-head">
         <span class="board-group-dot" style="background:${groupColorFor(k)}"></span>
@@ -631,7 +631,7 @@ function renderListView(board, filtered) {
     head.addEventListener('click', () => {
       const group = head.closest('.board-group');
       group.classList.toggle('collapsed');
-      localStorage.setItem('coco_chamados_collapsed_' + groupBy + '_' + group.dataset.groupKey, group.classList.contains('collapsed') ? '1' : '0');
+      localStorage.setItem('vpl_chamados_collapsed_' + groupBy + '_' + group.dataset.groupKey, group.classList.contains('collapsed') ? '1' : '0');
     });
   });
   wireTicketClicks(board);
@@ -713,7 +713,7 @@ function renderComments(t) {
   box.querySelectorAll('.comment-del').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await showConfirm('Excluir este comentário?'))) return;
-      await fetch(`/api/tickets/${openTicketId}/comments/${btn.dataset.commentId}`, { method: 'DELETE' });
+      await apiFetch(`/api/tickets/${openTicketId}/comments/${btn.dataset.commentId}`, { method: 'DELETE' });
       await load();
       const t2 = tickets.find(t => t.id === openTicketId);
       if (t2) renderComments(t2);
@@ -723,7 +723,7 @@ function renderComments(t) {
 
 async function patchOpenTicket(patch) {
   if (!openTicketId) return;
-  await fetch(`/api/tickets/${openTicketId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  await apiFetch(`/api/tickets/${openTicketId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
   await load();
 }
 
@@ -734,7 +734,7 @@ document.getElementById('tmCommentSubmit').addEventListener('click', async () =>
   const text = document.getElementById('tmCommentText').value.trim();
   if (!text || !openTicketId) return;
   const personId = ddValue('tmCommentPessoaDD');
-  await fetch(`/api/tickets/${openTicketId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personId, text }) });
+  await apiFetch(`/api/tickets/${openTicketId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personId, text }) });
   document.getElementById('tmCommentText').value = '';
   await load();
   const t2 = tickets.find(t => t.id === openTicketId);
@@ -744,7 +744,7 @@ document.getElementById('tmCommentSubmit').addEventListener('click', async () =>
 document.getElementById('tmDelete').addEventListener('click', async () => {
   if (!openTicketId) return;
   if (!(await showConfirm('Excluir este chamado? Essa ação não pode ser desfeita.'))) return;
-  await fetch(`/api/tickets/${openTicketId}`, { method: 'DELETE' });
+  await apiFetch(`/api/tickets/${openTicketId}`, { method: 'DELETE' });
   closeTicketModal();
   await load();
 });
@@ -780,7 +780,7 @@ document.getElementById('ntSubmit').addEventListener('click', async () => {
     responsavelId: ddValue('ntResponsavelDD'),
     criadoPorId: ddValue('ntCriadoPorDD'),
   };
-  const res = await fetch('/api/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await apiFetch('/api/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { errBox.textContent = data.error || 'Erro ao criar chamado.'; errBox.classList.add('show'); return; }
   closeNewTicketModal();
@@ -800,7 +800,7 @@ function renderPeopleList() {
     inp.addEventListener('blur', async () => {
       const name = inp.value.trim();
       if (!name) return;
-      await fetch(`/api/people/${inp.dataset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      await apiFetch(`/api/people/${inp.dataset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
       await load();
       renderPeopleList();
     });
@@ -808,7 +808,7 @@ function renderPeopleList() {
   box.querySelectorAll('.people-del').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await showConfirm('Remover esta pessoa? Chamados/comentários que apontavam pra ela vão mostrar "pessoa removida".'))) return;
-      await fetch(`/api/people/${btn.dataset.id}`, { method: 'DELETE' });
+      await apiFetch(`/api/people/${btn.dataset.id}`, { method: 'DELETE' });
       await load();
       renderPeopleList();
     });
@@ -824,7 +824,7 @@ document.getElementById('addPersonBtn').addEventListener('click', async () => {
   const inp = document.getElementById('newPersonName');
   const name = inp.value.trim();
   if (!name) return;
-  await fetch('/api/people', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  await apiFetch('/api/people', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
   inp.value = '';
   await load();
   renderPeopleList();
@@ -832,11 +832,16 @@ document.getElementById('addPersonBtn').addEventListener('click', async () => {
 document.getElementById('newPersonName').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('addPersonBtn').click(); });
 
 async function load() {
-  const [peopleRes, ticketsRes] = await Promise.all([fetch('/api/people'), fetch('/api/tickets')]);
-  people = await peopleRes.json();
-  tickets = await ticketsRes.json();
-  renderFilterPops();
-  render();
+  try {
+    const [peopleRes, ticketsRes] = await Promise.all([apiFetch('/api/people'), apiFetch('/api/tickets')]);
+    people = await peopleRes.json();
+    tickets = await ticketsRes.json();
+    renderFilterPops();
+    render();
+  } catch (e) {
+    // Sem isto a promessa era rejeitada sem ninguém ouvir e o quadro ficava preso no loader.
+    document.getElementById('board').innerHTML = loadErrorHtml(e.message);
+  }
 }
 
 document.getElementById('groupByVal').textContent = GROUPBY_LABELS[groupBy];

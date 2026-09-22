@@ -21,6 +21,56 @@ function escapeHtml(str) {
 }
 window.escapeHtml = escapeHtml;
 
+// apiFetch(url, options) — fetch com o erro tratado, pra usar no lugar de fetch() em toda
+// chamada à API desta app.
+//
+// Até 22/09/2026, 40 das 42 chamadas ignoravam o status da resposta e iam direto pro .json().
+// Um 500 do servidor virava então um erro de sintaxe do JSON, ou pior: um objeto {error:"..."}
+// tratado como se fossem os dados, o que deixava a tela em branco sem dizer nada. A causa real
+// ficava só no console, onde ninguém olha.
+//
+// Devolve a Response, igual ao fetch, então quem chama segue fazendo await res.json(). O que
+// muda é que respostas 4xx/5xx viram exceção com a mensagem do servidor (as rotas respondem
+// {error:"..."}), caindo no try/catch que essas telas já têm.
+async function apiFetch(url, options) {
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (error) {
+    // Falha de rede: servidor fora do ar, sem internet, requisição bloqueada.
+    throw new Error('Não foi possível falar com o servidor. Verifique a conexão e tente de novo.');
+  }
+  if (res.ok) return res;
+
+  // A resposta de erro das rotas é {error:"..."}; se não for JSON, não insiste.
+  let detalhe = '';
+  try {
+    const corpo = await res.clone().json();
+    if (corpo && corpo.error) detalhe = String(corpo.error);
+  } catch (error) { /* corpo vazio ou não-JSON */ }
+
+  if (detalhe) throw new Error(detalhe);
+  if (res.status === 401) throw new Error('Sua sessão expirou. Entre de novo para continuar.');
+  if (res.status === 404) throw new Error('Não encontrado.');
+  if (res.status === 429) throw new Error('Muitas solicitações em pouco tempo. Aguarde um instante e tente de novo.');
+  if (res.status >= 500) throw new Error('O servidor falhou ao responder (erro ' + res.status + '). Tente de novo em instantes.');
+  throw new Error('A solicitação falhou (erro ' + res.status + ').');
+}
+window.apiFetch = apiFetch;
+
+// loadErrorHtml(mensagem) — o que mostrar no lugar do conteúdo quando a carga da tela falha.
+// Antes, várias telas não tinham try/catch nenhum na função load(): a promessa era rejeitada sem
+// ninguém ouvir e a página ficava presa na animação de carregamento, para sempre e em silêncio.
+// A causa aparecia só no console. Um bloco só, aqui, pra todas mostrarem a mesma coisa.
+function loadErrorHtml(mensagem) {
+  return '<div class="empty load-error">'
+    + '<i class="bi bi-exclamation-triangle load-error-icon"></i>'
+    + '<div>' + escapeHtml(mensagem || 'Não foi possível carregar esta tela.') + '</div>'
+    + '<button type="button" class="load-error-retry" onclick="location.reload()">Tentar de novo</button>'
+    + '</div>';
+}
+window.loadErrorHtml = loadErrorHtml;
+
 // setBrandLogoImg — preenche/esconde um <img class="brand-logo-mini"> com o logo da marca
 // (registry.js expõe `logo` por marca, ver getRegistryTree). Reaproveitado por todas as páginas
 // que têm seletor de Marca, pra não duplicar essa checagem em cada `buildBrandSelector()`. Some
@@ -167,6 +217,31 @@ function initCollapsibleNotice({ noteId, collapseBtnId, fabId, storageKey }) {
 window.initCollapsibleNotice = initCollapsibleNotice;
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
+//  Prefixo das chaves de localStorage: coco_* -> vpl_*
+//
+//  As chaves nasceram com o nome da única marca que existia ("vpl_sm_since", "vpl_aud_mode").
+//  Com Coco and Luna e Yucaloo na mesma dashboard, o prefixo passou a mentir. `vpl` é a empresa
+//  (Vita Pet Life), que é o escopo real: preferência de período, de tema e de barra lateral é de
+//  quem usa, não da marca que está selecionada.
+//
+//  Roda antes de qualquer leitura — inclusive a da marca selecionada, logo abaixo — pra ninguém
+//  perder o que já tinha salvo. Copia e apaga a chave antiga; na segunda visita não há mais o que
+//  migrar e o laço não faz nada.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+(function migrarPrefixoDeArmazenamento() {
+  try {
+    for (const chave of Object.keys(localStorage)) {
+      if (!chave.startsWith('coco_')) continue;
+      const nova = 'vpl_' + chave.slice('coco_'.length);
+      if (localStorage.getItem(nova) === null) localStorage.setItem(nova, localStorage.getItem(chave));
+      localStorage.removeItem(chave);
+    }
+  } catch (error) {
+    /* Modo privado ou armazenamento bloqueado: segue com os padrões, nada quebra. */
+  }
+})();
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
 //  DashboardBrand — marca selecionada, compartilhada por todas as páginas.
 //
 //  Antes cada página tinha seu próprio buildBrandSelector() na topbar (7 cópias divergentes do
@@ -178,7 +253,7 @@ window.initCollapsibleNotice = initCollapsibleNotice;
 //     const brandId = DashboardBrand.id();
 //     DashboardBrand.onChange(() => load());
 // ─────────────────────────────────────────────────────────────────────────────────────────────
-const BRAND_STORAGE_KEY = 'coco_sm_brand';
+const BRAND_STORAGE_KEY = 'vpl_sm_brand';
 let registryTree = null;
 let currentBrandId = null;
 const brandListeners = [];
@@ -212,8 +287,35 @@ window.DashboardBrand = {
     brandListeners.push(callback);
     if (metaNotice) metaDependentPage = true;
     renderBrandNotice();
+    applyBrandNaming();
   },
 };
+
+// Nome da marca no título da aba e no rodapé. Até 22/09/2026 as 12 páginas tinham "Coco and
+// Luna" escrito na mão nos dois lugares — com duas marcas isso virou mentira: a aba dizia
+// "Cliques · Coco and Luna" com a Yucaloo selecionada.
+//
+// O HTML traz o nome da empresa como padrão (correto e estável enquanto o registry não chega, e
+// correto pra sempre nas telas da equipe inteira). Quem opta por mostrar a marca é a própria
+// página, pondo um <span data-brand-label> no rodapé — marcador explícito em vez de adivinhação
+// por texto, e o mesmo sinal decide se o título da aba também acompanha.
+function applyBrandNaming() {
+  const marcadores = document.querySelectorAll('[data-brand-label]');
+  if (!marcadores.length) return;
+  const brand = window.DashboardBrand.current();
+  const nome = brand ? brand.name : (registryTree && registryTree.company ? registryTree.company.name : null);
+  if (!nome) return;
+
+  for (const el of marcadores) el.textContent = nome;
+
+  // Troca só o último segmento do título ("Cliques · Vita Pet Life" -> "Cliques · Yucaloo"),
+  // preservando títulos com mais de um separador.
+  const partes = document.title.split('·');
+  if (partes.length > 1) {
+    partes[partes.length - 1] = ' ' + nome;
+    document.title = partes.join('·');
+  }
+}
 
 function notifyBrandChange() {
   for (const callback of brandListeners) {
@@ -336,6 +438,14 @@ window.renderBrandNotice = renderBrandNotice;
   border:1px solid #f0d48a;background:#fdf6e3;color:#6b5514;border-radius:11px;font-size:12.5px;line-height:1.5}
 .brand-not-connected i{font-size:15px;line-height:1.3;flex-shrink:0}
 @media(max-width:768px){.brand-not-connected{margin:0 16px 14px}}
+
+/* Bloco de erro de carga (loadErrorHtml). Mesma caixa em todas as telas. */
+.load-error{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  min-height:min(40vh,320px);max-width:440px;margin:0 auto;line-height:1.6;text-align:center}
+.load-error-icon{font-size:24px;color:#c9a227}
+.load-error-retry{border:1px solid rgba(28,43,57,.18);background:#fff;color:#1c2b39;border-radius:8px;
+  padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+.load-error-retry:hover{background:rgba(28,43,57,.06)}
 
 .nav-group{margin-bottom:22px;padding:0 12px}
 .nav-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#7c8794;padding:0 10px;margin-bottom:6px}
@@ -562,6 +672,7 @@ body.sidebar-hidden .topbar{padding-left:64px}
           paintBrandButton();
           paintBrandOptions();
           renderBrandNotice();
+          applyBrandNaming();
           notifyBrandChange();
         });
         brandPop.appendChild(opt);
@@ -592,6 +703,7 @@ body.sidebar-hidden .topbar{padding-left:64px}
         paintBrandButton();
         paintBrandOptions();
         renderBrandNotice();
+        applyBrandNaming();
       })
       .catch(error => {
         // Sem registry não dá pra saber a marca. Avisa no console e resolve a promise assim
@@ -607,7 +719,7 @@ body.sidebar-hidden .topbar{padding-left:64px}
     const openBtn  = document.getElementById('sidebarOpen');
     const isMobile = () => window.innerWidth <= 768;
 
-    if (!isMobile() && localStorage.getItem('coco_sm_sidebar') === 'hidden') {
+    if (!isMobile() && localStorage.getItem('vpl_sm_sidebar') === 'hidden') {
       document.body.classList.add('sidebar-hidden');
     }
     closeBtn.addEventListener('click', () => {
@@ -615,7 +727,7 @@ body.sidebar-hidden .topbar{padding-left:64px}
         document.body.classList.remove('sidebar-mobile-open');
       } else {
         const hidden = document.body.classList.toggle('sidebar-hidden');
-        localStorage.setItem('coco_sm_sidebar', hidden ? 'hidden' : 'visible');
+        localStorage.setItem('vpl_sm_sidebar', hidden ? 'hidden' : 'visible');
       }
     });
     openBtn.addEventListener('click', () => {
@@ -623,7 +735,7 @@ body.sidebar-hidden .topbar{padding-left:64px}
         document.body.classList.add('sidebar-mobile-open');
       } else {
         document.body.classList.remove('sidebar-hidden');
-        localStorage.setItem('coco_sm_sidebar', 'visible');
+        localStorage.setItem('vpl_sm_sidebar', 'visible');
       }
     });
     overlay.addEventListener('click', () => document.body.classList.remove('sidebar-mobile-open'));
