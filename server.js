@@ -15,7 +15,7 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { computeAudienceDashboard } from './src/audience.js';
 import { probeInsights, probeEngagement, probeDemographics, fetchInstagramMediaComments } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
-import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts } from './src/registry.js';
+import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts, getBrandToken } from './src/registry.js';
 import { generateReport, checkScheduledReports, computeNextRun, REPORT_TYPES, INTERVAL_UNITS } from './src/reports.js';
 import { renderReportPdf, renderReportDocx } from './src/reportRenderer.js';
 import {
@@ -368,8 +368,14 @@ app.patch('/api/content/:mediaId/context', (req, res) => {
 // da equipe, não uma sincronização em massa.
 app.get('/api/content/:mediaId/comments', async (req, res) => {
   const { mediaId } = req.params;
+  // Única rota que fala com a Meta sem ter marca no caminho: o mediaId sozinho não diz de qual
+  // Business Manager ele é. O front manda ?brand= (a marca selecionada na sidebar); sem isso,
+  // cai na marca padrão — que era o comportamento implícito quando o token era único.
+  const brandId = req.query.brand || getDefaultBrandId();
+  const token = getBrandToken(brandId);
+  if (!token) return res.json({ comments: [], error: 'Marca sem conexão com a Meta configurada.' });
   try {
-    res.json(await fetchInstagramMediaComments(mediaId));
+    res.json(await fetchInstagramMediaComments(token, mediaId));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

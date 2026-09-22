@@ -2,7 +2,7 @@
 // recente, o checkpoint D+7/D+14/D+30 (quando já existir histórico suficiente) e a comparação
 // com a mediana de conteúdos do mesmo formato + país. Nunca estima um checkpoint que não existe.
 import { getContentList } from './store.js';
-import { getBrand, getDefaultBrandId, getCountries, getAdAccountId } from './registry.js';
+import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
 import { generateText, isConfigured as aiConfigured } from './ai.js';
@@ -103,9 +103,10 @@ export async function computeContentDashboard({ brandId, country, since, until }
   // Permalinks impulsionados por país (via Marketing API — ver fetchBoostedPermalinks em
   // meta.js), buscados uma vez por país em escopo antes de montar os itens.
   const boostedByCountry = new Map();
+  const token = getBrandToken(brandId);
   for (const countryMeta of scopedCountries) {
     const adAccountId = getAdAccountId(brandId, countryMeta.id);
-    boostedByCountry.set(countryMeta.id, adAccountId ? await fetchBoostedPermalinks(adAccountId).catch(() => new Set()) : new Set());
+    boostedByCountry.set(countryMeta.id, adAccountId ? await fetchBoostedPermalinks(token, adAccountId).catch(() => new Set()) : new Set());
   }
 
   const items = [];

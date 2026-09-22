@@ -9,7 +9,7 @@
 // fica null ("—") em vez de fabricar um número.
 import { getSnapshotsInRange } from './store.js';
 import { fetchInstagramEngagement, fetchFacebookVideoViews } from './meta.js';
-import { getBrand, getDefaultBrandId, getCountries, getAccounts } from './registry.js';
+import { getBrand, getDefaultBrandId, getCountries, getAccounts, getBrandToken } from './registry.js';
 
 const IG_KEYS = ['followers', 'following', 'posts', 'recentLikes', 'recentComments'];
 const FB_KEYS = ['likes', 'followers'];
@@ -97,6 +97,10 @@ export async function computeSocialDashboard({ brandId, country, since, until, c
   const prevSince = cmpSince || auto.prevSince;
   const prevUntil = cmpUntil || auto.prevUntil;
 
+  // Token do Business Manager da marca — resolvido uma vez, fora do laço: é o mesmo pras contas
+  // de todos os países dela (o que muda por marca é o BM, não o país). Ver meta.js.
+  const token = getBrandToken(brandId);
+
   const perCountry = await Promise.all(scopedCountries.map(async countryMeta => {
     const accounts = getAccounts(brandId, countryMeta.id);
     const igAccount = accounts.find(a => a.platform === 'instagram');
@@ -106,10 +110,10 @@ export async function computeSocialDashboard({ brandId, country, since, until, c
     const facebook = buildEntity(brandId, 'facebook', countryMeta.id, since, until, prevSince, prevUntil);
 
     const [igEng, igEngPrev, fbVid, fbVidPrev] = await Promise.all([
-      igAccount ? fetchInstagramEngagement(igAccount.metaId, since, until).catch(() => null) : null,
-      igAccount ? fetchInstagramEngagement(igAccount.metaId, prevSince, prevUntil).catch(() => null) : null,
-      fbAccount ? fetchFacebookVideoViews(fbAccount.metaId, since, until).catch(() => null) : null,
-      fbAccount ? fetchFacebookVideoViews(fbAccount.metaId, prevSince, prevUntil).catch(() => null) : null,
+      igAccount ? fetchInstagramEngagement(token, igAccount.metaId, since, until).catch(() => null) : null,
+      igAccount ? fetchInstagramEngagement(token, igAccount.metaId, prevSince, prevUntil).catch(() => null) : null,
+      fbAccount ? fetchFacebookVideoViews(token, fbAccount.metaId, since, until).catch(() => null) : null,
+      fbAccount ? fetchFacebookVideoViews(token, fbAccount.metaId, prevSince, prevUntil).catch(() => null) : null,
     ]);
 
     instagram.engagement = igEng;

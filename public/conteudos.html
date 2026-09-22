@@ -574,7 +574,7 @@ async function openLightbox(item) {
   document.getElementById('lightboxCloseBtn').addEventListener('click', closeLightbox);
 
   try {
-    const res = await fetch(`/api/content/${item.mediaId}/comments`);
+    const res = await fetch(`/api/content/${item.mediaId}/comments?brand=${encodeURIComponent(brandId)}`);
     const data = await res.json();
     const commentsBox = document.getElementById('lightboxComments');
     if (!commentsBox) return; // lightbox já foi fechado antes da resposta chegar

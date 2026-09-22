@@ -119,17 +119,25 @@ Fluxo: `sync.js` busca dados da Meta (via `registry.listAccounts()`) → grava s
 diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/registry`.
 
 ### Registry (`src/registry.js`) — fundação multimarca/multipaís
-- Hierarquia **empresa → marca → país → conta**, montada em memória a partir do `.env` (mesmas variáveis
-  de sempre: `META_IG_ACCOUNT_ID_BR/US`, `META_FB_PAGE_ID_BR/US`). Hoje só a marca `coco-and-luna` tem
-  contas configuradas (`br`, `us`), mas `sync.js`/`metrics.js`/`server.js` já iteram a estrutura
-  genericamente — **adicionar uma marca ou país novo é só acrescentar um objeto em `BRANDS` + as env vars
-  correspondentes**, sem tocar no resto do código.
-- Contas sem `metaId` (env ausente) são removidas automaticamente (`pruneBrand`) — não aparecem no
-  registry nem entram na coleta.
-- `listAccounts(brandId?)` achata a árvore em `{brandId, countryId, platform, metaId}[]` — usado por
-  `sync.js`/`backfill.js` pra iterar sem conhecer a estrutura aninhada.
-- `getRegistryTree()` devolve a árvore **sem metaId** (nenhuma credencial) — é o que `GET /api/registry`
-  expõe pro front montar os seletores de Marca/País dinamicamente.
+- Hierarquia **empresa → marca → país → conta**, montada em memória a partir do `.env`. Duas marcas hoje:
+  `coco-and-luna` (`br`, `us`) e `yucaloo` (`br`, `us`). `sync.js`/`metrics.js`/`server.js` iteram a
+  estrutura genericamente — **adicionar uma marca ou país novo é só acrescentar um objeto em `BRANDS` +
+  as env vars correspondentes**, sem tocar no resto do código.
+- **O token da Meta é por marca, não global.** Cada marca vive no seu próprio Business Manager, então
+  cada uma tem seu `token` no `BRANDS` (`META_ACCESS_TOKEN` para Coco and Luna, que mantém o nome
+  histórico por já estar em produção; `META_YUCALOO_ACCESS_TOKEN` para Yucaloo). `getBrandToken(brandId)`
+  resolve; **nunca** exposto em `getRegistryTree()`.
+- Contas sem `metaId` (env ausente) são removidas automaticamente (`pruneBrand`). Marca sem `token` segue
+  a mesma regra e perde todas as contas — um metaId sem o token do BM correspondente só produziria erro
+  de API na primeira chamada.
+- `configured` (por marca) distingue "cadastrada mas sem credencial" de "funcionando". É o que permite uma
+  marca nova aparecer no seletor marcada como não conectada, em vez de sumir da interface ou mostrar telas
+  vazias sem explicação. Exposto em `getRegistryTree()`.
+- `listAccounts(brandId?)` achata a árvore em `{brandId, countryId, platform, metaId, token}[]` — usado por
+  `sync.js`/`backfill.js`/`contentSync.js`/`storySync.js` pra iterar sem conhecer a estrutura aninhada, já
+  com o token da marca junto.
+- `getRegistryTree()` devolve a árvore **sem metaId e sem token** (nenhuma credencial) — é o que
+  `GET /api/registry` expõe pro front montar os seletores de Marca/País dinamicamente.
 
 ### Ficha de conteúdo (`public/conteudos.html`, `src/contentSync.js`, `src/contentMetrics.js`)
 - **Card "Resumo"** no topo da página (`renderSummary()` em `conteudos.html`): Orgânico×Impulsionado
@@ -556,8 +564,11 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
 ### Plataformas e países — genéricos, resolvidos pelo registry
 - `platform`: `'instagram' | 'facebook'` (TikTok entra aqui quando implementado). `countryId`: `'br' | 'us'`
   hoje, mas qualquer string cadastrada em `registry.js` funciona sem mudança de código.
-- As 4 contas (Instagram BR/US + Página Facebook BR/US) vivem no mesmo Business Manager da Meta — o
-  mesmo `META_ACCESS_TOKEN` serve para todas; só o `metaId` muda por conta.
+- As 4 contas da Coco and Luna (Instagram BR/US + Página Facebook BR/US) vivem no mesmo Business Manager
+  — um token serve para as quatro. **Mas cada marca tem seu próprio BM**, então o token é resolvido por
+  marca (ver Registry acima). `meta.js` recebe `token` e `metaId` já resolvidos e continua sem conhecer
+  marca/país; as únicas exceções são as funções `probe*`, que recebem `brandId`/`countryId` porque são
+  feitas pra chamada manual por URL legível.
 
 ### Duas fontes de dado da Meta, propósitos diferentes — não confundir
 1. **Snapshot diário** (`fetchInstagramSnapshot`/`fetchFacebookSnapshot`, salvo por `sync.js`): seguidores,

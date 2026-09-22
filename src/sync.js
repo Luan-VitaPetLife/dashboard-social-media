@@ -1,7 +1,7 @@
 // sync.js — orquestra a coleta diária de métricas de redes sociais e grava no store. Itera
 // todas as contas do registry (empresa → marca → país → conta) em vez de uma lista fixa de
 // mercados — sync sempre cobre tudo, independente da marca/país selecionados na tela.
-import { fetchInstagramSnapshot, fetchFacebookSnapshot, isConfigured } from './meta.js';
+import { fetchInstagramSnapshot, fetchFacebookSnapshot } from './meta.js';
 import { addSnapshot, setLastSync } from './store.js';
 import { listAccounts } from './registry.js';
 import { runContentSync } from './contentSync.js';
@@ -16,15 +16,20 @@ export async function runSync() {
   const errors = [];
   const results = [];
 
-  if (!isConfigured()) {
-    errors.push('Meta não configurado (META_ACCESS_TOKEN ausente).');
+  // Antes existia uma checagem global "Meta configurado?" em cima de um token único. Com um
+  // Business Manager por marca isso deixou de fazer sentido: uma marca pode estar conectada e
+  // outra não. `listAccounts()` já devolve só contas de marca com token e metaId, então a lista
+  // vir vazia é a própria resposta — e o erro diz o que falta, em vez de citar uma variável.
+  const accounts = listAccounts();
+  if (!accounts.length) {
+    errors.push('Nenhuma conta conectada: cadastre o token do Business Manager e os IDs das contas de pelo menos uma marca.');
   } else {
-    for (const account of listAccounts()) {
-      const { brandId, countryId, platform, metaId } = account;
+    for (const account of accounts) {
+      const { brandId, countryId, platform, metaId, token } = account;
       try {
         const data = platform === 'instagram'
-          ? await fetchInstagramSnapshot(metaId)
-          : await fetchFacebookSnapshot(metaId);
+          ? await fetchInstagramSnapshot(token, metaId)
+          : await fetchFacebookSnapshot(token, metaId);
         if (data) {
           addSnapshot(brandId, platform, countryId, date, data);
           results.push({ brandId, countryId, platform, data });

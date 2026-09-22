@@ -13,9 +13,9 @@ export async function runStorySync() {
   let storiesSeen = 0;
 
   for (const account of listAccounts().filter(a => a.platform === 'instagram')) {
-    const { brandId, countryId, metaId } = account;
+    const { brandId, countryId, metaId, token } = account;
     try {
-      const stories = await fetchInstagramActiveStories(metaId);
+      const stories = await fetchInstagramActiveStories(token, metaId);
       for (const story of stories) {
         upsertStoryMeta(brandId, countryId, story.id, {
           mediaType: story.media_type,
@@ -23,7 +23,7 @@ export async function runStorySync() {
           permalink: story.permalink || null,
         });
         try {
-          const insights = await fetchInstagramStoryInsights(story.id);
+          const insights = await fetchInstagramStoryInsights(token, story.id);
           if (insights) {
             addStorySample(brandId, countryId, story.id, { polledAt, ...insights });
             storiesSeen++;

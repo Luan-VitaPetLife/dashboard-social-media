@@ -6,7 +6,7 @@
 // a conta BR quanto a US contaria duas vezes, mas a Meta não expõe um jeito de deduplicar isso
 // entre contas diferentes, então "combinado" é a melhor aproximação disponível, não um total
 // exato de audiência única.
-import { getBrand, getDefaultBrandId, getCountries, getAccounts } from './registry.js';
+import { getBrand, getDefaultBrandId, getCountries, getAccounts, getBrandToken } from './registry.js';
 import { fetchInstagramAudienceDemographics } from './meta.js';
 
 function mergeBreakdown(lists) {
@@ -65,11 +65,14 @@ export async function computeAudienceDashboard({ brandId, country }) {
   const allCountries = getCountries(brandId);
   const scopedCountries = country && country !== 'all' ? allCountries.filter(c => c.id === country) : allCountries;
 
+  // Token do Business Manager da marca (ver meta.js) — o mesmo pras contas de todos os países.
+  const token = getBrandToken(brandId);
+
   const perAccount = [];
   for (const countryMeta of scopedCountries) {
     const igAccount = getAccounts(brandId, countryMeta.id).find(a => a.platform === 'instagram');
     if (!igAccount) continue;
-    const data = await fetchInstagramAudienceDemographics(igAccount.metaId).catch(() => null);
+    const data = await fetchInstagramAudienceDemographics(token, igAccount.metaId).catch(() => null);
     perAccount.push({ countryId: countryMeta.id, countryName: countryMeta.name, countryFlag: countryMeta.flag, data });
   }
 

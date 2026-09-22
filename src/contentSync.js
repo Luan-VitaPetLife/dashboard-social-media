@@ -1,7 +1,7 @@
 // contentSync.js — coleta diária de conteúdo individual (posts/Reels do Instagram), separado
 // do sync de perfil (sync.js). Roda dentro do mesmo ciclo (chamado por runSync()) — não cria
 // fluxo novo pro usuário, só mais uma etapa do mesmo "Sincronizar agora".
-import { fetchInstagramMediaList, fetchInstagramMediaInsights, fetchInstagramCarouselChildren, isConfigured } from './meta.js';
+import { fetchInstagramMediaList, fetchInstagramMediaInsights, fetchInstagramCarouselChildren } from './meta.js';
 import { upsertContentMeta, addContentSnapshot } from './store.js';
 import { listAccounts } from './registry.js';
 
@@ -19,16 +19,17 @@ export async function runContentSync() {
   const errors = [];
   let itemsTracked = 0;
 
-  if (!isConfigured()) {
-    return { date, itemsTracked, errors: ['Meta não configurado (META_ACCESS_TOKEN ausente).'] };
-  }
-
   const sinceUnix = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
 
-  for (const account of listAccounts().filter(a => a.platform === 'instagram')) {
-    const { brandId, countryId, metaId } = account;
+  // Sem checagem global de "Meta configurado": o token é por marca (ver meta.js) e listAccounts()
+  // já filtra as contas sem credencial. Lista vazia = nada a coletar, e quem reporta isso é o
+  // runSync() que chama este módulo.
+  const accounts = listAccounts().filter(a => a.platform === 'instagram');
+
+  for (const account of accounts) {
+    const { brandId, countryId, metaId, token } = account;
     try {
-      const mediaList = await fetchInstagramMediaList(metaId, sinceUnix);
+      const mediaList = await fetchInstagramMediaList(token, metaId, sinceUnix);
       for (const item of mediaList) {
         const publishedAt = item.timestamp;
         if (Math.floor(Date.parse(publishedAt) / 1000) < sinceUnix) continue; // fora da janela
@@ -37,7 +38,7 @@ export async function runContentSync() {
         // Meta não devolve isso na listagem, só por post. Só pra esse tipo, pra não multiplicar
         // chamada em post nenhum que não seja carrossel.
         const carouselItems = item.media_type === 'CAROUSEL_ALBUM'
-          ? await fetchInstagramCarouselChildren(item.id).catch(() => [])
+          ? await fetchInstagramCarouselChildren(token, item.id).catch(() => [])
           : null;
 
         upsertContentMeta(brandId, countryId, item.id, {
@@ -63,7 +64,7 @@ export async function runContentSync() {
         });
 
         try {
-          const insights = await fetchInstagramMediaInsights(item.id);
+          const insights = await fetchInstagramMediaInsights(token, item.id);
           if (insights) {
             addContentSnapshot(brandId, countryId, item.id, date, insights);
             itemsTracked++;

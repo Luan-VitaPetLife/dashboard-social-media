@@ -42,7 +42,7 @@ export async function backfillSocialHistory({ brandId, countryId }) {
     if (igAnchor && igAnchor.data.followers != null) {
       result.instagram.attempted = true;
       try {
-        const deltas = await fetchInstagramFollowerDeltas(igAccount.metaId);
+        const deltas = await fetchInstagramFollowerDeltas(igAccount.token, igAccount.metaId);
         const series = reconstructAbsolute(igAnchor.data.followers, deltas);
         for (const { date, value } of series) {
           if (igExisting[date]) continue; // não sobrescreve snapshot real já sincronizado
@@ -63,7 +63,7 @@ export async function backfillSocialHistory({ brandId, countryId }) {
     if (fbAnchor && fbAnchor.data.likes != null) {
       result.facebook.attempted = true;
       try {
-        const deltas = await fetchFacebookNetFanDeltas(fbAccount.metaId);
+        const deltas = await fetchFacebookNetFanDeltas(fbAccount.token, fbAccount.metaId);
         const series = reconstructAbsolute(fbAnchor.data.likes, deltas);
         for (const { date, value } of series) {
           const existing = fbExisting[date];

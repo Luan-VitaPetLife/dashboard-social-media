@@ -28,6 +28,10 @@ window.escapeHtml = escapeHtml;
 function setBrandLogoImg(imgEl, brand) {
   if (!imgEl) return;
   if (brand?.logo) {
+    // onerror: se o arquivo configurado no registry não existir em public/, esconde em vez de
+    // deixar o ícone de imagem quebrada na tela (uma marca nova pode ser cadastrada antes de
+    // alguém subir o logo dela).
+    imgEl.onerror = () => { imgEl.style.display = 'none'; };
     imgEl.src = brand.logo;
     imgEl.alt = brand.name;
     imgEl.title = brand.name;

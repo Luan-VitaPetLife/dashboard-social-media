@@ -1,16 +1,19 @@
 // meta.js — Meta Graph API: métricas de conta (Instagram Business + Página do Facebook).
-// Cada função recebe o `metaId` da conta já resolvido pelo registry (src/registry.js) — este
-// arquivo não conhece marca/país, só fala com a Graph API dado um ID de recurso. As contas de
-// uma mesma marca costumam viver no mesmo Business Manager, então um único META_ACCESS_TOKEN
-// serve pra todas; só o ID do recurso muda por conta.
+// Cada função recebe o `token` e o `metaId` já resolvidos pelo registry (src/registry.js) — este
+// arquivo não conhece marca/país, só fala com a Graph API dado um token e um ID de recurso.
+//
+// O token é parâmetro, não constante de módulo: cada marca vive no seu próprio Business Manager
+// (Coco and Luna e Yucaloo são BMs separados), então não existe um token único que sirva pra
+// todas. `listAccounts()` no registry já devolve `token` junto de `metaId`, então quem itera
+// contas recebe os dois de uma vez. As únicas exceções são as funções probe*, que recebem
+// brandId/countryId porque são feitas pra chamada manual por URL legível.
 import 'dotenv/config';
-import { getAccounts } from './registry.js';
+import { getAccounts, getBrandToken } from './registry.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v20.0';
-const TOKEN = process.env.META_ACCESS_TOKEN;
 
-export function isConfigured() {
-  return Boolean(TOKEN);
+export function isConfigured(token) {
+  return Boolean(token);
 }
 
 async function graphGetAs(token, pathAndQuery) {
@@ -21,7 +24,6 @@ async function graphGetAs(token, pathAndQuery) {
   if (json.error) throw new Error(json.error.message || 'Meta Graph API error');
   return json;
 }
-function graphGet(pathAndQuery) { return graphGetAs(TOKEN, pathAndQuery); }
 
 // Page Insights (histórico) exige o token DA PRÓPRIA PÁGINA, não o token de usuário/sistema
 // usado em todo o resto deste arquivo (erro confirmado ao vivo: "(#190) This method must be
@@ -30,10 +32,10 @@ function graphGet(pathAndQuery) { return graphGetAs(TOKEN, pathAndQuery); }
 // ser salva em lugar nenhum, só usada na hora do backfill. Cache chaveado pelo próprio ID da
 // Página (não por marca/país) — cada conta troca seu token uma vez só.
 const pageTokenCache = {};
-async function fetchPageAccessToken(id) {
-  if (!TOKEN || !id) return null;
+async function fetchPageAccessToken(token, id) {
+  if (!token || !id) return null;
   if (pageTokenCache[id]) return pageTokenCache[id];
-  const json = await graphGet(`${id}?fields=access_token`);
+  const json = await graphGetAs(token, `${id}?fields=access_token`);
   pageTokenCache[id] = json.access_token || null;
   return pageTokenCache[id];
 }
@@ -41,10 +43,10 @@ async function fetchPageAccessToken(id) {
 // Instagram Business Account: seguidores, seguindo, nº de posts, e curtidas/comentários somados
 // dos últimos `mediaSample` posts — a Graph API não expõe um "total de curtidas da conta"
 // agregado, só por post, então isso é uma amostra recente, não o histórico completo.
-export async function fetchInstagramSnapshot(id, mediaSample = 25) {
-  if (!TOKEN || !id) return null;
-  const acc = await graphGet(`${id}?fields=followers_count,follows_count,media_count`);
-  const media = await graphGet(`${id}/media?fields=like_count,comments_count&limit=${mediaSample}`);
+export async function fetchInstagramSnapshot(token, id, mediaSample = 25) {
+  if (!token || !id) return null;
+  const acc = await graphGetAs(token, `${id}?fields=followers_count,follows_count,media_count`);
+  const media = await graphGetAs(token, `${id}/media?fields=like_count,comments_count&limit=${mediaSample}`);
   const items = media.data || [];
   return {
     followers: acc.followers_count ?? null,
@@ -57,9 +59,9 @@ export async function fetchInstagramSnapshot(id, mediaSample = 25) {
 }
 
 // Página do Facebook: curtidas (fan_count) e seguidores.
-export async function fetchFacebookSnapshot(id) {
-  if (!TOKEN || !id) return null;
-  const page = await graphGet(`${id}?fields=fan_count,followers_count,name`);
+export async function fetchFacebookSnapshot(token, id) {
+  if (!token || !id) return null;
+  const page = await graphGetAs(token, `${id}?fields=fan_count,followers_count,name`);
   return {
     name: page.name ?? null,
     likes: page.fan_count ?? null,
@@ -78,12 +80,12 @@ const CONTENT_METRICS = ['reach', 'likes', 'comments', 'saved', 'shares', 'total
 // Pagina /{id}/media até achar um item publicado antes de `sinceUnix` (ou acabar a paginação) —
 // usado pra montar a janela de retenção de conteúdo (ver contentSync.js). Corta assim que o item
 // mais antigo da página já é mais velho que a janela, em vez de paginar o histórico inteiro.
-export async function fetchInstagramMediaList(id, sinceUnix) {
-  if (!TOKEN || !id) return [];
+export async function fetchInstagramMediaList(token, id, sinceUnix) {
+  if (!token || !id) return [];
   const items = [];
   let url = `${id}/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,media_url,thumbnail_url&limit=25`;
   for (let page = 0; page < 20; page++) {
-    const json = await graphGet(url);
+    const json = await graphGetAs(token, url);
     const data = json.data || [];
     for (const item of data) {
       items.push(item);
@@ -100,10 +102,10 @@ export async function fetchInstagramMediaList(id, sinceUnix) {
 // de conteúdo. Tenta o conjunto completo numa chamada só; se algum nome não for aceito por essa
 // conta/tipo (a API já demonstrou variar por versão), cai pra buscar métrica por métrica e
 // descarta silenciosamente a que falhar, igual ao padrão já usado nas métricas de conta.
-export async function fetchInstagramMediaInsights(mediaId) {
-  if (!TOKEN || !mediaId) return null;
+export async function fetchInstagramMediaInsights(token, mediaId) {
+  if (!token || !mediaId) return null;
   try {
-    const json = await graphGet(`${mediaId}/insights?metric=${CONTENT_METRICS.join(',')}`);
+    const json = await graphGetAs(token, `${mediaId}/insights?metric=${CONTENT_METRICS.join(',')}`);
     const byName = {};
     for (const m of json.data || []) byName[m.name] = m.values?.[0]?.value ?? null;
     return {
@@ -119,7 +121,7 @@ export async function fetchInstagramMediaInsights(mediaId) {
     const byName = {};
     for (const metric of CONTENT_METRICS) {
       try {
-        const json = await graphGet(`${mediaId}/insights?metric=${metric}`);
+        const json = await graphGetAs(token, `${mediaId}/insights?metric=${metric}`);
         byName[metric] = json.data?.[0]?.values?.[0]?.value ?? null;
       } catch {
         byName[metric] = null;
@@ -142,10 +144,10 @@ export async function fetchInstagramMediaInsights(mediaId) {
 // pra VIDEO (media_url ali é o arquivo de vídeo), media_url direto pra IMAGE. Chamado por
 // contentSync.js só pra posts do tipo carrossel, e refeito a cada sync (12h) pelo mesmo motivo
 // do thumbnailUrl/videoUrl (URL assinada, não permanente).
-export async function fetchInstagramCarouselChildren(mediaId) {
-  if (!TOKEN || !mediaId) return [];
+export async function fetchInstagramCarouselChildren(token, mediaId) {
+  if (!token || !mediaId) return [];
   try {
-    const json = await graphGet(`${mediaId}/children?fields=media_type,media_url,thumbnail_url`);
+    const json = await graphGetAs(token, `${mediaId}/children?fields=media_type,media_url,thumbnail_url`);
     return (json.data || []).map(c => ({
       mediaType: c.media_type,
       url: (c.media_type === 'VIDEO' ? c.thumbnail_url : c.media_url) || null,
@@ -160,10 +162,10 @@ export async function fetchInstagramCarouselChildren(mediaId) {
 // conteúdo (nunca sincronizado/guardado, comentário muda a qualquer momento, diferente do
 // snapshot diário de métricas). Confirmado ao vivo (23/07/2026) que a Graph API devolve texto,
 // usuário, data e curtidas de verdade via {media-id}/comments.
-export async function fetchInstagramMediaComments(mediaId) {
-  if (!TOKEN || !mediaId) return { comments: [], error: 'Meta não configurado.' };
+export async function fetchInstagramMediaComments(token, mediaId) {
+  if (!token || !mediaId) return { comments: [], error: 'Meta não configurado.' };
   try {
-    const json = await graphGet(`${mediaId}/comments?fields=text,username,timestamp,like_count&limit=50`);
+    const json = await graphGetAs(token, `${mediaId}/comments?fields=text,username,timestamp,like_count&limit=50`);
     return { comments: json.data || [], error: null };
   } catch (e) {
     return { comments: [], error: e.message };
@@ -176,9 +178,9 @@ export async function fetchInstagramMediaComments(mediaId) {
 // antigos" depois que somem, então a cobertura aqui depende de sincronizar com frequência
 // suficiente pra pegar cada story pelo menos uma vez antes de expirar (ver storySync.js, que roda
 // num intervalo próprio, mais curto que o sync de perfil/conteúdo).
-export async function fetchInstagramActiveStories(id) {
-  if (!TOKEN || !id) return [];
-  const json = await graphGet(`${id}/stories?fields=id,media_type,timestamp,permalink`);
+export async function fetchInstagramActiveStories(token, id) {
+  if (!token || !id) return [];
+  const json = await graphGetAs(token, `${id}/stories?fields=id,media_type,timestamp,permalink`);
   return json.data || [];
 }
 
@@ -189,10 +191,10 @@ export async function fetchInstagramActiveStories(id) {
 // então a leitura "tela a tela" que o briefing pede não é possível hoje, só esse agregado.
 const STORY_METRICS = ['reach', 'replies', 'navigation', 'shares', 'total_interactions', 'profile_activity', 'follows'];
 
-export async function fetchInstagramStoryInsights(storyId) {
-  if (!TOKEN || !storyId) return null;
+export async function fetchInstagramStoryInsights(token, storyId) {
+  if (!token || !storyId) return null;
   try {
-    const json = await graphGet(`${storyId}/insights?metric=${STORY_METRICS.join(',')}`);
+    const json = await graphGetAs(token, `${storyId}/insights?metric=${STORY_METRICS.join(',')}`);
     const byName = {};
     for (const m of json.data || []) byName[m.name] = m.values?.[0]?.value ?? null;
     return {
@@ -208,7 +210,7 @@ export async function fetchInstagramStoryInsights(storyId) {
     const byName = {};
     for (const metric of STORY_METRICS) {
       try {
-        const json = await graphGet(`${storyId}/insights?metric=${metric}`);
+        const json = await graphGetAs(token, `${storyId}/insights?metric=${metric}`);
         byName[metric] = json.data?.[0]?.values?.[0]?.value ?? null;
       } catch {
         byName[metric] = null;
@@ -240,10 +242,10 @@ export async function fetchInstagramStoryInsights(storyId) {
 const INSIGHTS_LOOKBACK_DAYS = 30;
 function unixDaysAgo(n) { return Math.floor(Date.now() / 1000) - n * 86400; }
 
-export async function fetchInstagramFollowerDeltas(id) {
-  if (!TOKEN || !id) return [];
+export async function fetchInstagramFollowerDeltas(token, id) {
+  if (!token || !id) return [];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
-  const json = await graphGet(`${id}/insights?metric=follower_count&period=day&since=${since}&until=${until}`);
+  const json = await graphGetAs(token, `${id}/insights?metric=follower_count&period=day&since=${since}&until=${until}`);
   const values = json.data?.[0]?.values || [];
   return values.map(v => ({ date: (v.end_time || '').slice(0, 10), delta: v.value }));
 }
@@ -260,8 +262,8 @@ const FB_METRIC_CANDIDATES = [
 
 // Página do Facebook não tem um equivalente direto a follower_count — reconstrói a variação
 // líquida do dia a partir de "ganhou" menos "perdeu".
-export async function fetchFacebookNetFanDeltas(id) {
-  const pageToken = await fetchPageAccessToken(id);
+export async function fetchFacebookNetFanDeltas(token, id) {
+  const pageToken = await fetchPageAccessToken(token, id);
   if (!pageToken || !id) return [];
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const json = await graphGetAs(pageToken, `${id}/insights?metric=page_daily_follows_unique,page_daily_unfollows_unique&period=day&since=${since}&until=${until}`);
@@ -292,11 +294,11 @@ async function cached(key, fn) {
 }
 function isoToUnix(iso) { return Math.floor(Date.parse(iso + 'T00:00:00Z') / 1000); }
 
-export async function fetchInstagramEngagement(id, since, until) {
-  if (!TOKEN || !id) return null;
+export async function fetchInstagramEngagement(token, id, since, until) {
+  if (!token || !id) return null;
   return cached(`ig-eng-${id}-${since}-${until}`, async () => {
     const sinceU = isoToUnix(since), untilU = isoToUnix(until);
-    const json = await graphGet(`${id}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${sinceU}&until=${untilU}`);
+    const json = await graphGetAs(token, `${id}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${sinceU}&until=${untilU}`);
     const byName = {};
     for (const m of json.data || []) byName[m.name] = m.total_value?.value ?? null;
     return {
@@ -312,8 +314,8 @@ export async function fetchInstagramEngagement(id, since, until) {
 
 // Página do Facebook: page_video_views vem como série diária (confirmado ao vivo) — soma
 // dentro do período pedido.
-export async function fetchFacebookVideoViews(id, since, until) {
-  const pageToken = await fetchPageAccessToken(id);
+export async function fetchFacebookVideoViews(token, id, since, until) {
+  const pageToken = await fetchPageAccessToken(token, id);
   if (!pageToken || !id) return null;
   return cached(`fb-video-${id}-${since}-${until}`, async () => {
     const sinceU = isoToUnix(since), untilU = isoToUnix(until);
@@ -325,20 +327,20 @@ export async function fetchFacebookVideoViews(id, since, until) {
 }
 
 // ── Orgânico × pago (conteúdo impulsionado) ─────────────────────────────────────────────────
-// Confirmado ao vivo (21/07/2026): o mesmo META_ACCESS_TOKEN já usado no resto deste arquivo tem
+// Confirmado ao vivo (21/07/2026): o token da Coco and Luna já usado no resto deste arquivo tem
 // acesso de leitura à conta de anúncios do mesmo Business Manager (nenhum token/permissão nova
 // precisou ser gerada) — só faltava o ID da conta (mesmo valor já usado no projeto de vendas
 // ../dashboard, ver registry.js). O criativo de cada anúncio (`creative.instagram_permalink_url`)
 // devolve o link exato do post orgânico usado no anúncio — é isso que cruza com o `permalink` já
 // guardado por post em contentSync.js pra marcar "impulsionado". Cache de 5 min (mesmo padrão de
 // `cached()` acima) — não precisa bater na Marketing API a cada request de /api/content.
-export async function fetchBoostedPermalinks(adAccountId) {
-  if (!TOKEN || !adAccountId) return new Set();
+export async function fetchBoostedPermalinks(token, adAccountId) {
+  if (!token || !adAccountId) return new Set();
   return cached(`boosted-${adAccountId}`, async () => {
     const permalinks = new Set();
     let url = `act_${adAccountId}/ads?fields=creative{instagram_permalink_url}&limit=100`;
     for (let page = 0; page < 20; page++) {
-      const json = await graphGet(url);
+      const json = await graphGetAs(token, url);
       for (const ad of json.data || []) {
         const link = ad.creative?.instagram_permalink_url;
         if (link) permalinks.add(link.replace(/\/$/, ''));
@@ -365,16 +367,17 @@ export async function probeInsights(brandId, countryId) {
   const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const out = { brandId, countryId, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
-  if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+  const token = getBrandToken(brandId);
+  if (!token) { out.error = `Marca "${brandId}" sem token configurado — falta a variável de ambiente do Business Manager dela.`; return out; }
 
   if (igId) {
-    try { out.instagramFollowerCount = await graphGet(`${igId}/insights?metric=follower_count&period=day&since=${since}&until=${until}`); }
+    try { out.instagramFollowerCount = await graphGetAs(token, `${igId}/insights?metric=follower_count&period=day&since=${since}&until=${until}`); }
     catch (e) { out.instagramError = e.message; }
   } else out.instagramError = 'Nenhuma conta Instagram configurada para essa marca/país.';
 
   if (fbId) {
     try {
-      const pageToken = await fetchPageAccessToken(fbId);
+      const pageToken = await fetchPageAccessToken(token, fbId);
       out.facebookPageToken = pageToken ? 'obtido' : 'não veio (ver facebookTokenError)';
       out.facebookMetrics = {};
       for (const metric of FB_METRIC_CANDIDATES) {
@@ -412,18 +415,19 @@ export async function probeEngagement(brandId, countryId) {
   const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
   const since = unixDaysAgo(INSIGHTS_LOOKBACK_DAYS), until = unixDaysAgo(0);
   const out = { brandId, countryId, since, until, sinceDate: new Date(since * 1000).toISOString().slice(0, 10), untilDate: new Date(until * 1000).toISOString().slice(0, 10) };
-  if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+  const token = getBrandToken(brandId);
+  if (!token) { out.error = `Marca "${brandId}" sem token configurado — falta a variável de ambiente do Business Manager dela.`; return out; }
 
   if (igId) {
     out.instagramMetrics = {};
     try {
-      const json = await graphGet(`${igId}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${since}&until=${until}`);
+      const json = await graphGetAs(token, `${igId}/insights?metric=${IG_TOTAL_VALUE_CANDIDATES.join(',')}&metric_type=total_value&period=day&since=${since}&until=${until}`);
       out.instagramMetrics.totalValueRaw = json;
     } catch (e) {
       out.instagramMetrics.totalValueError = e.message;
     }
     try {
-      const json = await graphGet(`${igId}/insights?metric=reach&period=day&since=${since}&until=${until}`);
+      const json = await graphGetAs(token, `${igId}/insights?metric=reach&period=day&since=${since}&until=${until}`);
       out.instagramMetrics.reach = { ok: true, points: json.data?.[0]?.values?.length ?? 0 };
     } catch (e) {
       out.instagramMetrics.reach = { ok: false, error: e.message };
@@ -432,7 +436,7 @@ export async function probeEngagement(brandId, countryId) {
 
   if (fbId) {
     try {
-      const pageToken = await fetchPageAccessToken(fbId);
+      const pageToken = await fetchPageAccessToken(token, fbId);
       out.facebookEngagementMetrics = {};
       for (const metric of FB_ENGAGEMENT_CANDIDATES) {
         try {
@@ -471,7 +475,8 @@ export async function probeDemographics(brandId, countryId) {
   const igId = accounts.find(a => a.platform === 'instagram')?.metaId;
   const fbId = accounts.find(a => a.platform === 'facebook')?.metaId;
   const out = { brandId, countryId };
-  if (!TOKEN) { out.error = 'META_ACCESS_TOKEN ausente.'; return out; }
+  const token = getBrandToken(brandId);
+  if (!token) { out.error = `Marca "${brandId}" sem token configurado — falta a variável de ambiente do Business Manager dela.`; return out; }
 
   if (igId) {
     out.instagram = {};
@@ -480,7 +485,7 @@ export async function probeDemographics(brandId, countryId) {
       for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
         if (metric === 'follower_demographics') {
           try {
-            const json = await graphGet(`${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
+            const json = await graphGetAs(token, `${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
             out.instagram[metric][breakdown] = { ok: true, raw: json.data?.[0]?.total_value };
           } catch (e) {
             out.instagram[metric][breakdown] = { ok: false, error: e.message };
@@ -491,7 +496,7 @@ export async function probeDemographics(brandId, countryId) {
         let lastError = null;
         for (const timeframe of TIMEFRAME_CANDIDATES) {
           try {
-            const json = await graphGet(`${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
+            const json = await graphGetAs(token, `${igId}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
             out.instagram[metric][breakdown] = { ok: true, timeframe, raw: json.data?.[0]?.total_value };
             lastError = null;
             break;
@@ -507,7 +512,7 @@ export async function probeDemographics(brandId, countryId) {
   if (fbId) {
     out.facebook = {};
     try {
-      const pageToken = await fetchPageAccessToken(fbId);
+      const pageToken = await fetchPageAccessToken(token, fbId);
       for (const metric of FB_DEMOGRAPHIC_METRICS) {
         try {
           const json = await graphGetAs(pageToken, `${fbId}/insights/${metric}?period=lifetime`);
@@ -545,11 +550,11 @@ function parseBreakdownResults(json) {
   return results.map(r => ({ key: r.dimension_values[0], value: r.value }));
 }
 
-async function fetchLifetimeDemographics(id) {
+async function fetchLifetimeDemographics(token, id) {
   const out = {};
   for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
     try {
-      const json = await graphGet(`${id}/insights?metric=follower_demographics&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
+      const json = await graphGetAs(token, `${id}/insights?metric=follower_demographics&metric_type=total_value&breakdown=${breakdown}&period=lifetime`);
       out[breakdown] = parseBreakdownResults(json);
     } catch {
       out[breakdown] = null;
@@ -561,7 +566,7 @@ async function fetchLifetimeDemographics(id) {
 // engaged_audience_demographics / reached_audience_demographics — null se a conta não tem
 // atividade recente o bastante pra nenhum dos timeframes candidatos responder (não é erro, é
 // limitação real: contas sem post recente não têm o que mostrar aqui, ver CLAUDE.md).
-async function fetchTimeframedDemographics(id, metric) {
+async function fetchTimeframedDemographics(token, id, metric) {
   const out = {};
   let confirmedTimeframe = null;
   for (const breakdown of DEMOGRAPHIC_BREAKDOWNS) {
@@ -569,7 +574,7 @@ async function fetchTimeframedDemographics(id, metric) {
     let got = null;
     for (const timeframe of candidates) {
       try {
-        const json = await graphGet(`${id}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
+        const json = await graphGetAs(token, `${id}/insights?metric=${metric}&metric_type=total_value&breakdown=${breakdown}&period=lifetime&timeframe=${timeframe}`);
         got = parseBreakdownResults(json);
         confirmedTimeframe = timeframe;
         break;
@@ -581,14 +586,14 @@ async function fetchTimeframedDemographics(id, metric) {
   return hasData ? { timeframe: confirmedTimeframe, ...out } : null;
 }
 
-export async function fetchInstagramAudienceDemographics(id) {
-  if (!TOKEN || !id) return null;
+export async function fetchInstagramAudienceDemographics(token, id) {
+  if (!token || !id) return null;
   return cachedAudience(`ig-audience-${id}`, async () => {
-    const acc = await graphGet(`${id}?fields=followers_count`).catch(() => null);
+    const acc = await graphGetAs(token, `${id}?fields=followers_count`).catch(() => null);
     return {
-      followers: await fetchLifetimeDemographics(id),
-      engaged: await fetchTimeframedDemographics(id, 'engaged_audience_demographics'),
-      reached: await fetchTimeframedDemographics(id, 'reached_audience_demographics'),
+      followers: await fetchLifetimeDemographics(token, id),
+      engaged: await fetchTimeframedDemographics(token, id, 'engaged_audience_demographics'),
+      reached: await fetchTimeframedDemographics(token, id, 'reached_audience_demographics'),
       // Total real de seguidores (mesmo campo do snapshot diário) — usado só pra mostrar quantos
       // do total a Meta conseguiu geolocalizar na breakdown de demografia (ver "cobertura
       // geográfica" em audience.js/audiencia.html). A soma de follower_demographics por país/
