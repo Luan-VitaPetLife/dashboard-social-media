@@ -5,7 +5,7 @@
 // recalcula métrica nenhuma por conta própria. `generateReport()` é o dispatcher usado pela rota
 // manual; `checkAutoReports()` é chamado periodicamente pelo agendador (server.js) e nunca gera
 // o mesmo relatório duas vezes (dedupe via reportExists, ver store.js).
-import { getBrand, getBrands, getDefaultBrandId, getCountries } from './registry.js';
+import { getBrand, getBrands, getDefaultBrandId, getCountries, isBrandAiEnabled } from './registry.js';
 import { computeSocialDashboard } from './metrics.js';
 import { computeContentDashboard, generateContentAiSummary } from './contentMetrics.js';
 import { computeStoriesDashboard } from './storyMetrics.js';
@@ -65,10 +65,13 @@ function contextLine(context = {}) {
 // Duas causas bem diferentes pro mesmo "não tem texto de IA": nunca confundir uma com a outra
 // no relatório final — "não configurado" é um problema de configuração do servidor; "falhou" é
 // uma chamada real que deu erro (chave inválida/revogada, rate limit, rede) e vale investigar.
-function aiFallbackText(errored) {
-  if (!aiConfigured()) return 'ANTHROPIC_API_KEY não configurado no servidor. Este texto não pôde ser gerado por IA.';
-  if (errored) return 'A chamada à IA falhou ao gerar este texto (ver log do servidor). Tente gerar o relatório de novo mais tarde.';
-  return 'ANTHROPIC_API_KEY não configurado no servidor. Este texto não pôde ser gerado por IA.';
+// O texto que entra no lugar do resumo quando a IA não gerou. Diz o motivo sem citar nome de
+// variável de ambiente, que é detalhe de quem opera o servidor e não de quem lê o relatório.
+function aiFallbackText(errored, brandId) {
+  if (brandId && !isBrandAiEnabled(brandId)) return 'Os textos por IA estão desligados para esta marca.';
+  if (!aiConfigured()) return 'A geração de texto por IA não está configurada no servidor.';
+  if (errored) return 'A IA falhou ao gerar este texto. Tente gerar o relatório de novo em alguns instantes.';
+  return 'A geração de texto por IA não está configurada no servidor.';
 }
 
 // ── D+7 por conteúdo ────────────────────────────────────────────────────────────────────────
@@ -81,7 +84,7 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
 
   let aiSummary = item.aiSummary;
   let aiErrored = false;
-  if (!aiSummary && aiConfigured()) {
+  if (!aiSummary && aiConfigured() && isBrandAiEnabled(brandId)) {
     try {
       aiSummary = await generateContentAiSummary(item, brandId);
       setContentAiSummary(brandId, countryId, mediaId, aiSummary);
@@ -138,7 +141,7 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
       callout: { label: `Recomendação: ${RECOMENDACAO_LABEL[aiSummary.recomendacao] || 'não determinada'}`, text: aiSummary.recomendacaoTexto || '—' },
     });
   } else {
-    sections.push({ heading: 'Resumo da IA', callout: { label: 'Não disponível', text: aiFallbackText(aiErrored) } });
+    sections.push({ heading: 'Resumo da IA', callout: { label: 'Não disponível', text: aiFallbackText(aiErrored, brandId) } });
   }
 
   const model = {
@@ -153,8 +156,8 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
 }
 
 // ── Stories 24h ─────────────────────────────────────────────────────────────────────────────
-async function buildStoryLearning(item) {
-  if (!aiConfigured()) return { text: null, errored: false };
+async function buildStoryLearning(item, brandId) {
+  if (!aiConfigured() || !isBrandAiEnabled(brandId)) return { text: null, errored: false };
   const prompt = `Story do Instagram, formato ${item.meta.mediaType || 'desconhecido'}, publicado há ${Math.round(item.ageHours)}h.
 Métricas da última leitura: alcance ${item.latest?.reach ?? 'sem dado'}, respostas ${item.latest?.replies ?? 'sem dado'}, navegação (avanços+voltas+saídas somados) ${item.latest?.navigation ?? 'sem dado'}, interações totais ${item.latest?.totalInteractions ?? 'sem dado'}.
 ${item.sampleCount >= 2 ? `Evolução entre a primeira e a última leitura: ${JSON.stringify(item.growth)}.` : 'Só existe uma leitura até agora — não é possível medir evolução dentro da janela observada.'}
@@ -195,8 +198,8 @@ export async function buildStoriesReport({ brandId, countryId, storyId }) {
     },
   ];
 
-  const learning = await buildStoryLearning(item);
-  sections.push({ heading: 'Aprendizado (IA)', paragraphs: [learning.text || aiFallbackText(learning.errored)] });
+  const learning = await buildStoryLearning(item, brandId);
+  sections.push({ heading: 'Aprendizado (IA)', paragraphs: [learning.text || aiFallbackText(learning.errored, brandId)] });
 
   const model = {
     title: 'Relatório Stories 24h',
@@ -210,8 +213,8 @@ export async function buildStoriesReport({ brandId, countryId, storyId }) {
 }
 
 // ── Mensal por país ─────────────────────────────────────────────────────────────────────────
-async function buildMonthlySummary({ brandName, scopeLabel, growthRows = [], winners = [], losers = [], goalsRows = [] }) {
-  if (!aiConfigured()) return { text: null, errored: false };
+async function buildMonthlySummary({ brandId, brandName, scopeLabel, growthRows = [], winners = [], losers = [], goalsRows = [] }) {
+  if (!aiConfigured() || !isBrandAiEnabled(brandId)) return { text: null, errored: false };
   const prompt = `Você é um analista de social media resumindo o desempenho mensal de ${scopeLabel}, marca ${brandName || ''}.
 Crescimento: ${JSON.stringify(growthRows)}.
 Conteúdos vencedores: ${JSON.stringify(winners.map(i => ({ formato: i.formatLabel, pais: i.countryName, interacoes: i.latest?.totalInteractions, vsMediana: i.vsMedian?.totalInteractions })))}.
@@ -261,8 +264,8 @@ export async function buildMonthlyCountryReport({ brandId, countryId, monthKey }
   sections.push({ heading: 'Metas', table: { columns: ['Conta', 'Meta', 'Atual', 'Progresso', 'Prazo/status'], rows: goalsRows.length ? goalsRows : [['Nenhuma meta definida', '—', '—', '—', '—']] } });
   if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
-  const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: country.name, growthRows, winners, losers, goalsRows });
-  sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });
+  const summary = await buildMonthlySummary({ brandId, brandName: brand?.name, scopeLabel: country.name, growthRows, winners, losers, goalsRows });
+  sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored, brandId)] });
 
   const model = {
     title: `Relatório mensal · ${country.name}`,
@@ -305,8 +308,8 @@ export async function buildMonthlyPlatformReport({ brandId, platform, monthKey }
 
   if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
-  const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: PLATFORM_LABELS[platform] || platform, growthRows: rows });
-  sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });
+  const summary = await buildMonthlySummary({ brandId, brandName: brand?.name, scopeLabel: PLATFORM_LABELS[platform] || platform, growthRows: rows });
+  sections.unshift({ heading: 'Resumo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored, brandId)] });
 
   const model = {
     title: `Relatório mensal · ${PLATFORM_LABELS[platform] || platform}`,
@@ -355,8 +358,8 @@ export async function buildMonthlyGeneralReport({ brandId, monthKey }) {
   });
   if (isPartial) sections.push({ heading: 'Cobertura do período', callout: { label: 'Mês em andamento', text: `Este relatório cobre até ${fmtDateBR(until)}. O mês de ${monthLabel(monthKey)} ainda não terminou.` } });
 
-  const summary = await buildMonthlySummary({ brandName: brand?.name, scopeLabel: 'toda a empresa', growthRows, winners, losers, goalsRows });
-  sections.unshift({ heading: 'Resumo executivo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored)] });
+  const summary = await buildMonthlySummary({ brandId, brandName: brand?.name, scopeLabel: 'toda a empresa', growthRows, winners, losers, goalsRows });
+  sections.unshift({ heading: 'Resumo executivo (IA)', paragraphs: [summary.text || aiFallbackText(summary.errored, brandId)] });
 
   const model = {
     title: 'Relatório mensal geral',
@@ -472,6 +475,9 @@ async function runSchedule(brand, schedule) {
 // `nextRunAt` é recalculado a partir de agora + intervalo, então atrasos no agendador (servidor
 // fora do ar, etc.) não acumulam disparos retroativos — só roda o próximo, uma vez.
 export async function checkScheduledReports() {
+  // Sem chave da Anthropic não há texto nenhum a gerar pra marca alguma. Já uma marca com a IA
+  // desligada segue tendo relatório: os blocos de texto saem com o motivo no lugar (ver
+  // aiFallbackText), e os números, que não dependem de IA, continuam todos lá.
   if (!aiConfigured()) return { generated: 0, errors: [] };
   const errors = [];
   let generated = 0;

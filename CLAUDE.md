@@ -130,6 +130,14 @@ diretamente, e não hardcoda marca/país/plataforma — tudo vem de `GET /api/re
 - Contas sem `metaId` (env ausente) são removidas automaticamente (`pruneBrand`). Marca sem `token` segue
   a mesma regra e perde todas as contas — um metaId sem o token do BM correspondente só produziria erro
   de API na primeira chamada.
+- `aiEnabled` e `aiContext` (por marca) controlam os textos gerados por IA. `aiEnabled: false`
+  desliga **todos** eles pra marca (resumo por post, aprendizado de story, resumo mensal) — a
+  Yucaloo está assim desde 22/09/2026, a pedido do Luan, até existir um prompt bom pra ela.
+  `aiContext` é o ramo da marca, que entra no prompt do resumo por post; sem ele o prompt cita só
+  o nome, em vez de arriscar um ramo errado. Ausente = IA ligada, pra uma marca nova não ficar
+  muda sem querer; desligar é decisão explícita. O `aiEnabled` sai em `getRegistryTree()` pro
+  front nem oferecer o botão de gerar — oferecer uma ação que o servidor vai recusar é pior que
+  não oferecer. O servidor recusa de todo jeito (409), porque a tela não é a única porta.
 - `configured` (por marca) distingue "cadastrada mas sem credencial" de "funcionando". É o que permite uma
   marca nova aparecer no seletor marcada como não conectada, em vez de sumir da interface ou mostrar telas
   vazias sem explicação. Exposto em `getRegistryTree()`.

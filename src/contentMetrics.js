@@ -2,7 +2,7 @@
 // recente, o checkpoint D+7/D+14/D+30 (quando já existir histórico suficiente) e a comparação
 // com a mediana de conteúdos do mesmo formato + país. Nunca estima um checkpoint que não existe.
 import { getContentList } from './store.js';
-import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken, getBrandAiContext } from './registry.js';
+import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken, getBrandAiContext, isBrandAiEnabled } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
 import { generateText, isConfigured as aiConfigured } from './ai.js';
@@ -247,7 +247,14 @@ function buildAiSummaryPrompt(item) {
 }
 
 export async function generateContentAiSummary(item, brandId) {
-  if (!aiConfigured()) throw new Error('ANTHROPIC_API_KEY não configurado no servidor.');
+  // Marca com a IA desligada não gera texto nenhum (ver aiEnabled em src/registry.js). A checagem
+  // fica aqui, no único ponto que monta este resumo, e não só na rota: o gerador de relatórios
+  // também chama esta função.
+  if (!isBrandAiEnabled(brandId)) {
+    const brand = getBrand(brandId);
+    throw new Error(`Os textos por IA estão desligados para ${brand ? brand.name : 'esta marca'}.`);
+  }
+  if (!aiConfigured()) throw new Error('A geração de texto por IA não está configurada no servidor.');
   const prompt = buildAiSummaryPrompt(item);
   // Histórico de truncamento nesse campo (nunca JSON de verdade inválido, sempre cortado no meio):
   // 500 → 1000 (22/07/2026) → 1600 (23/07/2026, quando os campos passaram a pedir 3-5 frases em vez

@@ -425,6 +425,21 @@ const RECOMENDACAO_META = {
   nao_priorizar: { label: 'Não priorizar', color: '#c0392b' },
 };
 
+// A marca pode ter os textos por IA desligados (ver aiEnabled em src/registry.js). Nesse caso o
+// botão nem aparece: oferecer uma ação que o servidor vai recusar é pior que não oferecer.
+function aiLigada() {
+  return DashboardBrand.current()?.aiEnabled !== false;
+}
+
+function aiBodyHtml(item) {
+  if (item.aiSummary) return aiSummaryHtml(item.aiSummary);
+  if (!aiLigada()) {
+    const marca = DashboardBrand.current()?.name || 'esta marca';
+    return `<div class="empty" style="padding:8px 0 0">Os resumos por IA estão desligados para ${escapeHtml(marca)}.</div>`;
+  }
+  return '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>';
+}
+
 function aiSummaryHtml(s) {
   const rec = RECOMENDACAO_META[s.recomendacao];
   const field = (label, val) => val ? `<div class="cnt-ai-field"><b>${label}</b><span>${escapeHtml(val)}</span></div>` : '';
@@ -473,9 +488,9 @@ function cardHtml(item) {
       <div class="cnt-ai" data-ai>
         <div class="cnt-ai-head">
           <h4 data-ai-toggle><i class="bi bi-stars"></i> Resumo por IA <i class="bi bi-chevron-down cnt-ai-chevron"></i></h4>
-          <button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>
+          ${aiLigada() ? `<button class="cnt-ai-btn" data-ai-btn><i class="bi bi-magic"></i> ${item.aiSummary ? 'Gerar de novo' : 'Gerar resumo'}</button>` : ''}
         </div>
-        <div data-ai-body style="margin-top:10px">${item.aiSummary ? aiSummaryHtml(item.aiSummary) : '<div class="empty" style="padding:8px 0 0">ainda sem resumo, clique em "Gerar resumo"</div>'}</div>
+        <div data-ai-body style="margin-top:10px">${aiBodyHtml(item)}</div>
       </div>
       <div class="cnt-toggle" data-toggle><i class="bi bi-chevron-down"></i> Contexto (tema, objetivo, gancho, CTA...)</div>
       <div class="cnt-context">${contextFieldsHtml(item)}</div>

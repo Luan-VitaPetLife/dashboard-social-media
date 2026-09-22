@@ -20,10 +20,13 @@ const BRANDS = [
     id: 'coco-and-luna',
     name: 'Coco and Luna',
     logo: 'Logo1.svg',
-    // Em que ramo a marca atua. Entra no prompt da IA que escreve o resumo por post
-    // (ver AI_SUMMARY_SYSTEM_PROMPT em src/contentMetrics.js), onde antes estava escrito na mão
-    // — o resumo da Yucaloo saía assinado como analista da Coco and Luna. Opcional: sem ele, o
-    // prompt cita só o nome da marca, em vez de arriscar um ramo errado.
+    // Textos gerados por IA (resumo por post, aprendizado de story, resumo mensal). Desligar
+    // por marca existe porque o prompt precisa conhecer o negócio: sem isso a IA escreve análise
+    // genérica ou, pior, sobre o produto errado. Melhor não gerar do que gerar torto.
+    aiEnabled: true,
+    // Em que ramo a marca atua, usado no prompt do resumo por post (ver aiSummarySystemPrompt em
+    // src/contentMetrics.js), onde antes estava escrito na mão — o resumo da Yucaloo saía
+    // assinado como analista da Coco and Luna.
     aiContext: 'suplementos pet',
     // Mantém o nome histórico da variável: esta marca já está em produção no Railway e renomear
     // derrubaria a coleta no deploy. Marcas novas usam o padrão META_<MARCA>_*.
@@ -51,8 +54,11 @@ const BRANDS = [
     id: 'yucaloo',
     name: 'Yucaloo',
     logo: 'Logo3.webp',
-    // TODO: preencher com o ramo da Yucaloo (ex: 'areia higiênica para gatos'). Deixado vazio
-    // de propósito: chutar aqui faria a IA escrever análise sobre o produto errado.
+    // IA desligada a pedido do Luan (22/09/2026) até existir um prompt bom pra marca. Ligar =
+    // trocar pra true e preencher o aiContext abaixo; nada mais precisa mudar.
+    aiEnabled: false,
+    // TODO: o ramo da Yucaloo (ex: 'areia higiênica para gatos'). Vazio de propósito: chutar
+    // aqui faria a IA escrever análise sobre o produto errado.
     aiContext: null,
     token: process.env.META_YUCALOO_ACCESS_TOKEN,
     countries: [
@@ -135,7 +141,14 @@ export function getBrandToken(brandId) {
   return getBrand(brandId)?.token || null;
 }
 
-// Ramo da marca, pro prompt da IA (ver AI_SUMMARY_SYSTEM_PROMPT em contentMetrics.js).
+// A marca quer textos gerados por IA? Ausente = sim, pra uma marca nova não ficar muda sem
+// querer; desligar é uma decisão explícita.
+export function isBrandAiEnabled(brandId) {
+  const brand = getBrand(brandId);
+  return brand ? brand.aiEnabled !== false : false;
+}
+
+// Ramo da marca, pro prompt da IA (ver aiSummarySystemPrompt em contentMetrics.js).
 export function getBrandAiContext(brandId) {
   return getBrand(brandId)?.aiContext || null;
 }
@@ -178,6 +191,7 @@ export function getRegistryTree() {
       name: b.name,
       logo: b.logo || null,
       configured: b.configured,
+      aiEnabled: b.aiEnabled !== false,
       countries: b.countries.map(c => ({
         id: c.id,
         name: c.name,

@@ -15,7 +15,7 @@ import { computeCofrinhoDashboard } from './src/cofrinho.js';
 import { computeAudienceDashboard } from './src/audience.js';
 import { probeInsights, probeEngagement, probeDemographics, fetchInstagramMediaComments } from './src/meta.js';
 import { backfillSocialHistory } from './src/backfill.js';
-import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts, getBrandToken } from './src/registry.js';
+import { getRegistryTree, getDefaultBrandId, getBrands, getCountries, getAccounts, getBrandToken, isBrandAiEnabled } from './src/registry.js';
 import { generateReport, checkScheduledReports, computeNextRun, REPORT_TYPES, INTERVAL_UNITS } from './src/reports.js';
 import { renderReportPdf, renderReportDocx } from './src/reportRenderer.js';
 import {
@@ -389,6 +389,11 @@ app.post('/api/content/:mediaId/ai-summary', syncLimiter, async (req, res) => {
   const brandId = req.body.brandId || getDefaultBrandId();
   const countryId = req.body.countryId;
   if (!countryId) return res.status(400).json({ error: 'countryId é obrigatório.' });
+  // Recusa antes de montar o dashboard: além da mensagem certa, evita o cálculo caro (que
+  // inclusive bate na Marketing API) pra uma geração que não vai acontecer.
+  if (!isBrandAiEnabled(brandId)) {
+    return res.status(409).json({ error: 'Os textos por IA estão desligados para esta marca.' });
+  }
   try {
     const dashboard = await computeContentDashboard({ brandId, country: countryId });
     const item = dashboard.items.find(i => i.mediaId === mediaId);
