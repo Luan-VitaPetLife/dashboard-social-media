@@ -46,12 +46,11 @@ window.setBrandLogoImg = setBrandLogoImg;
 // enquanto a primeira busca de dado da página não volta. Reaproveitado por toda página que tem
 // um `<div class="empty">carregando…</div>` como placeholder inicial.
 function pageLoaderHtml() {
-  return `<div class="page-loader"><svg class="pl" viewBox="0 0 240 240">
-  <circle class="pl__ring pl__ring--a" cx="120" cy="120" r="105" fill="none" stroke="#000" stroke-width="20" stroke-dasharray="0 660" stroke-dashoffset="-330" stroke-linecap="round"></circle>
-  <circle class="pl__ring pl__ring--b" cx="120" cy="120" r="35" fill="none" stroke="#000" stroke-width="20" stroke-dasharray="0 220" stroke-dashoffset="-110" stroke-linecap="round"></circle>
-  <circle class="pl__ring pl__ring--c" cx="85" cy="120" r="70" fill="none" stroke="#000" stroke-width="20" stroke-dasharray="0 440" stroke-linecap="round"></circle>
-  <circle class="pl__ring pl__ring--d" cx="155" cy="120" r="70" fill="none" stroke="#000" stroke-width="20" stroke-dasharray="0 440" stroke-linecap="round"></circle>
-</svg></div>`;
+  return `<div class="page-loader"><div class="typewriter">
+  <div class="slide"><i></i></div>
+  <div class="paper"></div>
+  <div class="keyboard"></div>
+</div></div>`;
 }
 window.pageLoaderHtml = pageLoaderHtml;
 
@@ -362,49 +361,65 @@ body.sidebar-hidden .topbar{padding-left:64px}
 }
 
 /* ── Loader genérico (troca o texto "carregando…" enquanto a primeira busca de dado não volta) —
-   via pageLoaderHtml() abaixo. Peças de <uiverse.io/Nawsome>. ── */
-.page-loader{display:flex;align-items:center;justify-content:center;padding:18px 0}
-.page-loader .pl{width:56px;height:56px}
-.page-loader .pl__ring{animation:pageLoaderRingA 2s linear infinite}
-.page-loader .pl__ring--a{stroke:#ee2a7b}
-.page-loader .pl__ring--b{animation-name:pageLoaderRingB;stroke:#f9ce34}
-.page-loader .pl__ring--c{animation-name:pageLoaderRingC;stroke:#4776e6}
-.page-loader .pl__ring--d{animation-name:pageLoaderRingD;stroke:#6228d7}
-@keyframes pageLoaderRingA{
-  from,4%{stroke-dasharray:0 660;stroke-width:20;stroke-dashoffset:-330}
-  12%{stroke-dasharray:60 600;stroke-width:30;stroke-dashoffset:-335}
-  32%{stroke-dasharray:60 600;stroke-width:30;stroke-dashoffset:-595}
-  40%,54%{stroke-dasharray:0 660;stroke-width:20;stroke-dashoffset:-660}
-  62%{stroke-dasharray:60 600;stroke-width:30;stroke-dashoffset:-665}
-  82%{stroke-dasharray:60 600;stroke-width:30;stroke-dashoffset:-925}
-  90%,to{stroke-dasharray:0 660;stroke-width:20;stroke-dashoffset:-990}
+   via pageLoaderHtml() acima. Peça de <uiverse.io/Nawsome>. Tudo escopado sob .page-loader e com
+   os @keyframes renomeados: os nomes originais eram bounce05/slide05/paper05/keyboard05,
+   genéricos demais pra CSS global que entra em toda página da dashboard. ── */
+/* padding-top generoso: .paper é position:absolute com top:-26px e sobe durante a animação,
+   invadindo o espaço acima da caixa — sem essa folga ele passa por cima do conteúdo de cima. */
+.page-loader{display:flex;align-items:center;justify-content:center;padding:46px 0 18px}
+.page-loader .typewriter{--blue:#5C86FF;--blue-dark:#275EFE;--key:#fff;--paper:#EEF0FD;--text:#D3D4EC;--tool:#FBC56C;--duration:3s;
+  position:relative;animation:pageLoaderBounce var(--duration) linear infinite}
+.page-loader .typewriter .slide{width:92px;height:20px;border-radius:3px;margin-left:14px;transform:translateX(14px);
+  background:linear-gradient(var(--blue),var(--blue-dark));animation:pageLoaderSlide var(--duration) ease infinite}
+.page-loader .typewriter .slide:before,.page-loader .typewriter .slide:after,
+.page-loader .typewriter .slide i:before{content:"";position:absolute;background:var(--tool)}
+.page-loader .typewriter .slide:before{width:2px;height:8px;top:6px;left:100%}
+.page-loader .typewriter .slide:after{left:94px;top:3px;height:14px;width:6px;border-radius:3px}
+.page-loader .typewriter .slide i{display:block;position:absolute;right:100%;width:6px;height:4px;top:4px;background:var(--tool)}
+.page-loader .typewriter .slide i:before{right:100%;top:-2px;width:4px;border-radius:2px;height:14px}
+.page-loader .typewriter .paper{position:absolute;left:24px;top:-26px;width:40px;height:46px;border-radius:5px;
+  background:var(--paper);transform:translateY(46px);animation:pageLoaderPaper var(--duration) linear infinite}
+.page-loader .typewriter .paper:before{content:"";position:absolute;left:6px;right:6px;top:7px;border-radius:2px;height:4px;
+  transform:scaleY(0.8);background:var(--text);box-shadow:0 12px 0 var(--text),0 24px 0 var(--text),0 36px 0 var(--text)}
+.page-loader .typewriter .keyboard{width:120px;height:56px;margin-top:-10px;z-index:1;position:relative}
+.page-loader .typewriter .keyboard:before,.page-loader .typewriter .keyboard:after{content:"";position:absolute}
+.page-loader .typewriter .keyboard:before{top:0;left:0;right:0;bottom:0;border-radius:7px;
+  background:linear-gradient(135deg,var(--blue),var(--blue-dark));transform:perspective(10px) rotateX(2deg);transform-origin:50% 100%}
+.page-loader .typewriter .keyboard:after{left:2px;top:25px;width:11px;height:4px;border-radius:2px;
+  box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key);
+  animation:pageLoaderKeyboard var(--duration) linear infinite}
+@keyframes pageLoaderBounce{
+  85%,92%,100%{transform:translateY(0)}
+  89%{transform:translateY(-4px)}
+  95%{transform:translateY(2px)}
 }
-@keyframes pageLoaderRingB{
-  from,12%{stroke-dasharray:0 220;stroke-width:20;stroke-dashoffset:-110}
-  20%{stroke-dasharray:20 200;stroke-width:30;stroke-dashoffset:-115}
-  40%{stroke-dasharray:20 200;stroke-width:30;stroke-dashoffset:-195}
-  48%,62%{stroke-dasharray:0 220;stroke-width:20;stroke-dashoffset:-220}
-  70%{stroke-dasharray:20 200;stroke-width:30;stroke-dashoffset:-225}
-  90%{stroke-dasharray:20 200;stroke-width:30;stroke-dashoffset:-305}
-  98%,to{stroke-dasharray:0 220;stroke-width:20;stroke-dashoffset:-330}
+@keyframes pageLoaderSlide{
+  5%{transform:translateX(14px)}
+  15%,30%{transform:translateX(6px)}
+  40%,55%{transform:translateX(0)}
+  65%,70%{transform:translateX(-4px)}
+  80%,89%{transform:translateX(-12px)}
+  100%{transform:translateX(14px)}
 }
-@keyframes pageLoaderRingC{
-  from{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:0}
-  8%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-5}
-  28%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-175}
-  36%,58%{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:-220}
-  66%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-225}
-  86%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-395}
-  94%,to{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:-440}
+@keyframes pageLoaderPaper{
+  5%{transform:translateY(46px)}
+  20%,30%{transform:translateY(34px)}
+  40%,55%{transform:translateY(22px)}
+  65%,70%{transform:translateY(10px)}
+  80%,85%{transform:translateY(0)}
+  92%,100%{transform:translateY(46px)}
 }
-@keyframes pageLoaderRingD{
-  from,8%{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:0}
-  16%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-5}
-  36%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-175}
-  44%,50%{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:-220}
-  58%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-225}
-  78%{stroke-dasharray:40 400;stroke-width:30;stroke-dashoffset:-395}
-  86%,to{stroke-dasharray:0 440;stroke-width:20;stroke-dashoffset:-440}
+@keyframes pageLoaderKeyboard{
+  5%,12%,21%,30%,39%,48%,57%,66%,75%,84%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  9%{box-shadow:15px 2px 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  18%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 2px 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  27%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 12px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  36%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 12px 0 var(--key),60px 12px 0 var(--key),68px 12px 0 var(--key),83px 10px 0 var(--key)}
+  45%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 2px 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  54%{box-shadow:15px 0 0 var(--key),30px 2px 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  63%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 12px 0 var(--key)}
+  72%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 2px 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 10px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
+  81%{box-shadow:15px 0 0 var(--key),30px 0 0 var(--key),45px 0 0 var(--key),60px 0 0 var(--key),75px 0 0 var(--key),90px 0 0 var(--key),22px 10px 0 var(--key),37px 12px 0 var(--key),52px 10px 0 var(--key),60px 10px 0 var(--key),68px 10px 0 var(--key),83px 10px 0 var(--key)}
 }
 
 /* ── Loader específico de espera de IA (resumo por post, geração de relatório). Peças de

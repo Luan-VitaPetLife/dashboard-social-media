@@ -849,10 +849,15 @@ minimizável precisa copiar esse bloco de CSS também, não só chamar a funçã
 Implementado em 23/07/2026, a pedido do Luan (peças originais de uiverse.io — Nawsome e
 andrew-manzyk) — duas animações, ambas expostas globalmente por `sidebar.js` (mesmo padrão de
 `escapeHtml`/`initCollapsibleNotice`) pra não duplicar o SVG/CSS em cada página:
-- **`pageLoaderHtml()`** — anel colorido em bloom (4 círculos animados), substitui o texto
-  "carregando…" nos placeholders `.empty` de carregamento inicial de cada página (`accGrid`,
+- **`pageLoaderHtml()`** — máquina de escrever animada (peça de uiverse.io/Nawsome), substitui o
+  texto "carregando…" nos placeholders `.empty` de carregamento inicial de cada página (`accGrid`,
   `cntGrid`, `goalGrid`, `storyGrid`, `cofrinhoRoot`, `board`, `repList`). Chamado uma vez, antes
-  do primeiro `fetch`, no início do script de cada página.
+  do primeiro `fetch`, no início do script de cada página. Era um anel colorido em bloom até
+  22/09/2026. Todo o CSS é escopado sob `.page-loader` e os `@keyframes` foram renomeados com
+  prefixo `pageLoader*` — os nomes que vinham da peça original (`bounce05`, `slide05`, `paper05`,
+  `keyboard05`) são genéricos demais pra um CSS que entra em toda página. O `padding-top: 46px`
+  não é estético: `.paper` é `position:absolute` com `top:-26px` e sobe durante a animação, então
+  sem essa folga ele passaria por cima do conteúdo acima da caixa.
 - **`aiLoaderHtml()`** — animação de "joia" brilhando, específica de espera de chamada de IA.
   **Cuidado:** os `id` internos do SVG (`pegtopone`/`pegtoptwo`/`pegtopthree`) têm que ficar
   direto na tag `<svg>` (como no snippet original) — colocá-los num `<span>` envolvendo o `<svg>`
