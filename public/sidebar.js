@@ -167,6 +167,81 @@ function initCollapsibleNotice({ noteId, collapseBtnId, fabId, storageKey }) {
 }
 window.initCollapsibleNotice = initCollapsibleNotice;
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  DashboardBrand — marca selecionada, compartilhada por todas as páginas.
+//
+//  Antes cada página tinha seu próprio buildBrandSelector() na topbar (7 cópias divergentes do
+//  mesmo código) e todas liam a mesma chave de localStorage. O controle agora é um só, na
+//  sidebar, e as páginas apenas perguntam "qual marca?" e "me avise quando mudar".
+//
+//  Uso numa página:
+//     await DashboardBrand.ready;          // registry já carregado
+//     const brandId = DashboardBrand.id();
+//     DashboardBrand.onChange(() => load());
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+const BRAND_STORAGE_KEY = 'coco_sm_brand';
+let registryTree = null;
+let currentBrandId = null;
+const brandListeners = [];
+let markBrandReady;
+const brandReady = new Promise(resolve => { markBrandReady = resolve; });
+
+window.DashboardBrand = {
+  // Promise que resolve quando /api/registry chegou e a marca inicial já está decidida.
+  ready: brandReady,
+  id: () => currentBrandId,
+  brands: () => (registryTree && registryTree.brands) || [],
+  company: () => registryTree && registryTree.company,
+  current() { return this.brands().find(b => b.id === currentBrandId) || null; },
+  // Marca cadastrada porém sem credencial da Meta (ver `configured` em src/registry.js).
+  isConnected() { const b = this.current(); return Boolean(b && b.configured); },
+  // Registrar um listener é também o que marca esta página como dependente de marca: telas que
+  // não reagem à marca (Chamados, Configurações, Sobre) nunca chamam isto e, por isso, não
+  // recebem o aviso de marca não conectada — ele seria falso ali, já que elas funcionam igual
+  // com qualquer marca. Reavalia o aviso na hora, porque a inscrição acontece depois do
+  // carregamento do registry (a página só se inscreve após aguardar DashboardBrand.ready).
+  onChange(callback) {
+    brandListeners.push(callback);
+    renderBrandNotice();
+  },
+};
+
+function notifyBrandChange() {
+  for (const callback of brandListeners) {
+    // Um listener que estoura não pode impedir os outros de rodarem nem travar a troca de marca.
+    try { callback(currentBrandId); } catch (error) { console.error('DashboardBrand.onChange:', error); }
+  }
+}
+
+// Aviso global de marca sem conexão — injetado uma vez, logo abaixo da .topbar (classe presente
+// em toda página, ver Arquitetura no CLAUDE.md). Um ponto só em vez de um estado vazio diferente
+// em cada uma das 9 telas. Sem ele, marca não conectada fica indistinguível de marca sem dado no
+// período: a tela inteira vira travessão e "sem dado ainda", sem dizer o porquê.
+function renderBrandNotice() {
+  const existing = document.getElementById('brandNotConnectedNotice');
+  const brand = window.DashboardBrand.current();
+  // Sem listener = página que não usa a marca (ver onChange acima).
+  if (!brandListeners.length || !brand || brand.configured) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (existing) {
+    existing.querySelector('.bnc-brand').textContent = brand.name;
+    return;
+  }
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) return;
+  const notice = document.createElement('div');
+  notice.id = 'brandNotConnectedNotice';
+  notice.className = 'brand-not-connected';
+  notice.innerHTML = '<i class="bi bi-plug"></i><div><strong class="bnc-brand"></strong> ainda não está conectada à Meta.'
+    + ' As telas ficam vazias até alguém cadastrar o token do Business Manager dela e os IDs das contas'
+    + ' de Instagram e Facebook. Enquanto isso, escolha outra marca no seletor da sidebar.</div>';
+  notice.querySelector('.bnc-brand').textContent = brand.name;
+  topbar.insertAdjacentElement('afterend', notice);
+}
+window.renderBrandNotice = renderBrandNotice;
+
 (function () {
   const html = `
 <button id="sidebarOpen" class="sidebar-open-btn" title="Abrir menu"><i class="bi bi-list"></i></button>
@@ -179,8 +254,17 @@ window.initCollapsibleNotice = initCollapsibleNotice;
     <img src="Logo2.png" alt="Vita Pet Life" class="brand-mark">
     <div class="brand-text">
       <span class="brand-name">Vita Pet Life</span>
-      <span class="brand-sub">Coco and Luna · Redes Sociais</span>
+      <span class="brand-sub">Redes Sociais</span>
     </div>
+  </div>
+  <div class="brand-switch" id="brandSwitch" style="display:none">
+    <div class="nav-label">Marca</div>
+    <button type="button" class="brand-switch-btn" id="brandSwitchBtn" aria-haspopup="listbox" aria-expanded="false">
+      <img class="brand-switch-logo" id="brandSwitchLogo" alt="" style="display:none">
+      <span class="brand-switch-name" id="brandSwitchName">—</span>
+      <span class="brand-switch-arrow" aria-hidden="true">&#9662;</span>
+    </button>
+    <div class="brand-switch-pop" id="brandSwitchPop" role="listbox"></div>
   </div>
   <div class="nav-group">
     <div class="nav-label">Painel</div>
@@ -213,6 +297,37 @@ window.initCollapsibleNotice = initCollapsibleNotice;
 .brand-text{display:flex;flex-direction:column;line-height:1.3}
 .brand-name{font-size:13px;font-weight:700;color:#1c2b39}
 .brand-sub{font-size:10.5px;color:#6f7c88}
+/* ── Seletor de marca (ver DashboardBrand no topo). Fica na sidebar, não na topbar de cada
+   página: marca é o contexto de tudo que se vê, diferente de país/período, que são filtros de
+   análise e continuam por página. ── */
+.brand-switch{padding:0 12px;margin:-4px 0 18px;position:relative}
+.brand-switch-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;
+  border:1px solid rgba(28,43,57,.12);background:rgba(255,255,255,.65);color:#1c2b39;cursor:pointer;
+  font-size:12.5px;font-weight:600;text-align:left;transition:background .15s,border-color .15s}
+.brand-switch-btn:hover{background:rgba(255,255,255,.95);border-color:rgba(28,43,57,.22)}
+.brand-switch-logo{height:13px;width:auto;max-width:54px;object-fit:contain;flex-shrink:0}
+.brand-switch-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand-switch-arrow{font-size:10px;opacity:.5;flex-shrink:0}
+.brand-switch-pop{display:none;position:absolute;left:12px;right:12px;top:calc(100% + 4px);z-index:40;
+  background:#fff;border:1px solid rgba(28,43,57,.12);border-radius:10px;padding:5px;
+  box-shadow:0 8px 24px rgba(28,43,57,.16)}
+.brand-switch.open .brand-switch-pop{display:block}
+.brand-switch-opt{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;cursor:pointer;
+  font-size:12.5px;color:#1c2b39;transition:background .12s}
+.brand-switch-opt:hover{background:rgba(28,43,57,.07)}
+.brand-switch-opt.active{font-weight:700}
+.brand-switch-opt img{height:13px;width:auto;max-width:54px;object-fit:contain;flex-shrink:0}
+.brand-switch-opt .bs-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Bolinha de "não conectada": a marca existe no registry mas não tem credencial da Meta ainda. */
+.brand-switch-dot{width:6px;height:6px;border-radius:50%;background:#e0a800;flex-shrink:0}
+.brand-switch-btn .brand-switch-dot{margin-left:2px}
+
+/* Aviso de marca sem conexão, injetado abaixo da .topbar em qualquer página (renderBrandNotice). */
+.brand-not-connected{display:flex;align-items:flex-start;gap:10px;margin:0 32px 18px;padding:12px 14px;
+  border:1px solid #f0d48a;background:#fdf6e3;color:#6b5514;border-radius:11px;font-size:12.5px;line-height:1.5}
+.brand-not-connected i{font-size:15px;line-height:1.3;flex-shrink:0}
+@media(max-width:768px){.brand-not-connected{margin:0 16px 14px}}
+
 .nav-group{margin-bottom:22px;padding:0 12px}
 .nav-label{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#7c8794;padding:0 10px;margin-bottom:6px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:500;color:#1c2b39;
@@ -364,6 +479,103 @@ body.sidebar-hidden .topbar{padding-left:64px}
       await fetch('/api/auth/logout', { method: 'POST' });
       location.href = '/login';
     });
+
+    // ── Seletor de marca ────────────────────────────────────────────────────────────────────
+    // Carregado uma vez por página, aqui, em vez de em cada tela. Resolve a promise
+    // DashboardBrand.ready, que é o que as páginas esperam antes da primeira busca de dado.
+    const brandSwitch = document.getElementById('brandSwitch');
+    const brandBtn = document.getElementById('brandSwitchBtn');
+    const brandPop = document.getElementById('brandSwitchPop');
+    const brandNameEl = document.getElementById('brandSwitchName');
+    const brandLogoEl = document.getElementById('brandSwitchLogo');
+
+    function paintBrandButton() {
+      const brand = window.DashboardBrand.current();
+      brandNameEl.textContent = brand ? brand.name : '—';
+      setBrandLogoImg(brandLogoEl, brand);
+      const dot = brandBtn.querySelector('.brand-switch-dot');
+      if (dot) dot.remove();
+      if (brand && !brand.configured) {
+        const mark = document.createElement('span');
+        mark.className = 'brand-switch-dot';
+        mark.title = 'Sem conexão com a Meta configurada';
+        brandBtn.insertBefore(mark, brandBtn.querySelector('.brand-switch-arrow'));
+      }
+    }
+
+    function paintBrandOptions() {
+      brandPop.innerHTML = '';
+      for (const brand of window.DashboardBrand.brands()) {
+        const opt = document.createElement('div');
+        opt.className = 'brand-switch-opt' + (brand.id === currentBrandId ? ' active' : '');
+        opt.setAttribute('role', 'option');
+        opt.dataset.value = brand.id;
+        if (brand.logo) {
+          const img = document.createElement('img');
+          img.onerror = () => { img.style.display = 'none'; };
+          img.src = brand.logo;
+          img.alt = '';
+          opt.appendChild(img);
+        }
+        const name = document.createElement('span');
+        name.className = 'bs-name';
+        name.textContent = brand.name;
+        opt.appendChild(name);
+        if (!brand.configured) {
+          const mark = document.createElement('span');
+          mark.className = 'brand-switch-dot';
+          mark.title = 'Sem conexão com a Meta configurada';
+          opt.appendChild(mark);
+        }
+        opt.addEventListener('click', (e) => {
+          e.stopPropagation();
+          brandSwitch.classList.remove('open');
+          brandBtn.setAttribute('aria-expanded', 'false');
+          if (brand.id === currentBrandId) return;
+          currentBrandId = brand.id;
+          try { localStorage.setItem(BRAND_STORAGE_KEY, currentBrandId); } catch (error) { /* modo privado */ }
+          paintBrandButton();
+          paintBrandOptions();
+          renderBrandNotice();
+          notifyBrandChange();
+        });
+        brandPop.appendChild(opt);
+      }
+    }
+
+    brandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = brandSwitch.classList.toggle('open');
+      brandBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', () => {
+      brandSwitch.classList.remove('open');
+      brandBtn.setAttribute('aria-expanded', 'false');
+    });
+
+    fetch('/api/registry')
+      .then(r => { if (!r.ok) throw new Error('registry HTTP ' + r.status); return r.json(); })
+      .then(tree => {
+        registryTree = tree;
+        const brands = window.DashboardBrand.brands();
+        let saved = null;
+        try { saved = localStorage.getItem(BRAND_STORAGE_KEY); } catch (error) { /* modo privado */ }
+        // Marca salva que não existe mais (renomeada/removida do registry) cai na primeira.
+        currentBrandId = brands.some(b => b.id === saved) ? saved : (brands[0] ? brands[0].id : null);
+        // Com uma marca só, o seletor não tem função — fica escondido, como era antes na topbar.
+        brandSwitch.style.display = brands.length > 1 ? '' : 'none';
+        paintBrandButton();
+        paintBrandOptions();
+        renderBrandNotice();
+      })
+      .catch(error => {
+        // Sem registry não dá pra saber a marca. Avisa no console e resolve a promise assim
+        // mesmo: a página segue e mostra o próprio erro dela, em vez de ficar carregando pra
+        // sempre esperando um ready que nunca vem.
+        console.error('Não foi possível carregar as marcas:', error);
+        brandSwitch.style.display = 'none';
+      })
+      .finally(() => markBrandReady(currentBrandId));
 
     const overlay  = document.getElementById('sidebarOverlay');
     const closeBtn = document.getElementById('sidebarToggle');

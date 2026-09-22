@@ -170,13 +170,6 @@
       <div class="sub">Geração de relatórios em PDF/DOCX: D+7, Stories 24h e mensais</div>
     </div>
     <div class="topbar-controls">
-      <div class="filter-pill" id="brandPillStatic" style="display:none">
-        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal" style="display:none">—</span>
-      </div>
-      <div class="filter-pill csel" id="cselBrand" style="display:none">
-        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal" style="display:none">—</span><span class="arr">▾</span>
-        <div class="csel-pop"></div>
-      </div>
     </div>
   </header>
 
@@ -256,9 +249,11 @@ const REPORT_TYPE_META = {
 };
 const TIPO_OPTIONS = Object.entries(REPORT_TYPE_META).map(([value, m]) => ({ value, label: m.label, icon: m.icon }));
 
-let registryTree = null;
-let brandId = localStorage.getItem('coco_rep_brand') || null;
-function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+// A marca vem do seletor único da sidebar (DashboardBrand em public/sidebar.js). Antes cada
+// página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
+// diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
+let brandId = null;
+function currentBrand() { return DashboardBrand.current(); }
 
 let genType = null, genCountryId = null, genMediaId = null, genStoryId = null, genPlatform = null;
 let reports = [];
@@ -333,41 +328,15 @@ document.getElementById('confirmOkBtn').addEventListener('click', () => resolveC
 document.getElementById('confirmModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'confirmModalOverlay') resolveConfirm(false); });
 
 // ── Seletor de Marca (mesmo padrão das outras páginas, com logo — ver initCollapsibleNotice/setBrandLogoImg em sidebar.js) ──
-function buildBrandSelector(brands) {
-  const staticPill = document.getElementById('brandPillStatic');
-  const dropdown = document.getElementById('cselBrand');
-  if (brands.length <= 1) {
-    dropdown.style.display = 'none';
-    staticPill.style.display = brands.length ? '' : 'none';
-    if (brands.length) {
-      document.getElementById('brandStaticVal').textContent = brands[0].name;
-      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
-    }
-    return;
-  }
-  staticPill.style.display = 'none';
-  dropdown.style.display = '';
-  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
-    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
-  ).join('');
-  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
-  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
-  setupCsel(dropdown, val => {
-    brandId = val;
-    localStorage.setItem('coco_rep_brand', brandId);
-    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
-    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
+// Espera o seletor da sidebar resolver a marca e se inscreve pra recarregar quando ela mudar.
+async function loadRegistry() {
+  await DashboardBrand.ready;
+  brandId = DashboardBrand.id();
+  onBrandChanged();
+  DashboardBrand.onChange(() => {
+    brandId = DashboardBrand.id();
     onBrandChanged();
   });
-}
-
-async function loadRegistry() {
-  const res = await fetch('/api/registry');
-  registryTree = await res.json();
-  const brands = registryTree.brands || [];
-  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
-  buildBrandSelector(brands);
-  onBrandChanged();
 }
 
 function countryOptions() {

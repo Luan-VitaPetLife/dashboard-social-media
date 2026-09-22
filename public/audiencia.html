@@ -148,13 +148,6 @@
       <div class="sub" id="topSub">De onde vem quem segue, interage e é alcançado no Instagram</div>
     </div>
     <div class="topbar-controls">
-      <div class="filter-pill" id="brandPillStatic" style="display:none">
-        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandStaticLogo" src="" alt="" style="display:none"><span class="val" id="brandStaticVal" style="display:none">—</span>
-      </div>
-      <div class="filter-pill csel" id="cselBrand" style="display:none">
-        <span class="lbl">Marca</span><img class="brand-logo-mini" id="brandLogo" src="" alt="" style="display:none"><span class="val" id="brandVal" style="display:none">—</span><span class="arr">▾</span>
-        <div class="csel-pop"></div>
-      </div>
       <div class="filter-pill csel" id="cselCountry">
         <span class="lbl">Conta</span><span class="val" id="countryVal">Todas</span><span class="arr">▾</span>
         <div class="csel-pop" id="countryPop"></div>
@@ -245,8 +238,10 @@ const STATE_SOURCES = {
   },
 };
 
-let registryTree = null;
-let brandId = localStorage.getItem('coco_aud_brand') || null;
+// A marca vem do seletor único da sidebar (DashboardBrand em public/sidebar.js). Antes cada
+// página montava o seu próprio seletor na topbar e guardava a escolha numa chave de localStorage
+// diferente — eram 7 chaves, então navegar entre telas podia trocar a marca sem aviso nenhum.
+let brandId = null;
 let countryScope = localStorage.getItem('coco_aud_country') || 'all';
 let mode = localStorage.getItem('coco_aud_mode') || 'followers';
 let globeStyle = localStorage.getItem('coco_aud_style') || 'day';
@@ -259,7 +254,7 @@ let viewLevel = 'world'; // 'world' | 'state'
 let activeCountryIso = null;
 let stateFeaturesCache = {};
 
-function currentBrand() { return (registryTree?.brands || []).find(b => b.id === brandId) || null; }
+function currentBrand() { return DashboardBrand.current(); }
 function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('pt-BR'); }
 
 // ── dropdowns (mesmo padrão de todas as outras páginas) ──
@@ -280,35 +275,6 @@ function setupCsel(el, onSelect) {
   });
 }
 
-function buildBrandSelector(brands) {
-  const staticPill = document.getElementById('brandPillStatic');
-  const dropdown = document.getElementById('cselBrand');
-  if (brands.length <= 1) {
-    dropdown.style.display = 'none';
-    staticPill.style.display = brands.length ? '' : 'none';
-    if (brands.length) {
-      document.getElementById('brandStaticVal').textContent = brands[0].name;
-      setBrandLogoImg(document.getElementById('brandStaticLogo'), brands[0]);
-    }
-    return;
-  }
-  staticPill.style.display = 'none';
-  dropdown.style.display = '';
-  dropdown.querySelector('.csel-pop').innerHTML = brands.map(b =>
-    `<div class="csel-opt${b.id === brandId ? ' active' : ''}" data-value="${b.id}">${b.logo ? `<img class="brand-logo-mini" src="${b.logo}" alt="">` : ''}${b.name}</div>`
-  ).join('');
-  document.getElementById('brandVal').textContent = brands.find(b => b.id === brandId)?.name || '—';
-  setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
-  setupCsel(dropdown, val => {
-    brandId = val;
-    localStorage.setItem('coco_aud_brand', brandId);
-    document.getElementById('brandVal').textContent = currentBrand()?.name || '—';
-    setBrandLogoImg(document.getElementById('brandLogo'), currentBrand());
-    buildCountrySelector(currentBrand()?.countries || []);
-    loadAudience();
-  });
-}
-
 function buildCountrySelector(countries) {
   if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
   const pop = document.getElementById('countryPop');
@@ -324,13 +290,20 @@ function buildCountrySelector(countries) {
   });
 }
 
+// Espera o seletor da sidebar resolver a marca e se inscreve pra recarregar quando ela mudar.
 async function loadRegistry() {
-  const res = await fetch('/api/registry');
-  registryTree = await res.json();
-  const brands = registryTree.brands || [];
-  if (!brandId || !brands.some(b => b.id === brandId)) brandId = brands[0]?.id || null;
-  buildBrandSelector(brands);
+  await DashboardBrand.ready;
+  brandId = DashboardBrand.id();
   buildCountrySelector(currentBrand()?.countries || []);
+  DashboardBrand.onChange(() => {
+    brandId = DashboardBrand.id();
+    // País é escopado por marca: trocar de marca volta pra "todos" em vez de manter um país que
+    // pode nem existir na marca nova.
+    countryScope = 'all';
+    try { localStorage.removeItem('coco_aud_country'); } catch (error) { /* modo privado */ }
+    buildCountrySelector(currentBrand()?.countries || []);
+    load();
+  });
 }
 
 // ── modo de visualização (métrica) ──
