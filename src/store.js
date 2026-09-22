@@ -57,6 +57,38 @@ function migrateLegacySnapshotsIfNeeded() {
   return true;
 }
 
+// Formato antigo: clicks[screenId] = { label, days, ... }. Formato novo:
+// clicks[brandId][countryId][screenId] = { ... }, mesma forma que content/goals/stories já usam.
+// Cliques nasceram antes da segunda marca existir e eram a única estrutura do store sem marca
+// nem país — o cardápio de links coletado até aqui é da loja brasileira da Yucaloo, então é sob
+// ela que o formato antigo é reembrulhado.
+//
+// Detecta pelo formato do valor, não por lista de chaves: uma tela antiga tem `days` direto nela,
+// enquanto uma marca tem um mapa de países. Roda uma vez, é idempotente e nunca descarta dado.
+const LEGACY_CLICKS_BRAND_ID = 'yucaloo';
+const LEGACY_CLICKS_COUNTRY_ID = 'br';
+
+function migrateLegacyClicksIfNeeded() {
+  const clicks = cache.clicks || {};
+  const legacyScreenIds = Object.keys(clicks).filter(key => {
+    const value = clicks[key];
+    return value && typeof value === 'object' && value.days && typeof value.days === 'object';
+  });
+  if (!legacyScreenIds.length) return false;
+
+  const migrated = {};
+  for (const key of Object.keys(clicks)) {
+    if (!legacyScreenIds.includes(key)) migrated[key] = clicks[key]; // marca já no formato novo
+  }
+  const brand = migrated[LEGACY_CLICKS_BRAND_ID] || (migrated[LEGACY_CLICKS_BRAND_ID] = {});
+  const country = brand[LEGACY_CLICKS_COUNTRY_ID] || (brand[LEGACY_CLICKS_COUNTRY_ID] = {});
+  for (const screenId of legacyScreenIds) {
+    country[screenId] = clicks[screenId];
+  }
+  cache.clicks = migrated;
+  return legacyScreenIds.length;
+}
+
 export async function initStore() {
   if (USE_MONGO) {
     const { MongoClient } = await import('mongodb');
@@ -76,6 +108,13 @@ export async function initStore() {
     console.log('Store: snapshots do formato antigo migrados para o formato multimarca (brandId=' + LEGACY_BRAND_ID + ').');
     saveJson();
     await mongoSet('snapshots', cache.snapshots);
+  }
+
+  const migratedScreens = migrateLegacyClicksIfNeeded();
+  if (migratedScreens) {
+    console.log('Store: ' + migratedScreens + ' tela(s) de cliques migrada(s) para o formato multimarca (brandId=' + LEGACY_CLICKS_BRAND_ID + ', countryId=' + LEGACY_CLICKS_COUNTRY_ID + ').');
+    saveJson();
+    await mongoSet('clicks', cache.clicks);
   }
 }
 
@@ -493,17 +532,42 @@ function ensureClicks() {
   return cache.clicks;
 }
 
-export function getClicks() {
-  return ensureClicks();
+function ensureBrandClicks(brandId, countryId) {
+  const clicks = ensureClicks();
+  if (!clicks[brandId]) clicks[brandId] = {};
+  if (!clicks[brandId][countryId]) clicks[brandId][countryId] = {};
+  return clicks[brandId][countryId];
+}
+
+// De quem é uma tela já conhecida. Serve pra atribuir evento que chega sem marca/país (página
+// cujo tema ainda não foi atualizado): se a tela já existe em exatamente UM par marca/país, isso
+// não é palpite, é fato já registrado. Empatou em dois ou é tela nova, devolve null e quem chama
+// decide — nunca chuta.
+export function findClickScreenOwner(screenId) {
+  const clicks = ensureClicks();
+  const owners = [];
+  for (const brandId of Object.keys(clicks)) {
+    for (const countryId of Object.keys(clicks[brandId] || {})) {
+      if (clicks[brandId][countryId] && clicks[brandId][countryId][screenId]) owners.push({ brandId, countryId });
+    }
+  }
+  return owners.length === 1 ? owners[0] : null;
+}
+
+// Devolve os países da marca pedida, cada um com suas telas: { countryId: { screenId: tela } }.
+// Quem achata isso pro formato que computeClicksOverview/computeScreenPanorama esperam é
+// flattenClicks() em src/clicks.js — o store não agrega nada, só guarda.
+export function getClicks(brandId) {
+  return ensureClicks()[brandId] || {};
 }
 
 // Apaga uma tela inteira (todos os dias agregados dela). Serve pra limpar tela de teste que
 // entrou na base durante a configuração do rastreamento — não existe edição parcial de clique, e
 // o dado é agregado, então remover a tela é a única granularidade que faz sentido. Grava na hora
 // (flush direto, sem o adiamento de recordClickEvent): aqui é ação humana, não rajada.
-export async function deleteClickScreen(screenId) {
-  const clicks = ensureClicks();
-  if (!Object.prototype.hasOwnProperty.call(clicks, screenId)) return false;
+export async function deleteClickScreen(brandId, countryId, screenId) {
+  const clicks = (ensureClicks()[brandId] || {})[countryId];
+  if (!clicks || !Object.prototype.hasOwnProperty.call(clicks, screenId)) return false;
   delete clicks[screenId];
   if (clicksFlushTimer) {
     clearTimeout(clicksFlushTimer);
@@ -544,8 +608,8 @@ function pruneDays(days, todayISO) {
   }
 }
 
-export function recordClickEvent({ screenId, screenLabel, screenUrl, type, dateISO, linkLabel, source, device, theme }) {
-  const clicks = ensureClicks();
+export function recordClickEvent({ brandId, countryId, screenId, screenLabel, screenUrl, type, dateISO, linkLabel, source, device, theme }) {
+  const clicks = ensureBrandClicks(brandId, countryId);
   const screen = clicks[screenId] || (clicks[screenId] = { label: screenLabel || screenId, days: {} });
 
   if (screenLabel) screen.label = screenLabel;

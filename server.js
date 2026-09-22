@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { initStore, getLastSync, getSnapshots, getStoreBackend, getClicks, recordClickEvent, flushClicks, deleteClickScreen } from './src/store.js';
+import { initStore, getLastSync, getSnapshots, getStoreBackend, getClicks, recordClickEvent, flushClicks, deleteClickScreen, findClickScreenOwner } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
 import { computeContentDashboard, generateContentAiSummary } from './src/contentMetrics.js';
@@ -26,7 +26,7 @@ import {
   getSchedules, addSchedule, updateSchedule, deleteSchedule,
 } from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
-import { computeClicksOverview, computeScreenPanorama, normalizeSource, deviceFromUserAgent, normalizeLabel, todayISO as clicksTodayISO, DIRECT_SOURCE, UNKNOWN_LINK } from './src/clicks.js';
+import { flattenClicks, computeClicksOverview, computeScreenPanorama, normalizeSource, deviceFromUserAgent, normalizeLabel, todayISO as clicksTodayISO, DIRECT_SOURCE, UNKNOWN_LINK } from './src/clicks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -632,6 +632,35 @@ function allowedOrigins() {
     .filter(Boolean);
 }
 
+// Resolve a marca de um evento de clique, em ordem de confiança:
+//   1. o brandId que a página mandou (a section do cardápio tem campo pra isso);
+//   2. a marca que já é dona dessa tela — se `screenId` existe em exatamente uma marca, isso é
+//      fato registrado, não palpite, e cobre sem perda uma loja cujo tema ainda não foi
+//      atualizado pra mandar o campo novo;
+//   3. CLICKS_DEFAULT_BRAND, pra tela nova de uma página que ainda não manda o campo.
+// Nada disso resolvendo, quem chama recusa o evento. Marca desconhecida é sempre descartada:
+// um brandId digitado errado viraria um balde de cliques fantasma, invisível em toda tela.
+function resolveClickOwner(rawBrand, rawCountry, screenId) {
+  const brandExists = (id) => Boolean(id) && getBrands().some(b => b.id === id);
+  const countryExists = (brandId, id) => Boolean(id) && getCountries(brandId).some(c => c.id === id);
+
+  // A tela já conhecida resolve marca e país de uma vez — é o que cobre, sem perda, a loja cujo
+  // tema ainda não manda os campos novos.
+  const owner = findClickScreenOwner(screenId) || {};
+
+  const wantedBrand = String(rawBrand || '').trim();
+  const envBrand = String(process.env.CLICKS_DEFAULT_BRAND || '').trim();
+  const brandId = [wantedBrand, owner.brandId, envBrand].find(brandExists) || null;
+  if (!brandId) return null;
+
+  const wantedCountry = String(rawCountry || '').trim();
+  const envCountry = String(process.env.CLICKS_DEFAULT_COUNTRY || '').trim();
+  const countryId = [wantedCountry, owner.countryId, envCountry].find(id => countryExists(brandId, id)) || null;
+  if (!countryId) return null;
+
+  return { brandId, countryId };
+}
+
 function applyCollectCors(req, res) {
   const origin = String(req.headers.origin || '').replace(/\/$/, '');
   if (!origin || !allowedOrigins().includes(origin)) return false;
@@ -655,6 +684,16 @@ app.post('/api/clicks/collect', collectLimiter, (req, res) => {
   const screenId = normalizeLabel(body.screenId, '');
   if (!screenId) return res.status(400).json({ error: 'screenId é obrigatório.' });
 
+  // De qual marca e de qual mercado é esta página. Recusa em vez de cair num padrão qualquer:
+  // atribuir clique da loja errada mistura os dados em silêncio, e dado sutilmente errado é pior
+  // que evento perdido — aqui, pelo menos, o 400 aparece no Network de quem for investigar.
+  const owner = resolveClickOwner(body.brandId, body.countryId, screenId);
+  if (!owner) {
+    return res.status(400).json({
+      error: 'brandId e countryId são obrigatórios e precisam existir no cadastro. Preencha "Marca na dashboard" e "País" na section, ou defina CLICKS_DEFAULT_BRAND e CLICKS_DEFAULT_COUNTRY.',
+    });
+  }
+
   const device = deviceFromUserAgent(req.headers['user-agent']);
   // Bot não entra na contagem: um rastreador de link seguindo a página inflaria a visita e a
   // taxa de clique sem nenhuma pessoa do outro lado. Responde 204 assim mesmo pra não dar pista
@@ -663,6 +702,8 @@ app.post('/api/clicks/collect', collectLimiter, (req, res) => {
 
   const type = body.type === 'view' ? 'view' : 'click';
   recordClickEvent({
+    brandId: owner.brandId,
+    countryId: owner.countryId,
     screenId,
     screenLabel: String(body.screenLabel || '').trim().slice(0, 80) || null,
     screenUrl: String(body.screenUrl || '').trim().slice(0, 300) || null,
@@ -680,18 +721,21 @@ app.post('/api/clicks/collect', collectLimiter, (req, res) => {
 app.get('/api/clicks', (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
   const screenId = req.query.screen ? String(req.query.screen) : null;
+  const brandId = req.query.brand || getDefaultBrandId();
+  const countryScope = req.query.country || 'all';
+  const brandClicks = flattenClicks(getClicks(brandId), countryScope);
 
-  if (!screenId) return res.json(computeClicksOverview(getClicks(), { days }));
+  if (!screenId) return res.json(computeClicksOverview(brandClicks, { days }));
 
-  const panorama = computeScreenPanorama(getClicks(), screenId, { days });
+  const panorama = computeScreenPanorama(brandClicks, screenId, { days });
   if (!panorama) return res.status(404).json({ error: 'Tela não encontrada.' });
   res.json(panorama);
 });
 
 // Remove uma tela rastreada inteira. Fica atrás do login normal (não entra em PUBLIC_PATHS): quem
 // apaga é alguém da equipe, nunca o visitante da loja que alimenta /api/clicks/collect.
-app.delete('/api/clicks/:screenId', async (req, res) => {
-  const removed = await deleteClickScreen(String(req.params.screenId));
+app.delete('/api/clicks/:brandId/:countryId/:screenId', async (req, res) => {
+  const removed = await deleteClickScreen(String(req.params.brandId), String(req.params.countryId), String(req.params.screenId));
   if (!removed) return res.status(404).json({ error: 'Tela não encontrada.' });
   res.json({ ok: true });
 });

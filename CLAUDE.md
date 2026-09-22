@@ -437,6 +437,23 @@ adicionar dependência por causa de uma rota. A leitura (`GET /api/clicks`) cont
 login normal. O `apiLimiter` geral (300/15min) pula essa rota via `skip`: ali o IP não é de
 alguém da equipe, e sim de vários visitantes atrás do mesmo IP de operadora.
 
+**Escopo por marca e país (`clicks[brandId][countryId][screenId]`).** Mesma forma que `content`,
+`goals` e `stories` já usavam — cliques eram a única estrutura do store sem essas duas dimensões,
+porque nasceram antes da segunda marca existir. O formato antigo (`clicks[screenId]`) é migrado no
+boot para `yucaloo`/`br`, que é de quem o cardápio coletado até 22/09/2026 realmente é.
+
+A coleta resolve marca e país nesta ordem: o que a página mandou → **quem já é dono da tela** (se
+o `screenId` existe em exatamente um par marca/país, isso é fato registrado, não palpite, e cobre
+sem perda uma loja cujo tema ainda não foi atualizado) → `CLICKS_DEFAULT_BRAND`/`CLICKS_DEFAULT_COUNTRY`.
+Nada resolvendo, responde **400** em vez de cair num padrão: clique atribuído à loja errada
+corrompe os dados em silêncio, e dado sutilmente errado é pior que evento perdido.
+
+`flattenClicks()` (`src/clicks.js`) achata `{countryId: {screenId}}` no `{screenId}` que as funções
+de agregação consomem. Com escopo "todos os países" e a mesma tela existindo em mais de um mercado
+(acontece quando as lojas usam o mesmo identificador na section), os baldes diários são **somados**,
+não sobrescritos. Cada tela devolvida carrega `countries`, que a tela usa pra mostrar as bandeiras
+de procedência no card.
+
 **Gravação com flush adiado (`flushClicks`/`scheduleClicksFlush` em `store.js`).** Único lugar do
 projeto que não escreve a cada chamada: clique é evento de visitante e vem em rajada. Acumula em
 memória e descarrega depois de 2s, com flush garantido em SIGTERM/SIGINT (senão o redeploy do

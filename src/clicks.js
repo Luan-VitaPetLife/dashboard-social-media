@@ -143,6 +143,61 @@ function clickRate(clicks, views) {
   return (clicks / views) * 100;
 }
 
+// Achata { countryId: { screenId: tela } } no formato { screenId: tela } que as funções de
+// agregação abaixo consomem. Com escopo 'all' e a mesma tela existindo em mais de um país (o que
+// acontece quando a loja de cada mercado usa o mesmo identificador na section), os baldes diários
+// são somados em vez de um país sobrescrever o outro — perder metade dos cliques em silêncio
+// seria o pior resultado possível aqui. Cada tela devolvida carrega `countries` com os países que
+// a alimentaram, pro card poder mostrar a procedência.
+export function flattenClicks(brandClicks, countryScope = 'all') {
+  const countries = countryScope && countryScope !== 'all'
+    ? [countryScope]
+    : Object.keys(brandClicks || {});
+
+  const out = {};
+  for (const countryId of countries) {
+    for (const [screenId, screen] of Object.entries((brandClicks || {})[countryId] || {})) {
+      const existing = out[screenId];
+      if (!existing) {
+        out[screenId] = { ...screen, days: { ...(screen.days || {}) }, countries: [countryId] };
+        continue;
+      }
+      existing.countries.push(countryId);
+      if (!existing.url) existing.url = screen.url || null;
+      if (screen.lastEventAt && (!existing.lastEventAt || screen.lastEventAt > existing.lastEventAt)) {
+        existing.lastEventAt = screen.lastEventAt;
+      }
+      for (const [date, day] of Object.entries(screen.days || {})) {
+        existing.days[date] = existing.days[date] ? mergeDayBuckets(existing.days[date], day) : day;
+      }
+    }
+  }
+  return out;
+}
+
+// Soma dois baldes do mesmo dia, campo a campo. Mantém a forma exata que sumRange() espera.
+function mergeDayBuckets(a, b) {
+  const out = {
+    views: (a.views || 0) + (b.views || 0),
+    clicks: (a.clicks || 0) + (b.clicks || 0),
+    byLink: { ...(a.byLink || {}) },
+    bySource: { ...(a.bySource || {}) },
+    byDevice: { ...(a.byDevice || {}) },
+    byTheme: { ...(a.byTheme || {}) },
+    byLinkSource: {},
+  };
+  for (const campo of ['byLink', 'bySource', 'byDevice', 'byTheme']) {
+    for (const [k, v] of Object.entries(b[campo] || {})) addTo(out[campo], k, v);
+  }
+  for (const origem of [a.byLinkSource || {}, b.byLinkSource || {}]) {
+    for (const [link, sources] of Object.entries(origem)) {
+      out.byLinkSource[link] = out.byLinkSource[link] || {};
+      for (const [src, v] of Object.entries(sources)) addTo(out.byLinkSource[link], src, v);
+    }
+  }
+  return out;
+}
+
 // Painel de todas as telas rastreadas (os cards da primeira dobra).
 export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
   const until = todayISO();
@@ -166,6 +221,7 @@ export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
       topLink: sortedEntries(current.byLink, 1)[0] || null,
       topSource: sortedEntries(current.bySource, 1)[0] || null,
       series: current.series,
+      countries: screen.countries || [],
       lastEventAt: screen.lastEventAt || null,
     };
   });

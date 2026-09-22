@@ -182,6 +182,8 @@ const BRAND_STORAGE_KEY = 'coco_sm_brand';
 let registryTree = null;
 let currentBrandId = null;
 const brandListeners = [];
+// Vira true quando alguma parte da página declara depender da conexão com a Meta (ver onChange).
+let metaDependentPage = false;
 let markBrandReady;
 const brandReady = new Promise(resolve => { markBrandReady = resolve; });
 
@@ -194,13 +196,21 @@ window.DashboardBrand = {
   current() { return this.brands().find(b => b.id === currentBrandId) || null; },
   // Marca cadastrada porém sem credencial da Meta (ver `configured` em src/registry.js).
   isConnected() { const b = this.current(); return Boolean(b && b.configured); },
-  // Registrar um listener é também o que marca esta página como dependente de marca: telas que
-  // não reagem à marca (Chamados, Configurações, Sobre) nunca chamam isto e, por isso, não
-  // recebem o aviso de marca não conectada — ele seria falso ali, já que elas funcionam igual
-  // com qualquer marca. Reavalia o aviso na hora, porque a inscrição acontece depois do
-  // carregamento do registry (a página só se inscreve após aguardar DashboardBrand.ready).
-  onChange(callback) {
+  // Registrar um listener é também o que marca esta página como dependente da conexão com a
+  // Meta: telas que não reagem à marca (Chamados, Configurações, Sobre) nunca chamam isto e, por
+  // isso, não recebem o aviso de marca não conectada — ele seria falso ali, já que funcionam
+  // igual com qualquer marca.
+  //
+  // `metaNotice: false` é pra quem depende da marca mas NÃO da Meta. Hoje é o caso de Cliques:
+  // os eventos vêm da página da loja no Shopify, não da Graph API, então a tela tem dado mesmo
+  // com a marca sem token — e dizer ali que "as telas ficam vazias até conectar a Meta" seria
+  // simplesmente mentira.
+  //
+  // Reavalia o aviso na hora, porque a inscrição acontece depois do carregamento do registry (a
+  // página só se inscreve após aguardar DashboardBrand.ready).
+  onChange(callback, { metaNotice = true } = {}) {
     brandListeners.push(callback);
+    if (metaNotice) metaDependentPage = true;
     renderBrandNotice();
   },
 };
@@ -219,8 +229,8 @@ function notifyBrandChange() {
 function renderBrandNotice() {
   const existing = document.getElementById('brandNotConnectedNotice');
   const brand = window.DashboardBrand.current();
-  // Sem listener = página que não usa a marca (ver onChange acima).
-  if (!brandListeners.length || !brand || brand.configured) {
+  // Página que não depende da conexão com a Meta nunca mostra este aviso (ver onChange acima).
+  if (!metaDependentPage || !brand || brand.configured) {
     if (existing) existing.remove();
     return;
   }

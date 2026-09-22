@@ -87,7 +87,18 @@
   .screen-title{display:flex;flex-direction:column;line-height:1.3;min-width:0}
   .screen-title .name{font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .screen-title .meta{font-size:10.5px;color:var(--muted)}
-  .screen-open{margin-left:auto;color:var(--muted);font-size:13px;flex-shrink:0}
+  /* Sem margin-left:auto aqui: quem empurra o bloco da direita é .screen-source (abaixo). Com os
+     dois tendo margem automática, o espaço livre seria dividido entre eles e abriria um vão. */
+  .screen-open{color:var(--muted);font-size:13px;flex-shrink:0}
+  /* Procedência do dado: diferente do resto da dashboard, que vem da Meta, estes eventos são
+     coletados na própria loja. A logo deixa isso explícito sem precisar de legenda. */
+  .screen-source{display:inline-flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0;
+    padding:3px 7px;border-radius:6px;background:var(--surface2);color:var(--muted);font-size:9.5px;font-weight:600}
+  .screen-source img{width:11px;height:11px;object-fit:contain}
+  /* Bandeiras do mercado de onde vêm os eventos. Ficam no card, e não só no filtro, porque com
+     "Todos os países" selecionado o filtro não diz nada sobre a procedência de cada tela. */
+  .screen-flags{display:inline-flex;align-items:center;gap:3px;margin-left:6px}
+  .screen-flags img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
 
   .screen-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .num-lbl{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
@@ -130,6 +141,11 @@
   .rank-num .p{font-size:10px;color:var(--muted)}
 
   .empty{color:var(--muted);font-size:12.5px;padding:22px 0;text-align:center}
+  /* Estado vazio da grade de telas: ocupa a largura toda (senão o texto fica espremido na
+     primeira célula do grid) e centraliza na altura que sobra abaixo do cabeçalho. */
+  .screen-grid .empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;min-height:min(46vh,380px);line-height:1.7;max-width:460px;margin:0 auto}
+  .screen-grid .empty .empty-icon{font-size:26px;opacity:.35;margin-bottom:12px;display:block}
   footer{padding:22px 32px;color:var(--muted);font-size:11.5px;text-align:center}
 </style>
 </head>
@@ -142,6 +158,10 @@
       <div class="sub">Botões clicados nas páginas da loja</div>
     </div>
     <div class="topbar-controls">
+      <div class="filter-pill csel" id="cselCountry">
+        <span class="lbl">País</span><span class="val" id="countryVal">Todos</span><span class="arr">▾</span>
+        <div class="csel-pop" id="countryPop"></div>
+      </div>
       <div class="filter-pill csel" id="cselPeriod">
         <span class="lbl">Período</span><span class="val" id="periodVal">30 dias</span><span class="arr">▾</span>
         <div class="csel-pop" id="periodPop"></div>
@@ -194,6 +214,44 @@ function setChart(id, cfg) {
   if (el) charts[id] = new Chart(el, cfg);
 }
 
+/* ── Seletor de país ────────────────────────────────────────────────────────────────────── */
+// Mesma chave por página que as outras telas usam pro país (a marca é global, o país não — ver
+// DashboardBrand em sidebar.js).
+let countryScope = localStorage.getItem('coco_clicks_country') || 'all';
+
+function buildCountrySelector() {
+  const countries = DashboardBrand.current()?.countries || [];
+  // País salvo que não existe na marca atual volta pra "todos" em vez de filtrar por um mercado
+  // que não é dela e devolver tela vazia sem explicação.
+  if (countryScope !== 'all' && !countries.some(c => c.id === countryScope)) countryScope = 'all';
+
+  const rotulo = () => countryScope === 'all' ? 'Todos' : (countries.find(c => c.id === countryScope)?.name || 'Todos');
+  const opt = (value, label, flag) =>
+    `<div class="csel-opt${countryScope === value ? ' active' : ''}" data-value="${value}">${flag ? `<img src="${flag}" alt="">` : ''}${label}</div>`;
+
+  const pop = document.getElementById('countryPop');
+  pop.innerHTML = opt('all', 'Todos os países') + countries.map(c => opt(c.id, c.name, c.flag)).join('');
+  document.getElementById('countryVal').textContent = rotulo();
+
+  pop.querySelectorAll('.csel-opt').forEach(o => {
+    o.onclick = (e) => {
+      e.stopPropagation();
+      countryScope = o.dataset.value;
+      localStorage.setItem('coco_clicks_country', countryScope);
+      document.getElementById('cselCountry').classList.remove('open');
+      document.getElementById('countryVal').textContent = rotulo();
+      buildCountrySelector();
+      openScreen = null; // a tela aberta pode não existir no país escolhido
+      load();
+    };
+  });
+}
+
+document.getElementById('cselCountry').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('cselCountry').classList.toggle('open');
+};
+
 /* ── Seletor de período ─────────────────────────────────────────────────────────────────── */
 function buildPeriodSelector() {
   const pop = document.getElementById('periodPop');
@@ -218,14 +276,37 @@ document.getElementById('cselPeriod').onclick = (e) => {
   e.stopPropagation();
   document.getElementById('cselPeriod').classList.toggle('open');
 };
-document.addEventListener('click', () => document.getElementById('cselPeriod').classList.remove('open'));
+document.addEventListener('click', () => {
+  document.getElementById('cselPeriod').classList.remove('open');
+  document.getElementById('cselCountry').classList.remove('open');
+});
 document.getElementById('reloadBtn').onclick = () => load();
+
+// Bandeiras dos mercados que alimentam uma tela, resolvidas pelo registry (nenhum país fica
+// hardcoded aqui). Uma tela normalmente vem de um mercado só; mais de um acontece quando as
+// lojas de mercados diferentes usam o mesmo identificador de tela na section.
+function countryFlagsHtml(countryIds) {
+  const countries = DashboardBrand.current()?.countries || [];
+  const itens = (countryIds || [])
+    .map(id => countries.find(c => c.id === id))
+    .filter(c => c && c.flag)
+    .map(c => `<img src="${escapeHtml(c.flag)}" alt="${escapeHtml(c.name)}" title="${escapeHtml(c.name)}">`);
+  return itens.length ? `<span class="screen-flags">${itens.join('')}</span>` : '';
+}
 
 /* ── Primeira dobra: um card por tela ───────────────────────────────────────────────────── */
 function renderOverview(data) {
   const grid = document.getElementById('screenGrid');
   if (!data.screens.length) {
-    grid.innerHTML = `<div class="empty">Nenhum evento recebido ainda. Confira se a página da loja está publicada e se o domínio dela está em CLICKS_ALLOWED_ORIGINS.</div>`;
+    // Mensagem por marca: com duas marcas, "nenhum evento" quase sempre significa que a pessoa
+    // está olhando a marca errada, não que o rastreamento quebrou. O nome da variável de
+    // ambiente saiu daqui — é detalhe de quem opera o servidor, não de quem lê a tela.
+    const marca = DashboardBrand.current()?.name || 'esta marca';
+    grid.innerHTML = `<div class="empty">
+      <i class="bi bi-cursor empty-icon"></i>
+      Nenhum evento de <strong>${escapeHtml(marca)}</strong> no período.<br>
+      Se a página de links dela já está no ar, confira se o rastreamento está ativado na section do tema
+      e se a marca escolhida ali é a mesma selecionada aqui na barra lateral.</div>`;
     return;
   }
 
@@ -235,8 +316,11 @@ function renderOverview(data) {
         <div class="screen-badge"><i class="bi bi-cursor-fill"></i></div>
         <div class="screen-title">
           <span class="name">${escapeHtml(s.label)}</span>
-          <span class="meta">${s.links} ${s.links === 1 ? 'botão' : 'botões'}</span>
+          <span class="meta">${s.links} ${s.links === 1 ? 'botão' : 'botões'}${countryFlagsHtml(s.countries)}</span>
         </div>
+        <span class="screen-source" title="Eventos coletados na página da loja no Shopify">
+          <img src="logo_shopify.png" alt="" onerror="this.style.display='none'">Shopify
+        </span>
         <i class="bi bi-chevron-right screen-open"></i>
       </div>
 
@@ -411,7 +495,7 @@ async function load() {
   const panorama = document.getElementById('panorama');
 
   try {
-    const params = new URLSearchParams({ days: periodDays });
+    const params = new URLSearchParams({ days: periodDays, brand: DashboardBrand.id() || '', country: countryScope });
     if (openScreen) params.set('screen', openScreen);
     const res = await fetch('/api/clicks?' + params);
     if (!res.ok) throw new Error('Falha ao carregar os cliques.');
@@ -435,7 +519,27 @@ async function load() {
 }
 
 buildPeriodSelector();
-load();
+
+// Espera o seletor de marca da sidebar (DashboardBrand em sidebar.js) antes da primeira carga —
+// sem isso a primeira busca sairia sem marca.
+//
+// metaNotice:false porque esta tela depende da marca mas NÃO da conexão com a Meta: os eventos
+// vêm da página de links na loja Shopify, então há dado aqui mesmo para marca sem token da Meta.
+(async () => {
+  await DashboardBrand.ready;
+  buildCountrySelector();
+  DashboardBrand.onChange(() => {
+    // Volta pra visão geral: a tela aberta é de outra marca e pode nem existir na nova.
+    openScreen = null;
+    // Os países são por marca, então o seletor precisa ser remontado (e o país escolhido volta
+    // pra "todos" se não existir na marca nova — ver buildCountrySelector).
+    countryScope = 'all';
+    try { localStorage.removeItem('coco_clicks_country'); } catch (error) { /* modo privado */ }
+    buildCountrySelector();
+    load();
+  }, { metaNotice: false });
+  load();
+})();
 </script>
 </body>
 </html>
