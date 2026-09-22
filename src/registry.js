@@ -20,6 +20,11 @@ const BRANDS = [
     id: 'coco-and-luna',
     name: 'Coco and Luna',
     logo: 'Logo1.svg',
+    // Em que ramo a marca atua. Entra no prompt da IA que escreve o resumo por post
+    // (ver AI_SUMMARY_SYSTEM_PROMPT em src/contentMetrics.js), onde antes estava escrito na mão
+    // — o resumo da Yucaloo saía assinado como analista da Coco and Luna. Opcional: sem ele, o
+    // prompt cita só o nome da marca, em vez de arriscar um ramo errado.
+    aiContext: 'suplementos pet',
     // Mantém o nome histórico da variável: esta marca já está em produção no Railway e renomear
     // derrubaria a coleta no deploy. Marcas novas usam o padrão META_<MARCA>_*.
     token: process.env.META_ACCESS_TOKEN,
@@ -46,6 +51,9 @@ const BRANDS = [
     id: 'yucaloo',
     name: 'Yucaloo',
     logo: 'Logo3.webp',
+    // TODO: preencher com o ramo da Yucaloo (ex: 'areia higiênica para gatos'). Deixado vazio
+    // de propósito: chutar aqui faria a IA escrever análise sobre o produto errado.
+    aiContext: null,
     token: process.env.META_YUCALOO_ACCESS_TOKEN,
     countries: [
       {
@@ -125,6 +133,11 @@ export function getAdAccountId(brandId, countryId) {
 // credencial, mesma regra do adAccountId/metaId. Só server-side.
 export function getBrandToken(brandId) {
   return getBrand(brandId)?.token || null;
+}
+
+// Ramo da marca, pro prompt da IA (ver AI_SUMMARY_SYSTEM_PROMPT em contentMetrics.js).
+export function getBrandAiContext(brandId) {
+  return getBrand(brandId)?.aiContext || null;
 }
 
 // Uma marca está pronta pra coleta quando tem token e pelo menos uma conta com metaId.

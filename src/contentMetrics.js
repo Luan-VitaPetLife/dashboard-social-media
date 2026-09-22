@@ -2,7 +2,7 @@
 // recente, o checkpoint D+7/D+14/D+30 (quando já existir histórico suficiente) e a comparação
 // com a mediana de conteúdos do mesmo formato + país. Nunca estima um checkpoint que não existe.
 import { getContentList } from './store.js';
-import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken } from './registry.js';
+import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken, getBrandAiContext } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
 import { generateText, isConfigured as aiConfigured } from './ai.js';
@@ -188,7 +188,14 @@ export async function computeContentDashboard({ brandId, country, since, until }
 // já calculada ali, em vez de duplicar).
 const RECOMENDACAO_VALUES = ['repetir', 'adaptar', 'testar', 'nao_priorizar'];
 
-const AI_SUMMARY_SYSTEM_PROMPT = `Você é um analista de social media da marca Coco and Luna (suplementos pet), avaliando o desempenho de UM post/Reels do Instagram pra equipe de marketing.
+// O nome da marca era fixo aqui ("Coco and Luna (suplementos pet)"), então o resumo da Yucaloo
+// saía assinado como analista da marca errada. Agora vem do registry.
+function aiSummarySystemPrompt(brandId) {
+  const brand = getBrand(brandId);
+  const nome = brand ? brand.name : 'marca';
+  const ramo = getBrandAiContext(brandId);
+  const quem = ramo ? `${nome} (${ramo})` : nome;
+  return `Você é um analista de social media da marca ${quem}, avaliando o desempenho de UM post/Reels do Instagram pra equipe de marketing.
 Responda SOMENTE com um JSON válido (sem markdown, sem texto antes ou depois), exatamente neste formato:
 {"forca": "...", "gargalo": "...", "comparacao": "...", "hipotese": "...", "recomendacao": "repetir|adaptar|testar|nao_priorizar", "recomendacaoTexto": "..."}
 Regras:
@@ -204,6 +211,7 @@ Regras:
 - "recomendacaoTexto": 2-4 frases justificando a recomendação com base no que foi observado acima.
 - Se faltar dado (sem checkpoint D+7 ainda, grupo de comparação pequeno/inexistente), diga isso
   explicitamente no campo relevante em vez de inventar — nunca estime um número que não foi informado.`;
+}
 
 function buildAiSummaryPrompt(item) {
   const ctx = item.context || {};
@@ -238,7 +246,7 @@ function buildAiSummaryPrompt(item) {
   return lines.join('\n');
 }
 
-export async function generateContentAiSummary(item) {
+export async function generateContentAiSummary(item, brandId) {
   if (!aiConfigured()) throw new Error('ANTHROPIC_API_KEY não configurado no servidor.');
   const prompt = buildAiSummaryPrompt(item);
   // Histórico de truncamento nesse campo (nunca JSON de verdade inválido, sempre cortado no meio):
@@ -249,7 +257,7 @@ export async function generateContentAiSummary(item) {
   // texto pedido no system prompt ficou maior de novo — aumentar aqui, não assumir "resposta
   // inválida" sem checar o raw primeiro (usar um throw temporário com o raw, nunca redescobrir do
   // zero — ver histórico desta sessão).
-  const raw = await generateText(prompt, { system: AI_SUMMARY_SYSTEM_PROMPT, maxTokens: 3500 });
+  const raw = await generateText(prompt, { system: aiSummarySystemPrompt(brandId), maxTokens: 3500 });
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
   let parsed;
   try {

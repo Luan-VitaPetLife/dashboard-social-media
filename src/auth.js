@@ -5,7 +5,11 @@
 import crypto from 'crypto';
 import { getSettings } from './store.js';
 
-export const SESSION_COOKIE = 'coco_sm_session';
+// Renomeado de 'coco_sm_session' em 22/09/2026, junto com as chaves de localStorage: o nome
+// vinha da única marca que existia, e o escopo real é a empresa. Não há migração porque trocar o
+// nome do cookie apenas invalida a sessão — e o login está desligado hoje, então não derruba
+// ninguém. Se o login for ligado antes de alguém ler isto, o efeito é um novo login, nada mais.
+export const SESSION_COOKIE = 'vpl_sm_session';
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
 // SESSION_SECRET dedicado se existir; cai pra DASHBOARD_PASSWORD só pra não travar quem ainda

@@ -44,6 +44,10 @@ const US_STATES = new Set([
   'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia',
 ]);
 
+// countryId -> lista de estados reconhecidos. É daqui que sai o drill-down por estado; um país
+// novo entra acrescentando o conjunto dele (e o GeoJSON correspondente em public/audiencia.html).
+const STATE_SETS = { br: BR_STATES, us: US_STATES };
+
 function deriveState(cityKey) {
   const idx = cityKey.lastIndexOf(', ');
   if (idx === -1) return null;
@@ -81,21 +85,21 @@ export async function computeAudienceDashboard({ brandId, country }) {
   function buildMetric(field) {
     const entries = withData.map(a => a.data[field]).filter(Boolean);
     if (!entries.length) return null;
-    const brEntry = withData.find(a => a.countryId === 'br')?.data?.[field];
-    const usEntry = withData.find(a => a.countryId === 'us')?.data?.[field];
     const metric = {
       timeframe: entries.find(d => d.timeframe)?.timeframe || null,
       byCountry: mergeBreakdown(entries.map(d => d.country)),
       byCity: mergeBreakdown(entries.map(d => d.city)),
       byAge: mergeBreakdown(entries.map(d => d.age)),
       byGender: mergeBreakdown(entries.map(d => d.gender)),
-      // Drill-down por estado: chave = countryId minúsculo (mesmo padrão do resto do app), só
-      // existe pra Brasil e Estados Unidos por enquanto (únicos com GeoJSON de fronteiras ligado
-      // no front, ver STATE_SOURCES em public/audiencia.html).
-      byState: {
-        br: brEntry ? buildStateBreakdown(brEntry.city, BR_STATES) : [],
-        us: usEntry ? buildStateBreakdown(usEntry.city, US_STATES) : [],
-      },
+      // Drill-down por estado: chave = countryId minúsculo (mesmo padrão do resto do app). Só
+      // sai pros países que têm lista de estados aqui (STATE_SETS) — hoje Brasil e Estados
+      // Unidos, os únicos com GeoJSON de fronteiras ligado no front (ver STATE_SOURCES em
+      // public/audiencia.html). Montado a partir da lista em vez de dois campos fixos: um país
+      // novo passa a aparecer só acrescentando o conjunto de estados dele.
+      byState: Object.fromEntries(Object.entries(STATE_SETS).map(([countryId, estados]) => {
+        const entry = withData.find(a => a.countryId === countryId)?.data?.[field];
+        return [countryId, entry ? buildStateBreakdown(entry.city, estados) : []];
+      })),
     };
     // Só "followers" tem um total real e estável (followers_count, mesmo campo do snapshot
     // diário) pra comparar contra. "engaged"/"reached" são amostras de um período, não existe um
@@ -106,10 +110,11 @@ export async function computeAudienceDashboard({ brandId, country }) {
     // em vez de deixar o usuário achar que bateu tudo.
     if (field === 'followers') {
       metric.realTotal = withData.reduce((sum, a) => sum + (a.data.followersCount ?? 0), 0);
-      metric.realTotalByCountry = {
-        br: withData.find(a => a.countryId === 'br')?.data.followersCount ?? null,
-        us: withData.find(a => a.countryId === 'us')?.data.followersCount ?? null,
-      };
+      // Um por país em escopo, não dois fixos: com br/us escritos na mão, o total de um terceiro
+      // mercado entrava no realTotal acima mas sumia da abertura por país.
+      metric.realTotalByCountry = Object.fromEntries(
+        withData.map(a => [a.countryId, a.data.followersCount ?? null])
+      );
     }
     return metric;
   }

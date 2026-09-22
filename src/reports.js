@@ -83,7 +83,7 @@ export async function buildD7Report({ brandId, countryId, mediaId }) {
   let aiErrored = false;
   if (!aiSummary && aiConfigured()) {
     try {
-      aiSummary = await generateContentAiSummary(item);
+      aiSummary = await generateContentAiSummary(item, brandId);
       setContentAiSummary(brandId, countryId, mediaId, aiSummary);
     } catch (e) {
       console.error('IA falhou (resumo D+7):', e.message);

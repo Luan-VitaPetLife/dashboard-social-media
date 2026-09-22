@@ -393,7 +393,7 @@ app.post('/api/content/:mediaId/ai-summary', syncLimiter, async (req, res) => {
     const dashboard = await computeContentDashboard({ brandId, country: countryId });
     const item = dashboard.items.find(i => i.mediaId === mediaId);
     if (!item) return res.status(404).json({ error: 'Conteúdo não encontrado.' });
-    const summary = await generateContentAiSummary(item);
+    const summary = await generateContentAiSummary(item, brandId);
     setContentAiSummary(brandId, countryId, mediaId, summary);
     res.json(summary);
   } catch (e) {
@@ -758,9 +758,11 @@ app.get('/api/tiktok/oauth/callback', (req, res) => {
 
 // Diagnóstico: resposta crua dos endpoints de Insights (Instagram + Facebook), sem
 // processar nada. Ver src/meta.js (probeInsights) — roda antes de confiar no backfill.
+// Sem ?country, cai no primeiro país da marca em vez de um 'br' fixo: a marca pode nem ter
+// Brasil, e o diagnóstico responderia sobre um mercado que não existe pra ela.
 app.get('/api/meta/probe-insights', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
-  const countryId = req.query.country || 'br';
+  const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeInsights(brandId, countryId)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -769,7 +771,7 @@ app.get('/api/meta/probe-insights', syncLimiter, async (req, res) => {
 // somados no período (Instagram e Facebook), um de cada vez. Ver src/meta.js probeEngagement.
 app.get('/api/meta/probe-engagement', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
-  const countryId = req.query.country || 'br';
+  const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeEngagement(brandId, countryId)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -779,7 +781,7 @@ app.get('/api/meta/probe-engagement', syncLimiter, async (req, res) => {
 // Ver src/meta.js probeDemographics.
 app.get('/api/meta/probe-demographics', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
-  const countryId = req.query.country || 'br';
+  const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeDemographics(brandId, countryId)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });

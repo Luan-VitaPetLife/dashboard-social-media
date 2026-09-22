@@ -65,9 +65,9 @@
   .csel.open .csel-pop{display:flex}
   .csel-opt{padding:9px 14px;font-size:12px;color:var(--sub);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px}
   .csel-opt img{width:13px;height:9px;object-fit:cover;border-radius:2px;flex-shrink:0}
-  /* Logo de marca (wordmark, mais largo que uma bandeira) — usado no seletor de Marca e nos cards
-     "Por conta", pra deixar claro visualmente de qual marca é cada informação (mais relevante a
-     partir do dia em que existir uma segunda marca; hoje só a Coco and Luna tem `logo` no registry). */
+  /* Logo de marca (wordmark, mais largo que uma bandeira) — usado nos cards "Por conta", pra
+     deixar claro de qual marca é cada informação. O seletor de Marca saiu daqui pra sidebar em
+     22/09/2026 (ver DashboardBrand em sidebar.js), mas a classe segue usada nos dois lugares. */
   .csel-opt img.brand-logo-mini,.filter-pill img.brand-logo-mini{width:auto;height:13px;max-width:46px;object-fit:contain;border-radius:0}
   .csel-opt:hover{background:var(--surface2);color:var(--text)}
   .csel-opt.active{color:var(--text);font-weight:600}
