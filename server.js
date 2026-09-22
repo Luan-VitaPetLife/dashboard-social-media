@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { initStore, getLastSync, getSnapshots, getStoreBackend, getClicks, recordClickEvent, flushClicks } from './src/store.js';
+import { initStore, getLastSync, getSnapshots, getStoreBackend, getClicks, recordClickEvent, flushClicks, deleteClickScreen } from './src/store.js';
 import { runSync } from './src/sync.js';
 import { computeSocialDashboard } from './src/metrics.js';
 import { computeContentDashboard, generateContentAiSummary } from './src/contentMetrics.js';
@@ -680,6 +680,14 @@ app.get('/api/clicks', (req, res) => {
   const panorama = computeScreenPanorama(getClicks(), screenId, { days });
   if (!panorama) return res.status(404).json({ error: 'Tela não encontrada.' });
   res.json(panorama);
+});
+
+// Remove uma tela rastreada inteira. Fica atrás do login normal (não entra em PUBLIC_PATHS): quem
+// apaga é alguém da equipe, nunca o visitante da loja que alimenta /api/clicks/collect.
+app.delete('/api/clicks/:screenId', async (req, res) => {
+  const removed = await deleteClickScreen(String(req.params.screenId));
+  if (!removed) return res.status(404).json({ error: 'Tela não encontrada.' });
+  res.json({ ok: true });
 });
 
 // Placeholder do callback de OAuth da TikTok (integração ainda não construída — o app da TikTok

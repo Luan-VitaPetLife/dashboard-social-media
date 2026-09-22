@@ -497,6 +497,23 @@ export function getClicks() {
   return ensureClicks();
 }
 
+// Apaga uma tela inteira (todos os dias agregados dela). Serve pra limpar tela de teste que
+// entrou na base durante a configuração do rastreamento — não existe edição parcial de clique, e
+// o dado é agregado, então remover a tela é a única granularidade que faz sentido. Grava na hora
+// (flush direto, sem o adiamento de recordClickEvent): aqui é ação humana, não rajada.
+export async function deleteClickScreen(screenId) {
+  const clicks = ensureClicks();
+  if (!Object.prototype.hasOwnProperty.call(clicks, screenId)) return false;
+  delete clicks[screenId];
+  if (clicksFlushTimer) {
+    clearTimeout(clicksFlushTimer);
+    clicksFlushTimer = null;
+  }
+  saveJson();
+  await mongoSet('clicks', cache.clicks);
+  return true;
+}
+
 export async function flushClicks() {
   if (!clicksFlushTimer) return;
   clearTimeout(clicksFlushTimer);
