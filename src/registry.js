@@ -45,9 +45,7 @@ const BRANDS = [
   {
     id: 'yucaloo',
     name: 'Yucaloo',
-    // null até existir um arquivo de logo da Yucaloo em public/ — setBrandLogoImg() esconde o
-    // <img> quando não há logo, então a marca aparece só com o nome, sem imagem quebrada.
-    logo: null,
+    logo: 'Logo3.webp',
     token: process.env.META_YUCALOO_ACCESS_TOKEN,
     countries: [
       {
