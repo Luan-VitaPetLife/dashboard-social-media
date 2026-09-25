@@ -5,7 +5,7 @@ import { getContentList } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToken, getBrandAiContext, isBrandAiEnabled } from './registry.js';
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
-import { generateText, isConfigured as aiConfigured } from './ai.js';
+import { generateJson, isConfigured as aiConfigured } from './ai.js';
 
 const METRIC_KEYS = ['reach', 'likes', 'comments', 'saved', 'shares', 'totalInteractions', 'views'];
 
@@ -188,6 +188,18 @@ export async function computeContentDashboard({ brandId, country, since, until }
 // já calculada ali, em vez de duplicar).
 const RECOMENDACAO_VALUES = ['repetir', 'adaptar', 'testar', 'nao_priorizar'];
 
+const AI_TEXT = { type: 'string' };
+const AI_SUMMARY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['forca', 'gargalo', 'comparacao', 'hipotese', 'recomendacao', 'recomendacaoTexto'],
+  properties: {
+    forca: AI_TEXT, gargalo: AI_TEXT, comparacao: AI_TEXT, hipotese: AI_TEXT,
+    recomendacao: { type: 'string', enum: RECOMENDACAO_VALUES },
+    recomendacaoTexto: AI_TEXT,
+  },
+};
+
 // O nome da marca era fixo aqui ("Coco and Luna (suplementos pet)"), então o resumo da Yucaloo
 // saía assinado como analista da marca errada. Agora vem do registry.
 function aiSummarySystemPrompt(brandId) {
@@ -196,9 +208,8 @@ function aiSummarySystemPrompt(brandId) {
   const ramo = getBrandAiContext(brandId);
   const quem = ramo ? `${nome} (${ramo})` : nome;
   return `Você é um analista de social media da marca ${quem}, avaliando o desempenho de UM post/Reels do Instagram pra equipe de marketing.
-Responda SOMENTE com um JSON válido (sem markdown, sem texto antes ou depois), exatamente neste formato:
-{"forca": "...", "gargalo": "...", "comparacao": "...", "hipotese": "...", "recomendacao": "repetir|adaptar|testar|nao_priorizar", "recomendacaoTexto": "..."}
-Regras:
+A resposta sai no formato JSON definido pela API (campos forca, gargalo, comparacao, hipotese,
+recomendacao, recomendacaoTexto). Regras:
 - Português do Brasil, tom direto e objetivo, cada campo com 3-5 frases — desenvolva o raciocínio
   (cite os números relevantes, explique o porquê, não só afirme) em vez de uma frase solta genérica.
 - "forca": a métrica ou aspecto que mais se destacou positivamente, com os números que sustentam isso.
@@ -255,23 +266,11 @@ export async function generateContentAiSummary(item, brandId) {
     throw new Error(`Os textos por IA estão desligados para ${brand ? brand.name : 'esta marca'}.`);
   }
   if (!aiConfigured()) throw new Error('A geração de texto por IA não está configurada no servidor.');
-  const prompt = buildAiSummaryPrompt(item);
-  // Histórico de truncamento nesse campo (nunca JSON de verdade inválido, sempre cortado no meio):
-  // 500 → 1000 (22/07/2026) → 1600 (23/07/2026, quando os campos passaram a pedir 3-5 frases em vez
-  // de 1-2) → **3500** (23/07/2026, mesmo dia: confirmado ao vivo que 1600 ainda cortava no meio do
-  // 4º de 6 campos pra um post com bastante dado real — a resposta cresceu mais do que o esperado
-  // com o novo tamanho de frase pedido). Sempre que esse erro voltar a aparecer, é sinal de que o
-  // texto pedido no system prompt ficou maior de novo — aumentar aqui, não assumir "resposta
-  // inválida" sem checar o raw primeiro (usar um throw temporário com o raw, nunca redescobrir do
-  // zero — ver histórico desta sessão).
-  const raw = await generateText(prompt, { system: aiSummarySystemPrompt(brandId), maxTokens: 3500 });
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error('A IA não respondeu em JSON válido. Tente gerar de novo.');
-  }
+  // Histórico do "JSON inválido": era sempre resposta cortada no meio pelo max_tokens (500 → 1000 →
+  // 1600 → 3500 em jul/2026). Em set/2026 voltou com o Sonnet 5, cujo raciocínio interno gasta do
+  // mesmo limite. Agora o formato é garantido pelo schema (ver generateJson em ai.js) e o limite
+  // tem folga pro raciocínio; se cortar mesmo assim, o erro diz isso em vez de "JSON inválido".
+  const parsed = await generateJson(buildAiSummaryPrompt(item), { system: aiSummarySystemPrompt(brandId), schema: AI_SUMMARY_SCHEMA });
   if (!RECOMENDACAO_VALUES.includes(parsed.recomendacao)) parsed.recomendacao = null;
   return {
     forca: parsed.forca || null,
