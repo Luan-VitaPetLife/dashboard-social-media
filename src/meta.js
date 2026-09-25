@@ -12,16 +12,21 @@ import { getAccounts, getBrandToken } from './registry.js';
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v20.0';
 
-export function isConfigured(token) {
-  return Boolean(token);
-}
-
+// Falha de rede/parsing (Meta fora do ar, DNS, resposta não-JSON) é diferente de erro de negócio
+// da Graph API (json.error, tratado abaixo) — nos dois casos a mensagem que sobe já é pensada pra
+// aparecer na tela, nunca a exceção crua do fetch/JSON.parse.
 async function graphGetAs(token, pathAndQuery) {
   const sep = pathAndQuery.includes('?') ? '&' : '?';
   const url = `https://graph.facebook.com/${GRAPH_VERSION}/${pathAndQuery}${sep}access_token=${token}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message || 'Meta Graph API error');
+  let json;
+  try {
+    const res = await fetch(url);
+    json = await res.json();
+  } catch (e) {
+    console.error('[meta] falha de rede/parsing na Graph API:', e);
+    throw new Error('Não foi possível falar com a Meta agora. Tente de novo em instantes.');
+  }
+  if (json.error) throw new Error(json.error.message || 'A Meta recusou a solicitação.');
   return json;
 }
 

@@ -4,14 +4,10 @@
 // disso o story já expirou de verdade e a última amostra é só um retrato final, não algo "ao vivo".
 import { getStoriesList } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries } from './registry.js';
+import { pct } from './utils.js';
 
 const RETENTION_HOURS = 48;
 const METRIC_KEYS = ['reach', 'replies', 'navigation', 'shares', 'totalInteractions', 'profileActivity', 'follows'];
-
-function pct(from, to) {
-  if (from == null || to == null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
-}
 
 export function computeStoriesDashboard({ brandId, country }) {
   brandId = brandId || getDefaultBrandId();

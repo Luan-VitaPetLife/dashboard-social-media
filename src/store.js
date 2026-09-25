@@ -473,10 +473,6 @@ export function getSchedules(brandId) {
   return (cache.schedules || {})[brandId] || [];
 }
 
-export function getSchedule(brandId, id) {
-  return getSchedules(brandId).find(s => s.id === id) || null;
-}
-
 export function addSchedule(brandId, schedule) {
   if (!cache.schedules) cache.schedules = {};
   if (!cache.schedules[brandId]) cache.schedules[brandId] = [];

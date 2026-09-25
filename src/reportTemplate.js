@@ -5,6 +5,8 @@
 // azulado, caixas de destaque (tipo "Prioridade"/"Limite") em lavanda bem clara. Repetir esses
 // valores nos dois renderizadores em vez de um só, porque pdfkit usa hex com "#" e docx usa hex
 // sem "#" — mantidos juntos aqui pra nunca dessincronizar as duas paletas.
+import { getCompany } from './registry.js';
+
 export const COLORS = {
   purpleDark: '#4B2E83',   // cabeçalho de tabela, título principal
   purpleDarkHex: '4B2E83', // mesma cor sem '#', formato exigido pelo docx
@@ -24,8 +26,10 @@ export const COLORS = {
   whiteHex: 'FFFFFF',
 };
 
+// Nome da empresa vem do registry (fonte única de marca/empresa no projeto), não escrito na mão
+// aqui — se a empresa dona da dashboard mudar de nome um dia, é um lugar só pra atualizar.
 export const BRAND_FOOTER = (brandName, countryLabel) =>
-  `Vita Pet Life${brandName ? ' • ' + brandName : ''}${countryLabel ? ' · ' + countryLabel : ''} · Redes Sociais`;
+  `${getCompany().name}${brandName ? ' • ' + brandName : ''}${countryLabel ? ' · ' + countryLabel : ''} · Redes Sociais`;
 
 // Formata um número pt-BR sem depender de Intl no worker do PDF (funciona igual, mas mantém
 // consistência com fmt() usado no front) — null/undefined vira "—", nunca "0" fabricado.

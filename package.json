@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dashboard de métricas de redes sociais (Coco and Luna) — seguidores, curtidas e engajamento via Meta Graph API.",
+  "description": "Dashboard de métricas de redes sociais da Vita Pet Life (Coco and Luna e Yucaloo) — seguidores, curtidas e engajamento via Meta Graph API.",
   "scripts": {
     "start": "node server.js",
     "sync": "node -e \"import('./src/sync.js').then(m => m.runSync())\""

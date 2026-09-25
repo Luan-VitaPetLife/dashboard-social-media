@@ -6,13 +6,9 @@ import { getBrand, getDefaultBrandId, getCountries, getAdAccountId, getBrandToke
 import { fetchBoostedPermalinks } from './meta.js';
 import { RETENTION_DAYS } from './contentSync.js';
 import { generateJson, isConfigured as aiConfigured } from './ai.js';
+import { pct } from './utils.js';
 
 const METRIC_KEYS = ['reach', 'likes', 'comments', 'saved', 'shares', 'totalInteractions', 'views'];
-
-function pct(from, to) {
-  if (from == null || to == null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
-}
 
 function median(values) {
   const nums = values.filter(v => v != null).sort((a, b) => a - b);

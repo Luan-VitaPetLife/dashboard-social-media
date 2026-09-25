@@ -4,15 +4,12 @@
 import { fetchInstagramMediaList, fetchInstagramMediaInsights, fetchInstagramCarouselChildren } from './meta.js';
 import { upsertContentMeta, addContentSnapshot } from './store.js';
 import { listAccounts } from './registry.js';
+import { todayISO } from './utils.js';
 
 // Janela de retenção: só busca/atualiza conteúdo publicado nos últimos N dias. Cobre D+7 e D+14
 // com folga e D+30 exatamente — Reels no TikTok teriam janela maior, mas TikTok ainda não está
 // integrado (ver CLAUDE.md).
 export const RETENTION_DAYS = 35;
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export async function runContentSync() {
   const date = todayISO();

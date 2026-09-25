@@ -20,13 +20,21 @@ export function isConfigured() {
 
 async function createMessage(prompt, { maxTokens, system, outputConfig }) {
   if (!client) throw new Error('ANTHROPIC_API_KEY não configurado.');
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens + THINKING_HEADROOM,
-    ...(system ? { system } : {}),
-    ...(outputConfig ? { output_config: outputConfig } : {}),
-    messages: [{ role: 'user', content: prompt }],
-  });
+  let res;
+  try {
+    res = await client.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens + THINKING_HEADROOM,
+      ...(system ? { system } : {}),
+      ...(outputConfig ? { output_config: outputConfig } : {}),
+      messages: [{ role: 'user', content: prompt }],
+    });
+  } catch (e) {
+    // Erro do SDK (chave inválida, rede, rate limit) vem com detalhe interno da chamada — loga
+    // completo aqui, mas quem chama (rota, relatório) só precisa saber que a IA falhou.
+    console.error('[ai] chamada à Anthropic falhou:', e);
+    throw new Error('Não foi possível gerar o texto por IA agora. Tente de novo em instantes.');
+  }
   if (res.stop_reason === 'max_tokens') throw new Error('A resposta da IA ficou longa demais e foi cortada. Tente gerar de novo.');
   if (res.stop_reason === 'refusal') throw new Error('A IA se recusou a gerar este texto.');
   return res.content.map(b => (b.type === 'text' ? b.text : '')).join('').trim();

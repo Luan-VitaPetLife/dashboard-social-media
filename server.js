@@ -26,7 +26,8 @@ import {
   getSchedules, addSchedule, updateSchedule, deleteSchedule,
 } from './src/store.js';
 import { authGate, createSessionCookieValue, checkPassword, hasValidSession, SESSION_COOKIE, SESSION_MAX_AGE_MS } from './src/auth.js';
-import { flattenClicks, computeClicksOverview, computeScreenPanorama, normalizeSource, deviceFromUserAgent, normalizeLabel, todayISO as clicksTodayISO, DIRECT_SOURCE, UNKNOWN_LINK } from './src/clicks.js';
+import { flattenClicks, computeClicksOverview, computeScreenPanorama, normalizeSource, deviceFromUserAgent, normalizeLabel, DIRECT_SOURCE, UNKNOWN_LINK } from './src/clicks.js';
+import { todayISO, isoDaysAgo } from './src/utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -156,6 +157,20 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Resposta de erro padrão das rotas: sempre loga o erro completo (com stack) no servidor, junto
+// da rota que falhou, pra investigar depois — e decide a mensagem que volta pro cliente. Erro
+// lançado pelo nosso próprio código (validação, regra de negócio, os wrappers de Meta/Mongo/IA
+// em src/*.js) já vem em português, pronto pra tela; um bug de verdade (TypeError e afins) não
+// tem mensagem pensada pra usuário nenhum e pode citar nome de variável/propriedade interna, então
+// vira uma mensagem genérica em vez de vazar isso. Não sobrescreve o middleware de redactSecrets
+// acima (que continua limpando token/URI de qualquer string) — é uma camada a mais, pra erro
+// inesperado nem chegar a expor detalhe de implementação.
+function sendError(res, req, e, status = 500) {
+  console.error(`[${req.method} ${req.originalUrl}]`, e);
+  const isInternalBug = e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError || e instanceof SyntaxError;
+  res.status(status).json({ error: isInternalBug ? 'Erro interno. Tente de novo em instantes.' : (e?.message || 'Erro interno. Tente de novo em instantes.') });
+}
+
 // Redireciona favicon.png e favicon.ico pro novo caminho — compatibilidade com bookmarks e
 // <link rel="icon" href="favicon.png"> antigos em navegadores que buscam automaticamente.
 app.get('/favicon.png', (req, res) => res.redirect(301, '/img/favicon.png'));
@@ -208,7 +223,7 @@ app.post('/api/settings', (req, res) => {
   try {
     res.json(updateSettings({ loginEnabled: Boolean(loginEnabled) }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -319,9 +334,6 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-function isoDaysAgo(n) { return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10); }
-
 app.get('/api/dashboard', async (req, res) => {
   const until = req.query.until || todayISO();
   const since = req.query.since || isoDaysAgo(29);
@@ -334,7 +346,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     res.json({ ...(await computeSocialDashboard({ brandId, country, since, until, cmpSince, cmpUntil })), lastSync: getLastSync() });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -345,7 +357,7 @@ app.get('/api/content', async (req, res) => {
   try {
     res.json(await computeContentDashboard({ brandId, country, since, until }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -364,7 +376,7 @@ app.patch('/api/content/:mediaId/context', (req, res) => {
     const updated = setContentContext(brandId, countryId, mediaId, context);
     res.json(updated);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -383,7 +395,7 @@ app.get('/api/content/:mediaId/comments', async (req, res) => {
   try {
     res.json(await fetchInstagramMediaComments(token, mediaId));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -408,7 +420,7 @@ app.post('/api/content/:mediaId/ai-summary', syncLimiter, async (req, res) => {
     setContentAiSummary(brandId, countryId, mediaId, summary);
     res.json(summary);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -418,7 +430,7 @@ app.get('/api/goals', (req, res) => {
   try {
     res.json(computeGoalsDashboard({ brandId, country }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -435,7 +447,7 @@ app.post('/api/goals', (req, res) => {
     const goal = addGoal(brandId, countryId, platform, { metric: 'followers', target: targetNum, deadline });
     res.json(goal);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -445,7 +457,7 @@ app.get('/api/stories', (req, res) => {
   try {
     res.json(computeStoriesDashboard({ brandId, country }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -458,7 +470,7 @@ app.get('/api/audience', async (req, res) => {
   try {
     res.json(await computeAudienceDashboard({ brandId, country }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -468,7 +480,7 @@ app.get('/api/cofrinho', (req, res) => {
   try {
     res.json(computeCofrinhoDashboard({ brandId, country }));
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -492,7 +504,7 @@ app.post('/api/cofrinho/entries', (req, res) => {
     });
     res.json(entry);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -508,7 +520,7 @@ app.post('/api/cofrinho/goals', (req, res) => {
     const goal = addCofrinhoGoal(brandId, countryId, { metric, target: targetNum, deadline });
     res.json(goal);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -532,7 +544,7 @@ app.post('/api/reports/generate', syncLimiter, async (req, res) => {
     const record = addReport(brandId, { type, name: cleanName, periodKey, scopeLabel, generatedBy: 'manual', model });
     res.json({ id: record.id, type: record.type, name: record.name, scopeLabel: record.scopeLabel, periodKey: record.periodKey, generatedAt: record.generatedAt, generatedBy: record.generatedBy });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -546,7 +558,7 @@ app.get('/api/reports/:id/pdf', async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="${slugifyFilename(report.model.title)}.pdf"`);
     res.send(buffer);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -560,7 +572,7 @@ app.get('/api/reports/:id/docx', async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="${slugifyFilename(report.model.title)}.docx"`);
     res.send(buffer);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 
@@ -627,7 +639,7 @@ function slugifyFilename(title) {
 
 app.post('/api/sync', syncLimiter, async (req, res) => {
   try { res.json(await runSync()); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { sendError(res, req, e); }
 });
 
 
@@ -719,7 +731,7 @@ app.post('/api/clicks/collect', collectLimiter, (req, res) => {
     screenLabel: String(body.screenLabel || '').trim().slice(0, 80) || null,
     screenUrl: String(body.screenUrl || '').trim().slice(0, 300) || null,
     type,
-    dateISO: clicksTodayISO(),
+    dateISO: todayISO(),
     linkLabel: type === 'click' ? normalizeLabel(body.linkLabel, UNKNOWN_LINK) : null,
     source: normalizeSource({ utmSource: body.utmSource, referrer: body.referrer, selfHost: body.selfHost }) || DIRECT_SOURCE,
     device,
@@ -729,26 +741,37 @@ app.post('/api/clicks/collect', collectLimiter, (req, res) => {
   res.sendStatus(204);
 });
 
+// Período: `days` (padrão, comportamento de sempre) ou `since`/`until` explícitos (period picker
+// padrão do front) — validado e resolvido em resolveClicksPeriod (src/clicks.js), que também
+// calcula o período anterior de mesma duração pra comparação. Ver CLAUDE.md/seção Cliques.
 app.get('/api/clicks', (req, res) => {
-  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
   const screenId = req.query.screen ? String(req.query.screen) : null;
   const brandId = req.query.brand || getDefaultBrandId();
   const countryScope = req.query.country || 'all';
+  const period = { days: req.query.days, since: req.query.since, until: req.query.until };
   const brandClicks = flattenClicks(getClicks(brandId), countryScope);
 
-  if (!screenId) return res.json(computeClicksOverview(brandClicks, { days }));
+  try {
+    if (!screenId) return res.json(computeClicksOverview(brandClicks, period));
 
-  const panorama = computeScreenPanorama(brandClicks, screenId, { days });
-  if (!panorama) return res.status(404).json({ error: 'Tela não encontrada.' });
-  res.json(panorama);
+    const panorama = computeScreenPanorama(brandClicks, screenId, period);
+    if (!panorama) return res.status(404).json({ error: 'Tela não encontrada.' });
+    res.json(panorama);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // Remove uma tela rastreada inteira. Fica atrás do login normal (não entra em PUBLIC_PATHS): quem
 // apaga é alguém da equipe, nunca o visitante da loja que alimenta /api/clicks/collect.
 app.delete('/api/clicks/:brandId/:countryId/:screenId', async (req, res) => {
-  const removed = await deleteClickScreen(String(req.params.brandId), String(req.params.countryId), String(req.params.screenId));
-  if (!removed) return res.status(404).json({ error: 'Tela não encontrada.' });
-  res.json({ ok: true });
+  try {
+    const removed = await deleteClickScreen(String(req.params.brandId), String(req.params.countryId), String(req.params.screenId));
+    if (!removed) return res.status(404).json({ error: 'Tela não encontrada.' });
+    res.json({ ok: true });
+  } catch (e) {
+    sendError(res, req, e);
+  }
 });
 
 // Placeholder do callback de OAuth da TikTok (integração ainda não construída — o app da TikTok
@@ -775,7 +798,7 @@ app.get('/api/meta/probe-insights', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeInsights(brandId, countryId)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { sendError(res, req, e); }
 });
 
 // Diagnóstico: testa candidatos de métrica pra visualizações de vídeo + curtidas/comentários
@@ -784,7 +807,7 @@ app.get('/api/meta/probe-engagement', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeEngagement(brandId, countryId)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { sendError(res, req, e); }
 });
 
 // Diagnóstico: testa se demografia/geografia de audiência (cidade, país, idade, gênero)
@@ -794,7 +817,7 @@ app.get('/api/meta/probe-demographics', syncLimiter, async (req, res) => {
   const brandId = req.query.brand || getDefaultBrandId();
   const countryId = req.query.country || getCountries(brandId)[0]?.id;
   try { res.json(await probeDemographics(brandId, countryId)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  catch (e) { sendError(res, req, e); }
 });
 
 // Preenche dias anteriores ao início do sync via Insights API (nunca sobrescreve snapshot
@@ -808,7 +831,7 @@ app.post('/api/social/backfill', syncLimiter, async (req, res) => {
     for (const c of countries) results.push(await backfillSocialHistory({ brandId, countryId: c }));
     res.json({ results });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    sendError(res, req, e);
   }
 });
 

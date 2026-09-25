@@ -6,10 +6,7 @@ import { addSnapshot, setLastSync } from './store.js';
 import { listAccounts } from './registry.js';
 import { runContentSync } from './contentSync.js';
 import { runStorySync } from './storySync.js';
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayISO } from './utils.js';
 
 export async function runSync() {
   const date = todayISO();

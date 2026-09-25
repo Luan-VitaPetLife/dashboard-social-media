@@ -4,6 +4,7 @@
 // exatamente no dia em que a meta é batida (e pra continuar correto se o valor cair depois).
 import { getGoals, getSnapshots } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries, getAccounts } from './registry.js';
+import { daysUntil } from './utils.js';
 
 const PLATFORM_LABELS = { instagram: 'Instagram', facebook: 'Facebook' };
 const METRIC_LABELS = { followers: 'Seguidores' };
@@ -14,12 +15,6 @@ function latestValue(brandId, platform, countryId, metric) {
   if (!dates.length) return null;
   const last = all[dates[dates.length - 1]];
   return last[metric] ?? null;
-}
-
-function daysUntil(deadline) {
-  const target = Date.parse(deadline + 'T00:00:00Z');
-  const today = Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
-  return Math.round((target - today) / 86400000);
 }
 
 function buildAccountGoal(brandId, countryId, platform, metric) {

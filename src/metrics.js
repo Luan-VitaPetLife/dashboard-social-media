@@ -10,26 +10,17 @@
 import { getSnapshotsInRange } from './store.js';
 import { fetchInstagramEngagement, fetchFacebookVideoViews } from './meta.js';
 import { getBrand, getDefaultBrandId, getCountries, getAccounts, getBrandToken } from './registry.js';
+import { pct, shiftISO, daysBetween } from './utils.js';
 
 const IG_KEYS = ['followers', 'following', 'posts', 'recentLikes', 'recentComments'];
 const FB_KEYS = ['likes', 'followers'];
-
-function pct(from, to) {
-  if (from == null || to == null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
-}
-
-function parseISO(s) { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); }
-function isoUTC(d) { return d.toISOString().slice(0, 10); }
-function addDaysISO(iso, n) { const d = parseISO(iso); d.setUTCDate(d.getUTCDate() + n); return isoUTC(d); }
-function daysBetween(a, b) { return Math.round((parseISO(b) - parseISO(a)) / 86400000); }
 
 // Janela anterior de mesmo tamanho, encostada logo antes de `since` — ex: since=10/07,
 // until=16/07 (7 dias) → período anterior = 03/07 a 09/07.
 function previousPeriod(since, until) {
   const lengthDays = daysBetween(since, until) + 1;
-  const prevUntil = addDaysISO(since, -1);
-  const prevSince = addDaysISO(prevUntil, -(lengthDays - 1));
+  const prevUntil = shiftISO(since, -1);
+  const prevSince = shiftISO(prevUntil, -(lengthDays - 1));
   return { prevSince, prevUntil };
 }
 

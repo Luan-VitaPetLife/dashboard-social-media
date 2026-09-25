@@ -3,19 +3,9 @@
 // confirmada). Nunca analisa investimento nem operação de loja — só soma o que foi informado.
 import { getCofrinhoEntries, getCofrinhoGoals } from './store.js';
 import { getBrand, getDefaultBrandId, getCountries } from './registry.js';
+import { daysUntil } from './utils.js';
 
 const METRIC_LABELS = { vendas: 'Vendas rastreadas', faturamento: 'Faturamento informado' };
-
-function pct(from, to) {
-  if (from == null || to == null || from === 0) return null;
-  return ((to - from) / Math.abs(from)) * 100;
-}
-
-function daysUntil(deadline) {
-  const target = Date.parse(deadline + 'T00:00:00Z');
-  const today = Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
-  return Math.round((target - today) / 86400000);
-}
 
 function sum(values) {
   const nums = values.filter(v => v != null);

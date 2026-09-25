@@ -6,6 +6,7 @@
 // gravação. Balde diário por tela responde todas as perguntas da tela de Cliques com tamanho
 // limitado pelo número de links × origens, e de quebra não guarda nada que identifique alguém
 // (sem IP, sem user agent cru, sem id de visitante) — não vira base de dado pessoal.
+import { todayISO, shiftISO, daysBetween, pct } from './utils.js';
 
 // Origens conhecidas: o host que o navegador manda como referenciador raramente é o nome que a
 // gente usa pra falar do canal. Normaliza pra um punhado de rótulos estáveis, senão o relatório
@@ -70,20 +71,6 @@ export function normalizeLabel(value, fallback) {
   return clean ? clean.slice(0, 60) : fallback;
 }
 
-export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function shiftISO(dateISO, days) {
-  const d = new Date(dateISO + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function emptyTotals() {
-  return { views: 0, clicks: 0 };
-}
-
 function addTo(map, key, amount) {
   if (!key) return;
   map[key] = (map[key] || 0) + amount;
@@ -94,11 +81,6 @@ function sortedEntries(map, limit) {
     .map(([key, value]) => ({ key, value }))
     .sort((a, b) => b.value - a.value);
   return limit ? rows.slice(0, limit) : rows;
-}
-
-function deltaPct(current, previous) {
-  if (!previous) return null;
-  return ((current - previous) / previous) * 100;
 }
 
 // Soma os baldes diários de uma tela dentro de um intervalo. Devolve sempre a mesma forma,
@@ -198,12 +180,44 @@ function mergeDayBuckets(a, b) {
   return out;
 }
 
-// Painel de todas as telas rastreadas (os cards da primeira dobra).
-export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
-  const until = todayISO();
-  const since = shiftISO(until, -(days - 1));
+const MAX_RANGE_DAYS = 365;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Resolve o período pedido por GET /api/clicks: `days` (comportamento de sempre, padrão 30,
+// clamp 1-365) ou `since`/`until` explícitos (period picker padrão do front, mesmo formato usado
+// no resto do app). Validado aqui, não na rota, porque é regra do domínio "período de cliques" —
+// devolve sempre `{ since, until, days }` prontos pras funções abaixo, ou lança um Error com
+// mensagem pronta pra tela (a rota devolve isso como 400).
+export function resolveClicksPeriod({ days, since, until } = {}) {
+  if (since || until) {
+    if (!since || !until || !DATE_RE.test(since) || !DATE_RE.test(until)) {
+      throw new Error('Informe since e until juntos, no formato AAAA-MM-DD.');
+    }
+    if (since > until) throw new Error('since precisa ser anterior (ou igual) a until.');
+    if (until > todayISO()) throw new Error('until não pode ser uma data futura.');
+    const rangeDays = daysBetween(since, until) + 1;
+    if (rangeDays > MAX_RANGE_DAYS) throw new Error(`O período não pode passar de ${MAX_RANGE_DAYS} dias.`);
+    return { since, until, days: rangeDays };
+  }
+  const clampedDays = Math.min(Math.max(Number(days) || 30, 1), MAX_RANGE_DAYS);
+  const untilISO = todayISO();
+  return { since: shiftISO(untilISO, -(clampedDays - 1)), until: untilISO, days: clampedDays };
+}
+
+// Janela anterior de mesmo tamanho, encostada logo antes de `since` — mesma regra de
+// "período anterior" usada em metrics.js pro dashboard de perfil.
+function previousWindow(since, until) {
+  const lengthDays = daysBetween(since, until) + 1;
   const prevUntil = shiftISO(since, -1);
-  const prevSince = shiftISO(prevUntil, -(days - 1));
+  const prevSince = shiftISO(prevUntil, -(lengthDays - 1));
+  return { prevSince, prevUntil };
+}
+
+// Painel de todas as telas rastreadas (os cards da primeira dobra). Aceita `days` OU
+// `since`/`until` explícitos (ver resolveClicksPeriod acima) — a rota só repassa a query.
+export function computeClicksOverview(clicksStore, { since, until, days } = {}) {
+  ({ since, until, days } = resolveClicksPeriod({ since, until, days }));
+  const { prevSince, prevUntil } = previousWindow(since, until);
 
   const screens = Object.entries(clicksStore || {}).map(([screenId, screen]) => {
     const current = sumRange(screen.days || {}, since, until);
@@ -216,7 +230,7 @@ export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
       clicks: current.clicks,
       views: current.views,
       clickRate: clickRate(current.clicks, current.views),
-      deltaClicks: deltaPct(current.clicks, previous.clicks),
+      deltaClicks: pct(previous.clicks, current.clicks),
       links: Object.keys(current.byLink).length,
       topLink: sortedEntries(current.byLink, 1)[0] || null,
       topSource: sortedEntries(current.bySource, 1)[0] || null,
@@ -229,7 +243,7 @@ export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
   screens.sort((a, b) => b.clicks - a.clicks);
 
   return {
-    period: { days, since, until },
+    period: { days, since, until, prevSince, prevUntil },
     totals: {
       clicks: screens.reduce((sum, s) => sum + s.clicks, 0),
       views: screens.reduce((sum, s) => sum + s.views, 0),
@@ -240,14 +254,12 @@ export function computeClicksOverview(clicksStore, { days = 30 } = {}) {
 }
 
 // Panorama de uma tela específica (o que abre ao clicar num card).
-export function computeScreenPanorama(clicksStore, screenId, { days = 30 } = {}) {
+export function computeScreenPanorama(clicksStore, screenId, { since, until, days } = {}) {
   const screen = (clicksStore || {})[screenId];
   if (!screen) return null;
 
-  const until = todayISO();
-  const since = shiftISO(until, -(days - 1));
-  const prevUntil = shiftISO(since, -1);
-  const prevSince = shiftISO(prevUntil, -(days - 1));
+  ({ since, until, days } = resolveClicksPeriod({ since, until, days }));
+  const { prevSince, prevUntil } = previousWindow(since, until);
 
   const current = sumRange(screen.days || {}, since, until);
   const previous = sumRange(screen.days || {}, prevSince, prevUntil);
@@ -256,7 +268,7 @@ export function computeScreenPanorama(clicksStore, screenId, { days = 30 } = {})
     label: key,
     clicks: value,
     share: current.clicks ? (value / current.clicks) * 100 : 0,
-    delta: deltaPct(value, (previous.byLink || {})[key] || 0),
+    delta: pct((previous.byLink || {})[key] || 0, value),
     bySource: sortedEntries(current.byLinkSource[key] || {}),
   }));
 
@@ -264,13 +276,13 @@ export function computeScreenPanorama(clicksStore, screenId, { days = 30 } = {})
     screenId,
     label: screen.label || screenId,
     url: screen.url || null,
-    period: { days, since, until },
+    period: { days, since, until, prevSince, prevUntil },
     totals: {
       clicks: current.clicks,
       views: current.views,
       clickRate: clickRate(current.clicks, current.views),
-      deltaClicks: deltaPct(current.clicks, previous.clicks),
-      deltaViews: deltaPct(current.views, previous.views),
+      deltaClicks: pct(previous.clicks, current.clicks),
+      deltaViews: pct(previous.views, current.views),
     },
     series: current.series,
     links,
