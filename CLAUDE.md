@@ -562,7 +562,7 @@ pra equipe pedir/discutir melhorias do próprio dashboard e acompanhar nosso bac
 - **`authGate` (middleware global em `server.js`, roda logo depois de `express.json()` e antes do
   estático + de toda rota `/api`)**: deixa passar direto se `loginEnabled` for `false`, ou se a rota
   estiver na allowlist pública (`/login.html`, `/health`, `/api/auth/login`, `/api/auth/status`,
-  `Logo2.png`, `favicon.png`). Caso contrário, exige cookie de sessão válido — sem ele, `/api/*`
+  `/img/marcas/vita-pet-life.png`, `/img/favicon.png`, `/favicon.png`, `/favicon.ico`). Caso contrário, exige cookie de sessão válido — sem ele, `/api/*`
   devolve 401 JSON e qualquer outra rota redireciona pra `/login.html`.
 - **`app.set('trust proxy', 1)`** é necessário pro cookie `secure` funcionar certo atrás do proxy do
   Railway (que termina TLS e repassa por HTTP internamente) — sem isso, `req.secure` nunca bateria

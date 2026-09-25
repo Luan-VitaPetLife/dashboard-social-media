@@ -155,6 +155,12 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// Redireciona favicon.png e favicon.ico pro novo caminho — compatibilidade com bookmarks e
+// <link rel="icon" href="favicon.png"> antigos em navegadores que buscam automaticamente.
+app.get('/favicon.png', (req, res) => res.redirect(301, '/img/favicon.png'));
+app.get('/favicon.ico', (req, res) => res.redirect(301, '/img/favicon.png'));
+
 // Roda antes do estático e de toda rota /api — decide se a requisição pode passar (login
 // desligado, rota pública, ou sessão válida) ou se precisa ir pra tela de login. Ver src/auth.js.
 app.use(authGate);

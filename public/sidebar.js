@@ -362,7 +362,7 @@ window.renderBrandNotice = renderBrandNotice;
     <button id="sidebarToggle" class="sidebar-close-btn" title="Esconder menu"><i class="bi bi-layout-sidebar-reverse"></i></button>
   </div>
   <div class="brand">
-    <img src="Logo2.png" alt="Vita Pet Life" class="brand-mark">
+    <img src="/img/marcas/vita-pet-life.png" alt="Vita Pet Life" class="brand-mark">
     <div class="brand-text">
       <span class="brand-name">Vita Pet Life</span>
       <span class="brand-sub">Redes Sociais</span>

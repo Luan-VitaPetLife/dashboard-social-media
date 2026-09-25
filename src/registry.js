@@ -19,7 +19,7 @@ const BRANDS = [
   {
     id: 'coco-and-luna',
     name: 'Coco and Luna',
-    logo: 'Logo1.svg',
+    logo: '/img/marcas/coco-and-luna.svg',
     // Textos gerados por IA (resumo por post, aprendizado de story, resumo mensal). Desligar
     // por marca existe porque o prompt precisa conhecer o negócio: sem isso a IA escreve análise
     // genérica ou, pior, sobre o produto errado. Melhor não gerar do que gerar torto.
@@ -33,7 +33,7 @@ const BRANDS = [
     token: process.env.META_ACCESS_TOKEN,
     countries: [
       {
-        id: 'br', name: 'Brasil', flag: 'bandeira_brasil.webp',
+        id: 'br', name: 'Brasil', flag: '/img/bandeiras/br.svg',
         adAccountId: process.env.META_AD_ACCOUNT_ID_BR,
         accounts: [
           { platform: 'instagram', metaId: process.env.META_IG_ACCOUNT_ID_BR },
@@ -41,7 +41,7 @@ const BRANDS = [
         ],
       },
       {
-        id: 'us', name: 'Estados Unidos', flag: 'bandeira_eua.svg',
+        id: 'us', name: 'Estados Unidos', flag: '/img/bandeiras/us.svg',
         adAccountId: process.env.META_AD_ACCOUNT_ID_US,
         accounts: [
           { platform: 'instagram', metaId: process.env.META_IG_ACCOUNT_ID_US },
@@ -53,7 +53,7 @@ const BRANDS = [
   {
     id: 'yucaloo',
     name: 'Yucaloo',
-    logo: 'Logo3.webp',
+    logo: '/img/marcas/yucaloo.webp',
     // IA desligada a pedido do Luan (22/09/2026) até existir um prompt bom pra marca. Ligar =
     // trocar pra true e preencher o aiContext abaixo; nada mais precisa mudar.
     aiEnabled: false,
@@ -63,7 +63,7 @@ const BRANDS = [
     token: process.env.META_YUCALOO_ACCESS_TOKEN,
     countries: [
       {
-        id: 'br', name: 'Brasil', flag: 'bandeira_brasil.webp',
+        id: 'br', name: 'Brasil', flag: '/img/bandeiras/br.svg',
         adAccountId: process.env.META_YUCALOO_AD_ACCOUNT_ID_BR,
         accounts: [
           { platform: 'instagram', metaId: process.env.META_YUCALOO_IG_ACCOUNT_ID_BR },
@@ -71,7 +71,7 @@ const BRANDS = [
         ],
       },
       {
-        id: 'us', name: 'Estados Unidos', flag: 'bandeira_eua.svg',
+        id: 'us', name: 'Estados Unidos', flag: '/img/bandeiras/us.svg',
         adAccountId: process.env.META_YUCALOO_AD_ACCOUNT_ID_US,
         accounts: [
           { platform: 'instagram', metaId: process.env.META_YUCALOO_IG_ACCOUNT_ID_US },
